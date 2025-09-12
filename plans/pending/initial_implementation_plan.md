@@ -9,13 +9,17 @@ This document outlines the detailed implementation plan for the first 5 commits 
 - ✅ **Commit 1**: Core Data Models - COMPLETED
 - ✅ **Commit 2**: Basic AST Parsing for Function Definitions - COMPLETED
 - ✅ **Commit 3**: Weighted Component Annotation Scoring - COMPLETED
-- ⏳ **Commit 4**: Simple Call Counting - PENDING
+- ✅ **Commit 4**: Simple Call Counting - COMPLETED
 - ⏳ **Commit 5**: CLI Integration and Output - PENDING
 
 ## Current Project State
 
 - **Skeleton**: Basic project structure with `src/annotation_prioritizer/` package
-- **CLI**: Placeholder "Hello World" in `src/annotation_prioritizer/cli.py:main`
+- **Models**: Complete data structures in `src/annotation_prioritizer/models.py` (FunctionInfo, CallCount, etc.)
+- **Parser**: AST-based function definition parsing in `src/annotation_prioritizer/parser.py`
+- **Scoring**: Weighted annotation completeness scoring in `src/annotation_prioritizer/scoring.py`
+- **Call Counter**: Same-module call counting in `src/annotation_prioritizer/call_counter.py`
+- **CLI**: Placeholder "Hello World" in `src/annotation_prioritizer/cli.py:main` (pending replacement)
 - **Tooling**: Fully configured with uv, ruff, pyright (strict), pytest, pre-commit
 - **Standards**: 100% test coverage, functional programming style, frozen dataclasses
 - **Dependencies**: Runtime (rich), dev (pytest, coverage, pre-commit)
@@ -223,6 +227,9 @@ class CallCountVisitor(ast.NodeVisitor):
 - Method calls vs function calls
 - Multiple calls to same function
 - Calls to unknown/external functions (should be ignored)
+
+**Implementation Note:**
+- ⚠️ **Future Enhancement Needed**: The current implementation has a limitation with complex qualified calls like `obj.attr1.attr2.method()`. Currently, only the final attribute `"method"` is extracted rather than building the full qualified name. This simplification works for the current same-module scope but should be enhanced for cross-module analysis in future versions.
 
 ### Commit 5: CLI Integration and Output
 

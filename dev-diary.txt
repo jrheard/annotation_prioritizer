@@ -19,3 +19,8 @@ tried to add a lint-on-edit hook but couldn't get it working, maybe someday - TO
 added pyright
 
 added 100% coverage hook
+
+update original plan to reflect progress from initial_implemenation_plan?
+or don't, and just use both of those files when making the next plan?
+
+TODO be sure to pick up the "future enhancement needed" note in commit 4 of initial_implementation_plan
