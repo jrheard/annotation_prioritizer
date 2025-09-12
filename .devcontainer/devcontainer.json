@@ -56,7 +56,8 @@
     ],
     "containerEnv": {
         "CLAUDE_CONFIG_DIR": "/home/python/.claude",
-        "POWERLEVEL9K_DISABLE_GITSTATUS": "true"
+        "POWERLEVEL9K_DISABLE_GITSTATUS": "true",
+        "UV_LINK_MODE": "copy"
     },
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
     "workspaceFolder": "/workspace",

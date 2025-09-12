@@ -18,6 +18,8 @@ dev-dependencies = [
     "pytest>=8.0.0",
     "coverage[toml]>=7.0.0",
     "pre-commit>=3.0.0",
+    "pyright>=1.1.0",
+    "ruff>=0.6.0",
 ]
 
 [tool.ruff]
