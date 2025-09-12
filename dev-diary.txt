@@ -33,7 +33,7 @@ DONE have a subagent for specifically dealing with linting / type-checking issue
 
 DONE update claude.md to talk about workspace/demo_files dir
 
-TODO have a subagent for critically analyzing a plan file, looking for ways in which it's inconsistent with project goals, look for ways in which it's ambiguous / self-contradictory, generate detailed recommendations about any suggested changes
+TODO have a slash command for critically analyzing a plan file, looking for ways in which it's inconsistent with project goals, look for ways in which it's ambiguous / self-contradictory, generate detailed recommendations about any suggested changes
 
 DONE have a slash command that reviews tests (with $arguments) and looks for duplicated / overly verbose code that can be improved by using helper functions
 
@@ -41,4 +41,4 @@ DONE use new /test-quality command
 
 DONE count_function_calls() docstring is too brief - any others?
 
-TODO add github action that runs pre-commit hooks on whole codebase
+DONE add github action that runs pre-commit hooks on whole codebase

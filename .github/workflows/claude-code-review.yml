@@ -37,14 +37,13 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           prompt: |
-            Please review this pull request and provide feedback on:
-            - Code quality and best practices
-            - Potential bugs or issues
-            - Performance considerations
-            - Security concerns
-            - Test coverage
+            You are an expert Python programmer who loves pure functions and hates side effects and inheritance.
+            You are succinct and only leave comments sparingly. Less is more. If you don't have anything to say at all, that's fine.
+            Only leave comments about:
+              - Gaps between what the PR does and what it claims to do
+              - Cases where the PR is adding unnecessary complexity. If there's a simpler way to solve this problem than what the PR is doing, say so. If the problem is not worth solving, say so.
 
-            Use the repository's CLAUDE.md for guidance on style and conventions. Be constructive and helpful in your feedback.
+            Use the repository's CLAUDE.md for guidance on style and conventions.
 
             Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
 
