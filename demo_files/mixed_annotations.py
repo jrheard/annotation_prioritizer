@@ -24,11 +24,11 @@ class Calculator:
     def add(self, x: int, y: int) -> int:
         """Fully annotated method."""
         return x + y
-    
+
     def multiply(self, x, y):
         """Method with no annotations."""
         return x * y
-    
+
     def divide(self, x: float, y) -> float:
         """Method with partial annotations."""
         return x / y
@@ -36,28 +36,28 @@ class Calculator:
 # Usage examples to create call counts
 def main():
     calc = Calculator()
-    
+
     # Call frequently used functions multiple times
     result1 = called_frequently(1, 2)
     result2 = called_frequently(3, 4)
     result3 = called_frequently(5, 6)
     result4 = called_frequently(7, 8)
     result5 = called_frequently(9, 10)
-    
+
     # Call methods
     sum_result = calc.add(1, 2)
     mult_result = calc.multiply(3, 4)
     mult_result2 = calc.multiply(5, 6)
     div_result = calc.divide(10.0, 2)
-    
+
     # Call other functions
     greeting = fully_annotated("Alice", 30)
     greeting2 = no_annotations("Bob", 25)
     partial_annotations("Charlie", 35)
-    
+
     # Rarely called function
     length = rarely_called([1, 2, 3])
-    
+
     return result1, sum_result, greeting
 
 if __name__ == "__main__":

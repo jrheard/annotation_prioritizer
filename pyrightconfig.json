@@ -7,12 +7,12 @@
   "reportMissingImports": true,
   "venvPath": ".",
   "venv": ".venv",
-  
+
   "deprecateTypingAliases": true,
   "reportCallInDefaultInitializer": "error",
   "reportImplicitOverride": "error",
   "reportMissingSuperCall": "error",
-  
+
   "reportImplicitStringConcatenation": "error",
   "reportPropertyTypeMismatch": "error",
   "reportUninitializedInstanceVariable": "error",

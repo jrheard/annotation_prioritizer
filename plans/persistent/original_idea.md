@@ -24,7 +24,7 @@ Currently available tools (mypy, pytype, MonkeyType) can identify missing annota
 
 **Variable Type Analysis Enhancements**
 - Factory function resolution: `var = factory_function()` → determine return type
-- Assignment chain handling: `a = b = ClassName()` 
+- Assignment chain handling: `a = b = ClassName()`
 - Conditional assignment tracking: `var = Class1() if condition else Class2()`
 - Import-based constructor resolution: `var = imported.ClassName()`
 - Type annotation inference: Use existing annotations to infer variable types

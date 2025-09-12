@@ -51,6 +51,7 @@ class CallCountVisitor(ast.NodeVisitor):
 
     def __init__(self, call_counts: dict[str, int]) -> None:
         """Initialize visitor with call count tracking dictionary."""
+        super().__init__()
         self.call_counts = call_counts
         self.class_stack: list[str] = []
 

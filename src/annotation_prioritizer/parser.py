@@ -42,6 +42,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
 
     def __init__(self, file_path: str) -> None:
         """Initialize the visitor with a file path."""
+        super().__init__()
         self.file_path = file_path
         self.functions: list[FunctionInfo] = []
         self.class_stack: list[str] = []
