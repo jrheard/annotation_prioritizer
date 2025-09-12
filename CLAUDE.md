@@ -65,7 +65,7 @@ This project follows functional programming principles:
   - `refactor:` - Code restructuring without behavior changes
   - `test:` - Test changes
   - `docs:` - Documentation
-- **Include dev-diary.txt**: Always include changes to `dev-diary.txt` in commits (user edits this during work)
+- Always include changes to `dev-diary.txt` and `TODO.md` in commits (user edits these files during work)
 
 ## Project Structure
 

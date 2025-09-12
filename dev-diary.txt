@@ -35,4 +35,6 @@ DONE update claude.md to talk about workspace/demo_files dir
 
 TODO have a subagent for critically analyzing a plan file, looking for ways in which it's inconsistent with project goals, look for ways in which it's ambiguous / self-contradictory, generate detailed recommendations about any suggested changes
 
-TODO have a slash command that reviews tests (with $arguments) and looks for duplicated / overly verbose code that can be improved by using helper functions
+DONE have a slash command that reviews tests (with $arguments) and looks for duplicated / overly verbose code that can be improved by using helper functions
+
+TODO use new /test-quality command

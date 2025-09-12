@@ -2,6 +2,8 @@
 
 Python type annotation priority analyzer - identifies high-impact functions that need type annotations.
 
+NOTE: This codebase is ~10% intended to be actually useful, but is ~90% just a sandbox for me to experiment with Claude Code.
+
 ## Overview
 
 This tool analyzes Python codebases with partial type annotation coverage and prioritizes which functions should be annotated first based on usage frequency and annotation completeness.
