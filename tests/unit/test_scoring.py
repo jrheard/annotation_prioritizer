@@ -1,5 +1,7 @@
 """Unit tests for the scoring module."""
 
+import pytest
+
 from annotation_prioritizer.models import FunctionInfo, ParameterInfo
 from annotation_prioritizer.scoring import (
     PARAMETERS_WEIGHT,
@@ -13,9 +15,16 @@ from annotation_prioritizer.scoring import (
 class TestCalculateParameterScore:
     """Tests for calculate_parameter_score function."""
 
-    def test_no_parameters_returns_perfect_score(self) -> None:
-        """Functions with no parameters should get a perfect parameter score."""
-        parameters = ()
+    @pytest.mark.parametrize(
+        "parameters",
+        [
+            (),  # No parameters
+            (ParameterInfo("self", False, False, False),),  # Only self
+            (ParameterInfo("cls", False, False, False),),  # Only cls
+        ],
+    )
+    def test_implicit_parameters_get_perfect_score(self, parameters: tuple[ParameterInfo, ...]) -> None:
+        """Functions with only implicit/no parameters get perfect parameter score."""
         score = calculate_parameter_score(parameters)
         assert score == 1.0
 
@@ -236,18 +245,6 @@ class TestCalculateAnnotationScore:
         assert score.function_qualified_name == "module.ClassName.complex_func"
         expected_total = PARAMETERS_WEIGHT * (2.0 / 3.0)
         assert score.total_score == expected_total
-
-    def test_self_parameter_treated_as_implicit(self) -> None:
-        """Methods with only self parameter should get perfect parameter score."""
-        parameters = (ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),)
-        score = calculate_parameter_score(parameters)
-        assert score == 1.0
-
-    def test_cls_parameter_treated_as_implicit(self) -> None:
-        """Class methods with only cls parameter should get perfect parameter score."""
-        parameters = (ParameterInfo("cls", has_annotation=False, is_variadic=False, is_keyword=False),)
-        score = calculate_parameter_score(parameters)
-        assert score == 1.0
 
     def test_method_with_self_and_annotated_params(self) -> None:
         """Method with self + annotated params should get perfect parameter score."""

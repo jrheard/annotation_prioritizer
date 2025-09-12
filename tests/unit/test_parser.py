@@ -1,28 +1,30 @@
 """Tests for the AST parser module."""
 
+import pytest
+
 from annotation_prioritizer.models import ParameterInfo
 from annotation_prioritizer.parser import parse_function_definitions
 from tests.helpers.temp_files import temp_python_file
 
 
-def test_parse_function_definitions_empty_file() -> None:
-    """Test parsing an empty Python file."""
-    with temp_python_file("") as path:
-        result = parse_function_definitions(path)
-        assert result == ()
+@pytest.mark.parametrize(
+    ("test_case", "file_content"),
+    [
+        ("empty_file", ""),
+        ("nonexistent_file", None),
+        ("syntax_error", "def broken_syntax(\n"),
+    ],
+)
+def test_parse_invalid_inputs_return_empty(test_case: str, file_content: str | None) -> None:
+    """Test that parser returns empty tuple for various invalid inputs."""
+    if test_case == "nonexistent_file":
+        result = parse_function_definitions("/nonexistent/file.py")
+    else:
+        assert file_content is not None  # Type narrowing for pyright
+        with temp_python_file(file_content) as path:
+            result = parse_function_definitions(path)
 
-
-def test_parse_function_definitions_nonexistent_file() -> None:
-    """Test parsing a file that doesn't exist."""
-    result = parse_function_definitions("/nonexistent/file.py")
     assert result == ()
-
-
-def test_parse_function_definitions_syntax_error() -> None:
-    """Test parsing a file with syntax errors."""
-    with temp_python_file("def broken_syntax(\n") as path:
-        result = parse_function_definitions(path)
-        assert result == ()
 
 
 def test_parse_simple_function_no_annotations() -> None:
@@ -86,29 +88,24 @@ def mixed_function(a: int, b, c: str):
         assert func.parameters[2] == ParameterInfo("c", True, False, False)
 
 
-def test_parse_function_with_varargs() -> None:
-    """Test parsing a function with *args and **kwargs."""
-    source = """
+@pytest.mark.parametrize(
+    ("with_annotations", "expected_annotations"),
+    [
+        (True, {"a": True, "args": True, "kwargs": True, "return": True}),
+        (False, {"a": False, "args": False, "kwargs": False, "return": False}),
+    ],
+)
+def test_parse_function_with_varargs(
+    *, with_annotations: bool, expected_annotations: dict[str, bool]
+) -> None:
+    """Test parsing functions with *args and **kwargs with and without annotations."""
+    if with_annotations:
+        source = """
 def varargs_function(a: int, *args: str, **kwargs: bool) -> None:
     pass
 """
-
-    with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
-        assert len(result) == 1
-
-        func = result[0]
-        assert func.has_return_annotation is True
-        assert len(func.parameters) == 3
-
-        assert func.parameters[0] == ParameterInfo("a", True, False, False)
-        assert func.parameters[1] == ParameterInfo("args", True, True, False)
-        assert func.parameters[2] == ParameterInfo("kwargs", True, False, True)
-
-
-def test_parse_function_with_varargs_no_annotations() -> None:
-    """Test parsing a function with *args and **kwargs without annotations."""
-    source = """
+    else:
+        source = """
 def varargs_function(a, *args, **kwargs):
     pass
 """
@@ -118,12 +115,12 @@ def varargs_function(a, *args, **kwargs):
         assert len(result) == 1
 
         func = result[0]
-        assert func.has_return_annotation is False
+        assert func.has_return_annotation is expected_annotations["return"]
         assert len(func.parameters) == 3
 
-        assert func.parameters[0] == ParameterInfo("a", False, False, False)
-        assert func.parameters[1] == ParameterInfo("args", False, True, False)
-        assert func.parameters[2] == ParameterInfo("kwargs", False, False, True)
+        assert func.parameters[0] == ParameterInfo("a", expected_annotations["a"], False, False)
+        assert func.parameters[1] == ParameterInfo("args", expected_annotations["args"], True, False)
+        assert func.parameters[2] == ParameterInfo("kwargs", expected_annotations["kwargs"], False, True)
 
 
 def test_parse_class_methods() -> None:
