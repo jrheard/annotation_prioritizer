@@ -42,3 +42,7 @@ DONE use new /test-quality command
 DONE count_function_calls() docstring is too brief - any others?
 
 DONE add github action that runs pre-commit hooks on whole codebase
+
+TODO figure out what to work on next!! probably the method call attribution bug, plan in pending/ dir!!
+
+TODO read https://github.com/anthropics/claude-code-action?tab=readme-ov-file#-solutions--use-cases

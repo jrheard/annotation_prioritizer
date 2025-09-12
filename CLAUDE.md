@@ -32,7 +32,8 @@ ruff format                # Format code
 pre-commit run --all-files # Run all hooks manually
 ```
 
-When you encounter Python linting issues, run `ruff check --fix` and `ruff format` first before trying to fix those issues yourself. If you still see more than one or two errors, use the python-lint-fixer subagent.
+When you encounter Python linting issues, run `ruff check --fix` and `ruff format` first before trying to fix those issues yourself.
+If pre-commit fails with multiple pyright errors or test failures, immediately use the python-lint-fixer subagent instead of fixing manually.
 When fixing linting/formatting issues while satisfying pre-commit, ALWAYS `git add` the fixed files before attempting to commit again.
 
 ## Architecture
