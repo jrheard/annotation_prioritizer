@@ -27,8 +27,12 @@ TODO be sure to pick up the "future enhancement needed" note in commit 4 of init
 
 TODO next up should be updating this to run on a _directory_ rather than a single file
 
-TODO verify that we're treating self and cls correctly (they count as annotated)
+DONE verify that we're treating self and cls correctly (they count as annotated)
 
 DONE have a subagent for specifically dealing with linting / type-checking issues?
 
-TODO update claude.md to talk about workspace/demo_files dir
+DONE update claude.md to talk about workspace/demo_files dir
+
+TODO have a subagent for critically analyzing a plan file, looking for ways in which it's inconsistent with project goals, look for ways in which it's ambiguous / self-contradictory, generate detailed recommendations about any suggested changes
+
+TODO have a slash command that reviews tests (with $arguments) and looks for duplicated / overly verbose code that can be improved by using helper functions

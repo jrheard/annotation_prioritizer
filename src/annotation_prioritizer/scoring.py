@@ -16,13 +16,20 @@ def calculate_parameter_score(parameters: tuple[ParameterInfo, ...]) -> float:
     Returns:
         Score from 0.0 (no parameters annotated) to 1.0 (all parameters annotated).
         Returns 1.0 if there are no parameters (fully annotated by definition).
+        self and cls parameters are treated as implicitly annotated.
 
     """
     if not parameters:
         return 1.0  # No parameters = fully annotated
 
-    annotated_count = sum(1 for p in parameters if p.has_annotation)
-    return annotated_count / len(parameters)
+    # Filter out self and cls parameters as they are implicitly annotated
+    relevant_parameters = tuple(p for p in parameters if p.name not in ("self", "cls"))
+
+    if not relevant_parameters:
+        return 1.0  # Only self/cls parameters = fully annotated
+
+    annotated_count = sum(1 for p in relevant_parameters if p.has_annotation)
+    return annotated_count / len(relevant_parameters)
 
 
 def calculate_return_score(*, has_return_annotation: bool) -> float:

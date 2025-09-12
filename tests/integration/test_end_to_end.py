@@ -156,17 +156,19 @@ def use_calculator():
         priorities_by_name = {p.function_info.qualified_name: p for p in priorities}
 
         subtract = priorities_by_name["Calculator.subtract"]
-        assert subtract.annotation_score.total_score == 0.0  # No annotations (self, x, y all unannotated)
+        # self is ignored, x and y are unannotated, return is unannotated
+        # parameter_score = 0/2, return_score = 0.0, total = 0.75 * 0 + 0.25 * 0 = 0.0
+        assert subtract.annotation_score.total_score == 0.0
         assert subtract.call_count == 1
 
         multiply = priorities_by_name["Calculator.multiply"]
-        # self is unannotated, x is annotated, y is unannotated, return is annotated
-        # parameter_score = 1/3, return_score = 1.0, total = 0.75 * (1/3) + 0.25 * 1.0 = 0.5
-        assert multiply.annotation_score.total_score == 0.5
+        # self is ignored, x is annotated, y is unannotated, return is annotated
+        # parameter_score = 1/2, return_score = 1.0, total = 0.75 * 0.5 + 0.25 * 1.0 = 0.625
+        assert multiply.annotation_score.total_score == 0.625
         assert multiply.call_count == 1
 
         add = priorities_by_name["Calculator.add"]
-        # self is unannotated, x and y are annotated, return is annotated
-        # parameter_score = 2/3, return_score = 1.0, total = 0.75 * (2/3) + 0.25 * 1.0 = 0.75
-        assert add.annotation_score.total_score == 0.75
+        # self is ignored, x and y are annotated, return is annotated
+        # parameter_score = 2/2, return_score = 1.0, total = 0.75 * 1.0 + 0.25 * 1.0 = 1.0
+        assert add.annotation_score.total_score == 1.0
         assert add.call_count == 1

@@ -230,9 +230,64 @@ class TestCalculateAnnotationScore:
 
         score = calculate_annotation_score(function_info)
 
-        # 2 out of 4 parameters annotated = 0.5
-        assert score.parameter_score == 0.5
+        # self is ignored, 2 out of 3 relevant parameters annotated = 2/3
+        assert score.parameter_score == 2.0 / 3.0
         assert score.return_score == 0.0
         assert score.function_qualified_name == "module.ClassName.complex_func"
-        expected_total = PARAMETERS_WEIGHT * 0.5
+        expected_total = PARAMETERS_WEIGHT * (2.0 / 3.0)
         assert score.total_score == expected_total
+
+    def test_self_parameter_treated_as_implicit(self) -> None:
+        """Methods with only self parameter should get perfect parameter score."""
+        parameters = (ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),)
+        score = calculate_parameter_score(parameters)
+        assert score == 1.0
+
+    def test_cls_parameter_treated_as_implicit(self) -> None:
+        """Class methods with only cls parameter should get perfect parameter score."""
+        parameters = (ParameterInfo("cls", has_annotation=False, is_variadic=False, is_keyword=False),)
+        score = calculate_parameter_score(parameters)
+        assert score == 1.0
+
+    def test_method_with_self_and_annotated_params(self) -> None:
+        """Method with self + annotated params should get perfect parameter score."""
+        parameters = (
+            ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),
+            ParameterInfo("x", has_annotation=True, is_variadic=False, is_keyword=False),
+            ParameterInfo("y", has_annotation=True, is_variadic=False, is_keyword=False),
+        )
+        score = calculate_parameter_score(parameters)
+        assert score == 1.0
+
+    def test_method_with_self_and_mixed_annotations(self) -> None:
+        """Method with self + mixed annotations should score based only on real params."""
+        parameters = (
+            ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),
+            ParameterInfo("x", has_annotation=True, is_variadic=False, is_keyword=False),
+            ParameterInfo("y", has_annotation=False, is_variadic=False, is_keyword=False),
+        )
+        score = calculate_parameter_score(parameters)
+        # Only x and y count, 1 out of 2 annotated = 0.5
+        assert score == 0.5
+
+    def test_classmethod_with_cls_and_mixed_annotations(self) -> None:
+        """Class method with cls + mixed annotations should score based only on real params."""
+        parameters = (
+            ParameterInfo("cls", has_annotation=False, is_variadic=False, is_keyword=False),
+            ParameterInfo("value", has_annotation=True, is_variadic=False, is_keyword=False),
+            ParameterInfo("config", has_annotation=False, is_variadic=False, is_keyword=False),
+        )
+        score = calculate_parameter_score(parameters)
+        # Only value and config count, 1 out of 2 annotated = 0.5
+        assert score == 0.5
+
+    def test_both_self_and_cls_ignored(self) -> None:
+        """Unusual case where both self and cls are present should ignore both."""
+        parameters = (
+            ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),
+            ParameterInfo("cls", has_annotation=False, is_variadic=False, is_keyword=False),
+            ParameterInfo("x", has_annotation=True, is_variadic=False, is_keyword=False),
+        )
+        score = calculate_parameter_score(parameters)
+        # Only x counts, 1 out of 1 annotated = 1.0
+        assert score == 1.0
