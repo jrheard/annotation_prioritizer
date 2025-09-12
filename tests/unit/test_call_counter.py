@@ -1,11 +1,10 @@
 """Tests for call counting functionality."""
 
 import ast
-import tempfile
-from pathlib import Path
 
 from annotation_prioritizer.call_counter import CallCountVisitor, count_function_calls
 from annotation_prioritizer.models import FunctionInfo, ParameterInfo
+from tests.helpers.temp_files import temp_python_file
 
 
 def test_count_function_calls_simple_functions() -> None:
@@ -24,11 +23,7 @@ def caller():
     return func_a() + func_b()
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         known_functions = (
             FunctionInfo(
                 name="func_a",
@@ -65,9 +60,6 @@ def caller():
         assert call_counts["func_b"] == 2  # Called 2 times
         assert call_counts["caller"] == 0  # Not called
 
-    finally:
-        Path(temp_path).unlink()
-
 
 def test_count_method_calls() -> None:
     """Test counting calls to class methods."""
@@ -89,11 +81,7 @@ def use_calculator():
     return calc.add(5, 6)
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         known_functions = (
             FunctionInfo(
                 name="add",
@@ -130,9 +118,6 @@ def use_calculator():
         assert call_counts["Calculator.add"] == 2
         assert call_counts["Calculator.multiply"] == 1
 
-    finally:
-        Path(temp_path).unlink()
-
 
 def test_count_static_method_calls() -> None:
     """Test counting calls to static methods via class name."""
@@ -149,11 +134,7 @@ def external_use():
     return Utils.format_number(100)
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         known_functions = (
             FunctionInfo(
                 name="format_number",
@@ -173,9 +154,6 @@ def external_use():
         # Utils.format_number() called twice
         assert call_counts["Utils.format_number"] == 2
 
-    finally:
-        Path(temp_path).unlink()
-
 
 def test_count_no_calls() -> None:
     """Test with functions that are never called."""
@@ -187,11 +165,7 @@ def another_unused():
     pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         known_functions = (
             FunctionInfo(
                 name="unused_function",
@@ -217,9 +191,6 @@ def another_unused():
         assert call_counts["unused_function"] == 0
         assert call_counts["another_unused"] == 0
 
-    finally:
-        Path(temp_path).unlink()
-
 
 def test_count_unknown_functions_ignored() -> None:
     """Test that calls to unknown functions are ignored."""
@@ -233,11 +204,7 @@ def caller():
     imported_func()  # This should also be ignored
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         known_functions = (
             FunctionInfo(
                 name="known_func",
@@ -254,9 +221,6 @@ def caller():
 
         assert call_counts["known_func"] == 1
 
-    finally:
-        Path(temp_path).unlink()
-
 
 def test_count_calls_nonexistent_file() -> None:
     """Test handling of nonexistent files."""
@@ -271,16 +235,9 @@ def broken_syntax(
     # Missing closing parenthesis
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         result = count_function_calls(temp_path, ())
         assert result == ()
-
-    finally:
-        Path(temp_path).unlink()
 
 
 def test_count_calls_empty_known_functions() -> None:
@@ -290,16 +247,9 @@ def some_function():
     pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         result = count_function_calls(temp_path, ())
         assert result == ()
-
-    finally:
-        Path(temp_path).unlink()
 
 
 def test_count_nested_class_methods() -> None:
@@ -319,11 +269,7 @@ class Outer:
         return Outer.Inner().inner_method()
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         known_functions = (
             FunctionInfo(
                 name="inner_method",
@@ -342,9 +288,6 @@ class Outer:
 
         # Due to our simple implementation, these complex calls won't be tracked
         assert call_counts["Outer.Inner.inner_method"] == 0
-
-    finally:
-        Path(temp_path).unlink()
 
 
 def test_count_edge_case_calls() -> None:
@@ -370,11 +313,7 @@ def test_self_without_class():
     pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code) as temp_path:
         known_functions = (
             FunctionInfo(
                 name="method_in_class",
@@ -404,9 +343,6 @@ def test_self_without_class():
         assert call_counts["MyClass.method_in_class"] == 0
         assert call_counts["standalone_method"] == 0
 
-    finally:
-        Path(temp_path).unlink()
-
 
 def test_self_call_outside_class_context() -> None:
     """Test self.method() calls that occur outside class context."""
@@ -417,11 +353,7 @@ def some_function():
     pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(code)
-        temp_path = f.name
-
-    try:
+    with temp_python_file(code):
         # Create a visitor and manually test the edge case
         call_counts = {"method": 0}
         visitor = CallCountVisitor(call_counts)
@@ -433,9 +365,6 @@ def some_function():
         # Test by actually visiting the call - this should increment the count
         visitor.visit_Call(call_node)
         assert call_counts["method"] == 1  # This covers line 70
-
-    finally:
-        Path(temp_path).unlink()
 
 
 def test_complex_qualified_calls() -> None:
