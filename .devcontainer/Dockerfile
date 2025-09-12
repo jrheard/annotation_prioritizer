@@ -117,5 +117,9 @@ RUN mkdir -p /home/python/.config/fish && \
     echo "    if test -f /workspace/.venv/bin/activate.fish" >> /home/python/.config/fish/config.fish && \
     echo "        source /workspace/.venv/bin/activate.fish" >> /home/python/.config/fish/config.fish && \
     echo "    end" >> /home/python/.config/fish/config.fish && \
+    echo "    # Disable virtual environment prompt override since devcontainer is always in virtual environment" >> /home/python/.config/fish/config.fish && \
+    echo "    set -gx VIRTUAL_ENV_DISABLE_PROMPT 1" >> /home/python/.config/fish/config.fish && \
+    echo "    # Disable venv section since devcontainer is always in virtual environment" >> /home/python/.config/fish/config.fish && \
+    echo "    set -gx SPACEFISH_VENV_SHOW false" >> /home/python/.config/fish/config.fish && \
     echo "end" >> /home/python/.config/fish/config.fish && \
     chown -R python:python /home/python/.config/fish
