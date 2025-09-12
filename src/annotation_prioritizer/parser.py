@@ -7,7 +7,20 @@ from .models import FunctionInfo, ParameterInfo
 
 
 def parse_function_definitions(file_path: str) -> tuple[FunctionInfo, ...]:
-    """Extract all function definitions from a Python file."""
+    """Extract all function definitions from a Python file using AST parsing.
+
+    Parses the Python source file and extracts information about all function
+    definitions found, including regular functions, async functions, and methods
+    within classes. Builds qualified names for methods using class context.
+    Returns empty tuple if file doesn't exist or has syntax errors.
+
+    Args:
+        file_path: Path to the Python source file to analyze
+
+    Returns:
+        Tuple of FunctionInfo objects containing function metadata including
+        name, qualified name, parameters, and return annotation status.
+    """
     file_path_obj = Path(file_path)
     if not file_path_obj.exists():
         return ()

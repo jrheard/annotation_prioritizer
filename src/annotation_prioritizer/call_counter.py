@@ -7,7 +7,22 @@ from .models import CallCount, FunctionInfo
 
 
 def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ...]) -> tuple[CallCount, ...]:
-    """Count calls to known functions within the same file."""
+    """Count calls to known functions within the same file using AST parsing.
+
+    Parses the Python source file and identifies calls to functions from the
+    known_functions list. Handles direct function calls, method calls on self,
+    and class method calls. Returns empty tuple if file doesn't exist or has
+    syntax errors.
+
+    Args:
+        file_path: Path to the Python source file to analyze
+        known_functions: Functions to count calls for, matched by qualified_name
+
+    Returns:
+        Tuple of CallCount objects with call counts for each known function.
+        Functions with zero calls are still included in the results.
+
+    """
     file_path_obj = Path(file_path)
     if not file_path_obj.exists():
         return ()
