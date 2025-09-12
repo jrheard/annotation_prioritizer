@@ -108,10 +108,14 @@ COPY pyproject.toml README.md ./
 COPY src/ src/
 RUN uv sync --dev
 
-# Create container-safe fish config that preserves PATH
+# Create container-safe fish config that preserves PATH and activates virtual environment
 RUN mkdir -p /home/python/.config/fish && \
     echo "if status is-interactive" > /home/python/.config/fish/config.fish && \
     echo "    # Preserve container PATH for Claude CLI and other tools" >> /home/python/.config/fish/config.fish && \
     echo "    # Host functions will be available via mounted functions directory" >> /home/python/.config/fish/config.fish && \
+    echo "    # Activate uv virtual environment if it exists" >> /home/python/.config/fish/config.fish && \
+    echo "    if test -f /workspace/.venv/bin/activate.fish" >> /home/python/.config/fish/config.fish && \
+    echo "        source /workspace/.venv/bin/activate.fish" >> /home/python/.config/fish/config.fish && \
+    echo "    end" >> /home/python/.config/fish/config.fish && \
     echo "end" >> /home/python/.config/fish/config.fish && \
     chown -R python:python /home/python/.config/fish

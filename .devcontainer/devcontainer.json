@@ -25,8 +25,8 @@
             "settings": {
                 "editor.formatOnSave": true,
                 "editor.defaultFormatter": "charliermarsh.ruff",
-                "python.defaultInterpreterPath": "/usr/local/bin/python",
-                "python.terminal.activateEnvironment": false,
+                "python.defaultInterpreterPath": "/workspace/.venv/bin/python",
+                "python.terminal.activateEnvironment": true,
                 "python.analysis.typeCheckingMode": "strict",
                 "python.linting.enabled": false,
                 "python.formatting.provider": "none",
@@ -58,6 +58,7 @@
     },
     "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated",
     "workspaceFolder": "/workspace",
+    "postCreateCommand": "uv sync --dev && uv run pre-commit install",
     "postStartCommand": "sudo /usr/local/bin/init-firewall.sh",
     "waitFor": "postStartCommand"
 }
