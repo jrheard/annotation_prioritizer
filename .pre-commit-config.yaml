@@ -27,6 +27,7 @@ repos:
     rev: v1.1.405
     hooks:
       - id: pyright
+        args: [--project, pyrightconfig.precommit.json]
 
   - repo: local
     hooks:
