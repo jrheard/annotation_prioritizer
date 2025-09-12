@@ -6,5 +6,16 @@
   "ignore": ["demo_files/"],
   "reportMissingImports": true,
   "venvPath": ".",
-  "venv": ".venv"
+  "venv": ".venv",
+  
+  "deprecateTypingAliases": true,
+  "reportCallInDefaultInitializer": "error",
+  "reportImplicitOverride": "error",
+  "reportMissingSuperCall": "error",
+  
+  "reportImplicitStringConcatenation": "error",
+  "reportPropertyTypeMismatch": "error",
+  "reportUninitializedInstanceVariable": "error",
+  "reportUnnecessaryTypeIgnoreComment": "error",
+  "reportUnusedCallResult": "none"
 }

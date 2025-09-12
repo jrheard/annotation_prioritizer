@@ -2,6 +2,7 @@
 
 import ast
 from pathlib import Path
+from typing import override
 
 from .models import FunctionInfo, ParameterInfo
 
@@ -45,17 +46,20 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         self.functions: list[FunctionInfo] = []
         self.class_stack: list[str] = []
 
+    @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Visit class definition to track context for method qualified names."""
         self.class_stack.append(node.name)
         self.generic_visit(node)
         self.class_stack.pop()
 
+    @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Visit function definition to extract function info."""
         self._process_function(node)
         self.generic_visit(node)
 
+    @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Visit async function definition to extract function info."""
         self._process_function(node)
