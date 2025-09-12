@@ -1,11 +1,8 @@
 """Tests for output module."""
 
-from io import StringIO
-
-from rich.console import Console
-
 from annotation_prioritizer.models import AnnotationScore, FunctionInfo, FunctionPriority, ParameterInfo
 from annotation_prioritizer.output import display_results, format_results_table, print_summary_stats
+from tests.helpers.console import assert_console_contains, capture_console_output
 
 
 def test_format_results_table_empty() -> None:
@@ -96,13 +93,9 @@ def test_format_results_table_color_styling() -> None:
 
 def test_print_summary_stats_empty() -> None:
     """Test printing summary stats for empty results."""
-    output = StringIO()
-    console = Console(file=output, force_terminal=False, width=80)
-
-    print_summary_stats(console, ())
-
-    output_str = output.getvalue()
-    assert "No functions found to analyze." in output_str
+    with capture_console_output() as (console, output):
+        print_summary_stats(console, ())
+        assert_console_contains(output, "No functions found to analyze.")
 
 
 def test_print_summary_stats_all_annotated() -> None:
@@ -126,16 +119,15 @@ def test_print_summary_stats_all_annotated() -> None:
         priority_score=0.0,
     )
 
-    output = StringIO()
-    console = Console(file=output, force_terminal=False, width=80)
-
-    print_summary_stats(console, (priority,))
-
-    output_str = output.getvalue()
-    assert "Total functions analyzed: 1" in output_str
-    assert "Fully annotated functions: 1" in output_str
-    assert "High priority functions (score ≥ 2.0): 0" in output_str
-    assert "All functions are fully annotated!" in output_str
+    with capture_console_output() as (console, output):
+        print_summary_stats(console, (priority,))
+        assert_console_contains(
+            output,
+            "Total functions analyzed: 1",
+            "Fully annotated functions: 1",
+            "High priority functions (score ≥ 2.0): 0",
+            "All functions are fully annotated!",
+        )
 
 
 def test_print_summary_stats_with_high_priority() -> None:
@@ -178,27 +170,22 @@ def test_print_summary_stats_with_high_priority() -> None:
         priority_score=0.0,
     )
 
-    output = StringIO()
-    console = Console(file=output, force_terminal=False, width=80)
-
-    print_summary_stats(console, (priority1, priority2))
-
-    output_str = output.getvalue()
-    assert "Total functions analyzed: 2" in output_str
-    assert "Fully annotated functions: 1" in output_str
-    assert "High priority functions (score ≥ 2.0): 1" in output_str
-    assert "function(s) need attention." in output_str
+    with capture_console_output() as (console, output):
+        print_summary_stats(console, (priority1, priority2))
+        assert_console_contains(
+            output,
+            "Total functions analyzed: 2",
+            "Fully annotated functions: 1",
+            "High priority functions (score ≥ 2.0): 1",
+            "function(s) need attention.",
+        )
 
 
 def test_display_results_empty() -> None:
     """Test displaying empty results."""
-    output = StringIO()
-    console = Console(file=output, force_terminal=False, width=80)
-
-    display_results(console, ())
-
-    output_str = output.getvalue()
-    assert "No functions found to analyze." in output_str
+    with capture_console_output() as (console, output):
+        display_results(console, ())
+        assert_console_contains(output, "No functions found to analyze.")
 
 
 def test_display_results_with_data() -> None:
@@ -222,13 +209,12 @@ def test_display_results_with_data() -> None:
         priority_score=3.75,
     )
 
-    output = StringIO()
-    console = Console(file=output, force_terminal=False, width=80)
-
-    display_results(console, (priority,))
-
-    output_str = output.getvalue()
-    # Should contain both table and summary
-    assert "Function Annotation Priority Analysis" in output_str
-    assert "Summary:" in output_str
-    assert "Total functions analyzed: 1" in output_str
+    with capture_console_output() as (console, output):
+        display_results(console, (priority,))
+        # Should contain both table and summary
+        assert_console_contains(
+            output,
+            "Function Annotation Priority Analysis",
+            "Summary:",
+            "Total functions analyzed: 1",
+        )

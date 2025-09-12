@@ -37,6 +37,6 @@ TODO have a subagent for critically analyzing a plan file, looking for ways in w
 
 DONE have a slash command that reviews tests (with $arguments) and looks for duplicated / overly verbose code that can be improved by using helper functions
 
-TODO use new /test-quality command
+DONE use new /test-quality command
 
-TODO  count_function_calls() docstring is too brief - any others?
+DONE count_function_calls() docstring is too brief - any others?
