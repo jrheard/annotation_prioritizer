@@ -2,6 +2,9 @@
 
 from dataclasses import dataclass
 
+# Temporary import to test import cycle detection
+from .scoring import RETURN_TYPE_WEIGHT
+
 
 @dataclass(frozen=True)
 class ParameterInfo:
