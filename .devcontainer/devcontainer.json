@@ -23,6 +23,7 @@
                 "charliermarsh.ruff"
             ],
             "settings": {
+                "remote.autoForwardPorts": false,
                 "editor.formatOnSave": true,
                 "editor.defaultFormatter": "charliermarsh.ruff",
                 "python.defaultInterpreterPath": "/workspace/.venv/bin/python",

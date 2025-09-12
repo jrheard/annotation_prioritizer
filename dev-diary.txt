@@ -1,0 +1,13 @@
+9/12
+
+got claude set up
+got dev container running after a lot of back and forth
+and more and more tweaks. but now i think it's good
+
+my goodness, is it time to actually get started?
+
+no :)
+i'm forwarding 21 ports atm, they're accumulating more and more
+ok fixed
+
+ok let's get started i guess!
