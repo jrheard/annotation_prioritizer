@@ -1,22 +1,15 @@
 """Tests for the AST parser module."""
 
-import tempfile
-from pathlib import Path
-
 from annotation_prioritizer.models import ParameterInfo
 from annotation_prioritizer.parser import parse_function_definitions
+from tests.helpers.temp_files import temp_python_file
 
 
 def test_parse_function_definitions_empty_file() -> None:
     """Test parsing an empty Python file."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write("")
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file("") as path:
+        result = parse_function_definitions(path)
         assert result == ()
-
-        Path(f.name).unlink()
 
 
 def test_parse_function_definitions_nonexistent_file() -> None:
@@ -27,14 +20,9 @@ def test_parse_function_definitions_nonexistent_file() -> None:
 
 def test_parse_function_definitions_syntax_error() -> None:
     """Test parsing a file with syntax errors."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write("def broken_syntax(\n")
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file("def broken_syntax(\n") as path:
+        result = parse_function_definitions(path)
         assert result == ()
-
-        Path(f.name).unlink()
 
 
 def test_parse_simple_function_no_annotations() -> None:
@@ -44,11 +32,8 @@ def simple_function(a, b):
     return a + b
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 1
 
         func = result[0]
@@ -56,13 +41,11 @@ def simple_function(a, b):
         assert func.qualified_name == "simple_function"
         assert func.has_return_annotation is False
         assert func.line_number == 2
-        assert func.file_path == f.name
+        assert func.file_path == path
 
         assert len(func.parameters) == 2
         assert func.parameters[0] == ParameterInfo("a", False, False, False)
         assert func.parameters[1] == ParameterInfo("b", False, False, False)
-
-        Path(f.name).unlink()
 
 
 def test_parse_function_with_annotations() -> None:
@@ -72,11 +55,8 @@ def annotated_function(a: int, b: str) -> bool:
     return len(b) > a
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 1
 
         func = result[0]
@@ -87,8 +67,6 @@ def annotated_function(a: int, b: str) -> bool:
         assert func.parameters[0] == ParameterInfo("a", True, False, False)
         assert func.parameters[1] == ParameterInfo("b", True, False, False)
 
-        Path(f.name).unlink()
-
 
 def test_parse_function_mixed_annotations() -> None:
     """Test parsing a function with mixed annotation coverage."""
@@ -97,11 +75,8 @@ def mixed_function(a: int, b, c: str):
     pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 1
 
         func = result[0]
@@ -109,8 +84,6 @@ def mixed_function(a: int, b, c: str):
         assert func.parameters[0] == ParameterInfo("a", True, False, False)
         assert func.parameters[1] == ParameterInfo("b", False, False, False)
         assert func.parameters[2] == ParameterInfo("c", True, False, False)
-
-        Path(f.name).unlink()
 
 
 def test_parse_function_with_varargs() -> None:
@@ -120,11 +93,8 @@ def varargs_function(a: int, *args: str, **kwargs: bool) -> None:
     pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 1
 
         func = result[0]
@@ -135,8 +105,6 @@ def varargs_function(a: int, *args: str, **kwargs: bool) -> None:
         assert func.parameters[1] == ParameterInfo("args", True, True, False)
         assert func.parameters[2] == ParameterInfo("kwargs", True, False, True)
 
-        Path(f.name).unlink()
-
 
 def test_parse_function_with_varargs_no_annotations() -> None:
     """Test parsing a function with *args and **kwargs without annotations."""
@@ -145,11 +113,8 @@ def varargs_function(a, *args, **kwargs):
     pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 1
 
         func = result[0]
@@ -159,8 +124,6 @@ def varargs_function(a, *args, **kwargs):
         assert func.parameters[0] == ParameterInfo("a", False, False, False)
         assert func.parameters[1] == ParameterInfo("args", False, True, False)
         assert func.parameters[2] == ParameterInfo("kwargs", False, False, True)
-
-        Path(f.name).unlink()
 
 
 def test_parse_class_methods() -> None:
@@ -179,11 +142,8 @@ class TestClass:
         return not z
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 3
 
         # Check qualified names
@@ -202,8 +162,6 @@ class TestClass:
         assert static_method.qualified_name == "TestClass.static_method"
         assert static_method.has_return_annotation is False
 
-        Path(f.name).unlink()
-
 
 def test_parse_nested_classes() -> None:
     """Test parsing methods in nested classes."""
@@ -217,11 +175,8 @@ class OuterClass:
             return x
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 2
 
         outer_method = next(f for f in result if f.name == "outer_method")
@@ -229,8 +184,6 @@ class OuterClass:
 
         inner_method = next(f for f in result if f.name == "inner_method")
         assert inner_method.qualified_name == "OuterClass.InnerClass.inner_method"
-
-        Path(f.name).unlink()
 
 
 def test_parse_async_functions() -> None:
@@ -244,11 +197,8 @@ class AsyncClass:
         pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 2
 
         async_func = next(f for f in result if f.name == "async_function")
@@ -259,8 +209,6 @@ class AsyncClass:
         assert async_method.qualified_name == "AsyncClass.async_method"
         assert async_method.has_return_annotation is False
 
-        Path(f.name).unlink()
-
 
 def test_parse_keyword_only_args() -> None:
     """Test parsing functions with keyword-only arguments."""
@@ -269,11 +217,8 @@ def keyword_only(a, *, b: int, c) -> None:
     pass
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 1
 
         func = result[0]
@@ -281,8 +226,6 @@ def keyword_only(a, *, b: int, c) -> None:
         assert func.parameters[0] == ParameterInfo("a", False, False, False)
         assert func.parameters[1] == ParameterInfo("b", True, False, False)
         assert func.parameters[2] == ParameterInfo("c", False, False, False)
-
-        Path(f.name).unlink()
 
 
 def test_parse_no_parameters() -> None:
@@ -292,19 +235,14 @@ def no_params() -> int:
     return 42
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 1
 
         func = result[0]
         assert func.name == "no_params"
         assert len(func.parameters) == 0
         assert func.has_return_annotation is True
-
-        Path(f.name).unlink()
 
 
 def test_parse_multiple_functions() -> None:
@@ -324,11 +262,8 @@ def func3() -> str:
     return "test"
 """
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        result = parse_function_definitions(f.name)
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
         assert len(result) == 4
 
         names = {f.name for f in result}
@@ -336,5 +271,3 @@ def func3() -> str:
 
         qualified_names = {f.qualified_name for f in result}
         assert qualified_names == {"func1", "func2", "TestClass.method1", "func3"}
-
-        Path(f.name).unlink()
