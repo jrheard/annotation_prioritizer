@@ -108,6 +108,9 @@ ipython_config.py
 # poetry.lock
 # poetry.toml
 
+# uv
+.python-version
+
 # pdm
 #   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
 #   pdm recommends including project-wide configuration in pdm.toml, but excluding .pdm-python.
@@ -214,3 +217,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Claude
+*.local.json

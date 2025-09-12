@@ -1,0 +1,9 @@
+{
+  "pythonVersion": "3.13",
+  "typeCheckingMode": "strict",
+  "include": ["src", "tests"],
+  "exclude": ["**/__pycache__"],
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false,
+  "reportPrivateImportUsage": false
+}

@@ -1,0 +1,44 @@
+[project]
+name = "annotation-prioritizer"
+version = "0.1.0"
+description = "Python type annotation priority analyzer"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["rich>=13.0.0"]
+
+[project.scripts]
+annotation-prioritizer = "annotation_prioritizer.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "coverage[toml]>=7.0.0",
+    "pre-commit>=3.0.0",
+]
+
+[tool.ruff]
+target-version = "py313"
+line-length = 88
+select = ["ALL"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/test_*", "*/__main__.py"]
+
+[tool.coverage.report]
+exclude_also = [
+    "def __repr__",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+fail_under = 100
