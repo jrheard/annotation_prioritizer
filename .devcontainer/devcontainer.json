@@ -20,7 +20,8 @@
                 "anthropic.claude-code",
                 "ms-python.python",
                 "ms-python.pylance",
-                "charliermarsh.ruff"
+                "charliermarsh.ruff",
+                "tamasfe.even-better-toml"
             ],
             "settings": {
                 "remote.autoForwardPorts": false,

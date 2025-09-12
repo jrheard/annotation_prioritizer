@@ -12,4 +12,6 @@ ok fixed
 
 ok let's get started i guess!
 
-TODO add "even better toml" extension
+DONE add "even better toml" extension
+
+tried to add a lint-on-edit hook but couldn't get it working, maybe someday - TODO

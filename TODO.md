@@ -1,7 +1,6 @@
 * precommit - pyright, tests, ruff, more base pre-commit hooks
 * tests
 * 100% test coverage
-* run ruff as post-edit hook
 * subagents
 * claude github actions
 * think about potentially useful slash commands

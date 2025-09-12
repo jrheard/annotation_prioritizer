@@ -55,6 +55,7 @@ This project follows functional programming principles:
 - **No inheritance**: Avoid inheritance unless absolutely necessary (e.g., when integrating with libraries like Python's AST module). Use bare functions instead
 - **No pytest fixtures**: Prefer normal helper functions over pytest fixtures for test setup
 - **Commit messages**: Use conventional commits format: `type: description` (e.g., `feat: add parser`, `fix: handle edge case`, `docs: update readme`)
+- **Include dev-diary.txt**: Always include changes to `dev-diary.txt` in commits (user edits this during work)
 
 ## Project Structure
 

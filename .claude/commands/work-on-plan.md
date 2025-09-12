@@ -1,0 +1,1 @@
+Find the next pending task in the implementation plan that's ready to be worked on. Implement that task completely, including all code and tests. Update the plan file to mark the task as completed and reflect any progress made. Create a commit with the changes using conventional commit format.
