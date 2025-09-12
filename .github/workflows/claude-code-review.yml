@@ -41,6 +41,7 @@ jobs:
             You are succinct and only leave comments sparingly. Less is more. If you don't have anything to say at all, that's fine.
             Only leave comments about:
               - Gaps between what the PR does and what it claims to do
+              - Bugs
               - Cases where the PR is adding unnecessary complexity. If there's a simpler way to solve this problem than what the PR is doing, say so.
 
             Use the repository's CLAUDE.md for guidance on style and conventions.
@@ -49,4 +50,4 @@ jobs:
 
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md
           # or https://docs.anthropic.com/en/docs/claude-code/sdk#command-line for available options
-          claude_args: '--allowed-tools "Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
+          claude_args: '--allowed-tools "Read,Grep,Glob,Bash(gh issue view:*),Bash(gh search:*),Bash(gh issue list:*),Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*)"'
