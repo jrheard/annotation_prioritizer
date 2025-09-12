@@ -17,7 +17,7 @@ annotation-prioritizer
 pytest                     # Run all tests
 pytest tests/unit/         # Run unit tests only
 pytest tests/integration/  # Run integration tests only
-pytest --cov=src          # Run tests with coverage
+pytest --cov=src --cov-report=term-missing --cov-fail-under=100  # Run tests with 100% coverage enforcement
 
 # Type Checking
 pyright                    # Run type checker (strict mode enabled)

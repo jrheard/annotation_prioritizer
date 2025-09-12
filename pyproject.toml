@@ -16,6 +16,7 @@ build-backend = "hatchling.build"
 [tool.uv]
 dev-dependencies = [
     "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
     "coverage[toml]>=7.0.0",
     "pre-commit>=3.0.0",
     "pyright>=1.1.0",
