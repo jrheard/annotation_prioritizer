@@ -48,10 +48,11 @@ RUN groupadd --gid 1000 python && \
 
 ARG USERNAME=python
 
-# Persist bash history.
+# Persist bash, fish, and fzf history.
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
-    && mkdir /commandhistory \
+    && mkdir -p /commandhistory/.local/share/fish \
     && touch /commandhistory/.bash_history \
+    && touch /commandhistory/.fzf_history \
     && chown -R $USERNAME /commandhistory
 
 # Set `DEVCONTAINER` environment variable to help with orientation
@@ -113,6 +114,9 @@ RUN mkdir -p /home/python/.config/fish && \
     echo "if status is-interactive" > /home/python/.config/fish/config.fish && \
     echo "    # Preserve container PATH for Claude CLI and other tools" >> /home/python/.config/fish/config.fish && \
     echo "    # Host functions will be available via mounted functions directory" >> /home/python/.config/fish/config.fish && \
+    echo "    # Configure persistent history locations" >> /home/python/.config/fish/config.fish && \
+    echo "    set -gx XDG_DATA_HOME /commandhistory/.local/share" >> /home/python/.config/fish/config.fish && \
+    echo "    set -gx FZF_DEFAULT_OPTS \"--history=/commandhistory/.fzf_history\"" >> /home/python/.config/fish/config.fish && \
     echo "    # Activate uv virtual environment if it exists" >> /home/python/.config/fish/config.fish && \
     echo "    if test -f /workspace/.venv/bin/activate.fish" >> /home/python/.config/fish/config.fish && \
     echo "        source /workspace/.venv/bin/activate.fish" >> /home/python/.config/fish/config.fish && \
