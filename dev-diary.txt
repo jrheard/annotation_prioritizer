@@ -15,3 +15,7 @@ ok let's get started i guess!
 DONE add "even better toml" extension
 
 tried to add a lint-on-edit hook but couldn't get it working, maybe someday - TODO
+
+added pyright
+
+added 100% coverage hook
