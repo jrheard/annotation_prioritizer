@@ -2,6 +2,7 @@
 
 import ast
 from pathlib import Path
+from typing import override
 
 from .models import CallCount, FunctionInfo
 
@@ -53,12 +54,14 @@ class CallCountVisitor(ast.NodeVisitor):
         self.call_counts = call_counts
         self.class_stack: list[str] = []
 
+    @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Visit class definition to track context for method calls."""
         self.class_stack.append(node.name)
         self.generic_visit(node)
         self.class_stack.pop()
 
+    @override
     def visit_Call(self, node: ast.Call) -> None:
         """Visit function call to count calls to known functions."""
         call_name = self._extract_call_name(node)
