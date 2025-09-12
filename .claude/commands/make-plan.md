@@ -1,6 +1,6 @@
 Write a detailed implementation plan to a markdown file in plans/pending/ (plan-YYYY-MM-DD.md). Include:
 - Full implementation steps with context
-- Recommended file structures 
+- Recommended file structures
 - Example code snippets where helpful
 - Any assumptions or dependencies
 

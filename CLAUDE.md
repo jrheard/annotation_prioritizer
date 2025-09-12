@@ -57,9 +57,9 @@ This project follows functional programming principles:
 - **No inheritance**: Avoid inheritance unless absolutely necessary (e.g., when integrating with libraries like Python's AST module). Use bare functions instead
 - **No pytest fixtures**: Prefer normal helper functions over pytest fixtures for test setup
 - **Commit messages**: Use conventional commits format with precise types:
-  - `feat:` - New user-facing functionality only (core app features)  
+  - `feat:` - New user-facing functionality only (core app features)
   - `chore:` - Tooling, deps, dev env, config (most non-feat changes)
-  - `fix:` - Bug fixes  
+  - `fix:` - Bug fixes
   - `refactor:` - Code restructuring without behavior changes
   - `test:` - Test changes
   - `docs:` - Documentation

@@ -71,9 +71,9 @@ class CallCount:
 class AnnotationScore:
     function_qualified_name: str
     parameter_score: float  # 0.0 to 1.0
-    return_score: float     # 0.0 to 1.0  
+    return_score: float     # 0.0 to 1.0
     total_score: float      # weighted combination
-    
+
 @dataclass(frozen=True)
 class FunctionPriority:
     function_info: FunctionInfo
@@ -105,12 +105,12 @@ def parse_function_definitions(file_path: str) -> tuple[FunctionInfo, ...]:
     # Use ast.parse() and ast.NodeVisitor
     # Handle both module-level functions and class methods
     # Create qualified names (e.g., "ClassName.method_name")
-    
+
 class FunctionDefinitionVisitor(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         # Extract function name, parameters, return annotation
         # Determine if inside a class (for qualified naming)
-    
+
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         # Handle async functions similarly
 ```
@@ -119,7 +119,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
 - Use `ast.parse()` to get AST from source code
 - Walk AST with custom `ast.NodeVisitor` subclass
 - Track class context for method qualified names
-- Extract parameter annotations by checking `arg.annotation` 
+- Extract parameter annotations by checking `arg.annotation`
 - Extract return annotations from `returns` attribute
 - Handle special parameters (*args, **kwargs) correctly
 
@@ -154,7 +154,7 @@ def calculate_parameter_score(parameters: tuple[ParameterInfo, ...]) -> float:
     """Calculate 0.0-1.0 score for parameter annotations."""
     if not parameters:
         return 1.0  # No parameters = fully annotated
-    
+
     annotated_count = sum(1 for p in parameters if p.has_annotation)
     return annotated_count / len(parameters)
 
@@ -196,7 +196,7 @@ def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ..
 class CallCountVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         # Handle direct function calls: func_name()
-        # Handle method calls: obj.method_name()  
+        # Handle method calls: obj.method_name()
         # Handle qualified calls: ClassName.static_method()
 ```
 
@@ -245,7 +245,7 @@ def main() -> None:
     # Parse command line arguments
     # Run analysis on target files/directories
     # Display results using Rich
-    
+
 # Command line args:
 # --target PATH (file or directory to analyze)
 # --min-calls N (filter functions with fewer than N calls)

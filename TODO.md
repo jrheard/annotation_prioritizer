@@ -1,3 +1,3 @@
-* precommit - pyright, tests, more base pre-commit hooks
+* precommit - more base pre-commit hooks
 * subagents
 * claude github actions
