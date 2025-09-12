@@ -18,29 +18,28 @@ pre-commit install
 
 ## Usage
 
+The `demo_files/` directory contains example Python files you can use to test the tool.
+
 ```bash
-# Run the CLI
-annotation-prioritizer
+# Run the CLI on a Python file
+annotation-prioritizer path/to/file.py
 
-# Run tests
+# Try it with the demo files
+annotation-prioritizer demo_files/mixed_annotations.py
+annotation-prioritizer demo_files/complex_cases.py
+
+# Run tests (with 100% coverage requirement)
 pytest
+pytest --cov=src --cov-report=term-missing --cov-fail-under=100
 
-# Run type checking
+# Run type checking (strict mode)
 pyright
 
-# Run linting
+# Run linting and formatting
 ruff check
+ruff check --fix  # Auto-fix issues
 ruff format
 ```
-
-## Development
-
-This project uses:
-- Python 3.13+
-- uv for dependency management
-- ruff for linting and formatting
-- pyright for type checking
-- pytest for testing
 
 ## License
 
