@@ -8,12 +8,6 @@ This is a Python type annotation priority analyzer that identifies high-impact f
 
 ## Development Commands
 
-### Environment Setup
-```bash
-uv sync                    # Install dependencies
-pre-commit install         # Install pre-commit hooks
-```
-
 ### Common Commands
 ```bash
 # Run the CLI tool
@@ -29,9 +23,9 @@ pytest --cov=src          # Run tests with coverage
 pyright                    # Run type checker (strict mode enabled)
 
 # Linting and Formatting
-ruff check                 # Lint code
-ruff check --fix           # Lint and auto-fix issues
-ruff format                # Format code
+uv run --with ruff ruff check                 # Lint code
+uv run --with ruff ruff check --fix           # Lint and auto-fix issues
+uv run --with ruff ruff format                # Format code
 
 # Pre-commit (runs automatically on commit)
 pre-commit run --all-files # Run all hooks manually
