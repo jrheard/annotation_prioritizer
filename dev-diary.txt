@@ -24,3 +24,7 @@ update original plan to reflect progress from initial_implemenation_plan?
 or don't, and just use both of those files when making the next plan?
 
 TODO be sure to pick up the "future enhancement needed" note in commit 4 of initial_implementation_plan
+
+TODO next up should be updating this to run on a _directory_ rather than a single file
+
+TODO verify that we're treating self and cls correctly (they count as annotated)
