@@ -7,7 +7,7 @@ This document outlines the detailed implementation plan for the first 5 commits 
 ## Implementation Progress
 
 - ✅ **Commit 1**: Core Data Models - COMPLETED
-- ⏳ **Commit 2**: Basic AST Parsing for Function Definitions - PENDING  
+- ✅ **Commit 2**: Basic AST Parsing for Function Definitions - COMPLETED
 - ⏳ **Commit 3**: Weighted Component Annotation Scoring - PENDING
 - ⏳ **Commit 4**: Simple Call Counting - PENDING
 - ⏳ **Commit 5**: CLI Integration and Output - PENDING
