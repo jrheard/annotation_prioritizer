@@ -30,7 +30,7 @@
                 "python.analysis.typeCheckingMode": "strict",
                 "python.linting.enabled": false,
                 "python.formatting.provider": "none",
-                "terminal.integrated.defaultProfile.linux": "zsh",
+                "terminal.integrated.defaultProfile.linux": "fish",
                 "terminal.integrated.profiles.linux": {
                     "bash": {
                         "path": "bash",
@@ -38,6 +38,9 @@
                     },
                     "zsh": {
                         "path": "zsh"
+                    },
+                    "fish": {
+                        "path": "fish"
                     }
                 }
             }
@@ -46,7 +49,8 @@
     "remoteUser": "python",
     "mounts": [
         "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
-        "source=claude-code-config-${devcontainerId},target=/home/python/.claude,type=volume"
+        "source=claude-code-config-${devcontainerId},target=/home/python/.claude,type=volume",
+        "source=${localEnv:HOME}/.config/fish/functions,target=/home/python/.config/fish/functions,type=bind,consistency=cached"
     ],
     "containerEnv": {
         "CLAUDE_CONFIG_DIR": "/home/python/.claude",

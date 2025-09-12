@@ -9,10 +9,12 @@ ARG CLAUDE_CODE_VERSION=latest
 RUN apt-get update && apt-get install -y --no-install-recommends \
     less \
     git \
+    openssh-client \
     procps \
     sudo \
     fzf \
     zsh \
+    fish \
     man-db \
     unzip \
     gnupg2 \
@@ -28,7 +30,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     wget \
     build-essential \
+    locales \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Configure locale to fix perl warnings
+RUN sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && locale-gen
+ENV LANG=en_US.UTF-8
+ENV LANGUAGE=en_US:en
+ENV LC_ALL=en_US.UTF-8
 
 # Install uv package manager
 RUN pip install --no-cache-dir uv
@@ -68,8 +77,8 @@ RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
 # Set up non-root user
 USER python
 
-# Set the default shell to zsh rather than sh
-ENV SHELL=/bin/zsh
+# Set the default shell to fish rather than sh
+ENV SHELL=/usr/bin/fish
 
 # Set the default editor and visual
 ENV EDITOR=nano
@@ -98,3 +107,11 @@ USER python
 COPY pyproject.toml README.md ./
 COPY src/ src/
 RUN uv sync --dev
+
+# Create container-safe fish config that preserves PATH
+RUN mkdir -p /home/python/.config/fish && \
+    echo "if status is-interactive" > /home/python/.config/fish/config.fish && \
+    echo "    # Preserve container PATH for Claude CLI and other tools" >> /home/python/.config/fish/config.fish && \
+    echo "    # Host functions will be available via mounted functions directory" >> /home/python/.config/fish/config.fish && \
+    echo "end" >> /home/python/.config/fish/config.fish && \
+    chown -R python:python /home/python/.config/fish
