@@ -28,3 +28,5 @@ TODO be sure to pick up the "future enhancement needed" note in commit 4 of init
 TODO next up should be updating this to run on a _directory_ rather than a single file
 
 TODO verify that we're treating self and cls correctly (they count as annotated)
+
+TODO have a subagent for specifically dealing with linting / type-checking issues?

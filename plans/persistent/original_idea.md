@@ -22,6 +22,14 @@ Currently available tools (mypy, pytype, MonkeyType) can identify missing annota
 - Complexity-based weighting (cyclomatic complexity)
 - Integration with existing type checkers
 
+**Variable Type Analysis Enhancements**
+- Factory function resolution: `var = factory_function()` → determine return type
+- Assignment chain handling: `a = b = ClassName()` 
+- Conditional assignment tracking: `var = Class1() if condition else Class2()`
+- Import-based constructor resolution: `var = imported.ClassName()`
+- Type annotation inference: Use existing annotations to infer variable types
+- Complex expression evaluation: Support method chaining and nested calls
+
 ## Non-Goals
 
 - **Automatic code modification**: The tool should only analyze and recommend, never modify source code
@@ -59,6 +67,12 @@ The tool must solve several complex static analysis problems:
 - Map each call site to the specific function/method implementation it invokes
 - Handle both direct function calls and method calls on objects
 
+**Variable Type Resolution**
+- Track variable assignments to resolve instance method calls (e.g., `obj = ClassName()` then `obj.method()`)
+- Distinguish between variable names and class names in qualified call resolution
+- Handle multiple assignment patterns and variable reassignment within same module
+- Provide foundation for cross-module analysis and inheritance resolution
+
 ### Inheritance Resolution Strategy
 
 The most complex aspect involves correctly attributing method calls in inheritance hierarchies:
@@ -71,8 +85,10 @@ The most complex aspect involves correctly attributing method calls in inheritan
 
 **For `obj.method()` calls:**
 1. Attempt to determine `obj`'s type from context (assignments, annotations)
-2. If type is known, follow same MRO resolution
-3. If type is unknown, exclude from call counting and track separately as unresolvable
+2. Track variable assignments like `obj = ClassName()` to build type mapping
+3. Handle common assignment patterns: direct instantiation, variable reassignment, factory functions
+4. If type is known, follow same MRO resolution
+5. If type is unknown, exclude from call counting and track separately as unresolvable
 
 **Unresolvable Call Handling:**
 - Calls where the target cannot be statically determined are excluded from all function call counts
@@ -115,6 +131,14 @@ The most complex aspect involves correctly attributing method calls in inheritan
 - Clear reporting of unresolved symbols
 - Iterative improvement based on real codebase patterns
 - Explicit handling of star imports as unresolvable to avoid false positives
+
+### Medium Risk: Variable Type Resolution Accuracy
+**Risk**: Incorrect variable type inference leading to wrong call attribution
+**Mitigation**:
+- Conservative handling of ambiguous assignments (only track clear patterns like `var = Class()`)
+- Comprehensive test coverage for assignment patterns and edge cases
+- Clear reporting of unresolvable variable types in analysis output
+- Start with simple same-module assignments before expanding to imports
 
 ### Low Risk: Performance on Large Codebases
 **Risk**: Analysis taking too long on large projects
