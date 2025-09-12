@@ -1,8 +1,7 @@
 """End-to-end integration tests for the type annotation prioritizer."""
 
-import tempfile
-
 from annotation_prioritizer.analyzer import analyze_file
+from tests.helpers.temp_files import temp_python_file
 
 
 def test_analyze_simple_file() -> None:
@@ -32,11 +31,8 @@ def caller():
     return result1 + result2 + result3
 '''
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
-        tmp.write(test_code)
-        tmp.flush()
-
-        priorities = analyze_file(tmp.name)
+    with temp_python_file(test_code) as path:
+        priorities = analyze_file(path)
 
         # Should find 4 functions
         assert len(priorities) == 4
@@ -96,11 +92,8 @@ def caller():
 
 def test_analyze_empty_file() -> None:
     """Test analyzing an empty Python file."""
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
-        tmp.write("# Empty file\n")
-        tmp.flush()
-
-        priorities = analyze_file(tmp.name)
+    with temp_python_file("# Empty file\n") as path:
+        priorities = analyze_file(path)
         assert priorities == ()
 
 
@@ -132,11 +125,8 @@ def use_calculator():
     return calc.calculate_all()
 '''
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
-        tmp.write(test_code)
-        tmp.flush()
-
-        priorities = analyze_file(tmp.name)
+    with temp_python_file(test_code) as path:
+        priorities = analyze_file(path)
 
         # Should find 5 functions (4 methods + 1 function)
         assert len(priorities) == 5

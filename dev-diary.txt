@@ -40,3 +40,5 @@ DONE have a slash command that reviews tests (with $arguments) and looks for dup
 DONE use new /test-quality command
 
 DONE count_function_calls() docstring is too brief - any others?
+
+TODO add github action that runs pre-commit hooks on whole codebase
