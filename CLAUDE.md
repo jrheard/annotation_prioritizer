@@ -11,7 +11,8 @@ This is a Python type annotation priority analyzer that identifies high-impact f
 ### Common Commands
 ```bash
 # Run the CLI tool
-annotation-prioritizer
+# (See the demo_files/ directory for some example files you can run the tool on)
+annotation-prioritizer filename.py
 
 # Testing
 pytest                     # Run all tests
@@ -31,7 +32,7 @@ ruff format                # Format code
 pre-commit run --all-files # Run all hooks manually
 ```
 
-When you encounter Python linting issues, run `ruff check --fix` and `ruff format` first before trying to fix those issues yourself.
+When you encounter Python linting issues, run `ruff check --fix` and `ruff format` first before trying to fix those issues yourself. If you still see more than one or two errors, use the python-lint-fixer subagent.
 When fixing linting/formatting issues while satisfying pre-commit, ALWAYS `git add` the fixed files before attempting to commit again.
 
 ## Architecture

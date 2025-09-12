@@ -3,6 +3,7 @@
   "typeCheckingMode": "strict",
   "include": ["src", "tests"],
   "exclude": ["**/__pycache__"],
+  "ignore": ["demo_files/"],
   "reportMissingImports": true,
   "venvPath": ".",
   "venv": ".venv"

@@ -29,4 +29,6 @@ TODO next up should be updating this to run on a _directory_ rather than a singl
 
 TODO verify that we're treating self and cls correctly (they count as annotated)
 
-TODO have a subagent for specifically dealing with linting / type-checking issues?
+DONE have a subagent for specifically dealing with linting / type-checking issues?
+
+TODO update claude.md to talk about workspace/demo_files dir
