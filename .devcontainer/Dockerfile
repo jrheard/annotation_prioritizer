@@ -1,4 +1,4 @@
-FROM node:20
+FROM python:3.13-slim
 
 ARG TZ
 ENV TZ="$TZ"
@@ -25,13 +25,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     nano \
     vim \
+    curl \
+    wget \
+    build-essential \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Ensure default node user has access to /usr/local/share
-RUN mkdir -p /usr/local/share/npm-global && \
-    chown -R node:node /usr/local/share
+# Install uv package manager
+RUN pip install --no-cache-dir uv
 
-ARG USERNAME=node
+# Create python user
+RUN groupadd --gid 1000 python && \
+    useradd --uid 1000 --gid python --shell /bin/bash --create-home python
+
+ARG USERNAME=python
 
 # Persist bash history.
 RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
@@ -43,23 +49,24 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
 ENV DEVCONTAINER=true
 
 # Create workspace and config directories and set permissions
-RUN mkdir -p /workspace /home/node/.claude && \
-    chown -R node:node /workspace /home/node/.claude
+RUN mkdir -p /workspace /home/python/.claude && \
+    chown -R python:python /workspace /home/python/.claude
 
 WORKDIR /workspace
 
 ARG GIT_DELTA_VERSION=0.18.2
 RUN ARCH=$(dpkg --print-architecture) && \
     wget "https://github.com/dandavison/delta/releases/download/${GIT_DELTA_VERSION}/git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
-    sudo dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
+    dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
     rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
 
-# Set up non-root user
-USER node
+# Install Claude Code CLI via npm (keeping Node.js installation for this specific tool)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
+    apt-get install -y nodejs && \
+    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
 
-# Install global packages
-ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
-ENV PATH=$PATH:/usr/local/share/npm-global/bin
+# Set up non-root user
+USER python
 
 # Set the default shell to zsh rather than sh
 ENV SHELL=/bin/zsh
@@ -78,14 +85,16 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
     -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
     -x
 
-# Install Claude
-RUN npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
-
 
 # Copy and set up firewall script
-COPY init-firewall.sh /usr/local/bin/
+COPY .devcontainer/init-firewall.sh /usr/local/bin/
 USER root
 RUN chmod +x /usr/local/bin/init-firewall.sh && \
-    echo "node ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/node-firewall && \
-    chmod 0440 /etc/sudoers.d/node-firewall
-USER node
+    echo "python ALL=(root) NOPASSWD: /usr/local/bin/init-firewall.sh" > /etc/sudoers.d/python-firewall && \
+    chmod 0440 /etc/sudoers.d/python-firewall
+USER python
+
+# Install project dependencies
+COPY pyproject.toml README.md ./
+COPY src/ src/
+RUN uv sync --dev

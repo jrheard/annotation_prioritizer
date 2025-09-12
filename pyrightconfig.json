@@ -4,6 +4,4 @@
   "include": ["src", "tests"],
   "exclude": ["**/__pycache__"],
   "reportMissingImports": true,
-  "reportMissingTypeStubs": false,
-  "reportPrivateImportUsage": false
 }

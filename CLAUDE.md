@@ -60,6 +60,7 @@ This project follows functional programming principles:
 - **Frozen dataclasses**: Always use `@dataclass(frozen=True)` for structured data. Never use namedtuples or regular classes for data
 - **No inheritance**: Avoid inheritance unless absolutely necessary (e.g., when integrating with libraries like Python's AST module). Use bare functions instead
 - **No pytest fixtures**: Prefer normal helper functions over pytest fixtures for test setup
+- **Commit messages**: Use conventional commits format: `type: description` (e.g., `feat: add parser`, `fix: handle edge case`, `docs: update readme`)
 
 ## Project Structure
 
