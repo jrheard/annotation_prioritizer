@@ -54,4 +54,4 @@ TODO read https://github.com/anthropics/claude-code-action?tab=readme-ov-file#-s
 NVM give claude.yml ability to run tests, right?
     oh i already did :)
 
-TODO refactor dockerfile
+DONE refactor dockerfile
