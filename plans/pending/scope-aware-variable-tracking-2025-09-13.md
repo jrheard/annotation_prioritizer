@@ -61,13 +61,32 @@ Every variable gets a unique qualified name based on its scope:
 
 This ensures complete isolation between scopes while maintaining simplicity.
 
+## Prerequisites: Data Model Updates
+
+### Tracking Unresolvable Calls
+
+Before implementing the variable tracking, we need infrastructure to distinguish between resolved and unresolvable calls:
+
+**File**: `src/annotation_prioritizer/models.py`
+
+```python
+@dataclass(frozen=True)
+class CallCountResult:
+    """Result of call counting analysis."""
+    resolved_counts: tuple[CallCount, ...]  # Successfully resolved calls
+    unresolvable_count: int  # Number of calls that couldn't be resolved
+    unresolvable_examples: tuple[str, ...]  # First 5 examples for debugging
+```
+
+This will require updating `count_function_calls()` to return `CallCountResult` instead of `tuple[CallCount, ...]`, and updating the analyzer and output modules accordingly.
+
 ## Detailed Implementation Steps
 
 ### Step 0: Create Failing Tests First (Prerequisite)
 
-**File**: `tests/unit/test_call_counter_bug.py`
+**File**: Add to existing `tests/unit/test_call_counter.py`
 
-Before fixing the bug, we need tests that demonstrate the current broken behavior:
+Before fixing the bug, add a test to the existing test file that demonstrates the current broken behavior:
 
 ```python
 def test_instance_method_calls_bug():
@@ -187,7 +206,16 @@ def _extract_type_from_annotation(self, annotation: ast.expr) -> str | None:
 
     # Handle string annotations (forward references): "Calculator"
     if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
-        return annotation.value
+        # For simple string annotations, just return the string value
+        # Complex string annotations like "Optional[Calculator]" will fail parsing
+        # and be treated as unsupported (returning None)
+        try:
+            # Try to parse as a simple identifier
+            if annotation.value.isidentifier():
+                return annotation.value
+        except:
+            pass
+        return None  # Complex string annotation
 
     # Handle qualified type annotations: typing.Optional (just for detection)
     if isinstance(annotation, ast.Attribute):
@@ -250,11 +278,11 @@ def _extract_call_name(self, node: ast.Call) -> str | None:
                 class_name = self.scoped_variables[scoped_var]
                 return f"{class_name}.{func.attr}"
 
-            # For nested functions, try parent scopes
-            # NOTE: Phase 1 limitation - we only check current and module scope
-            # Full parent scope traversal would require tracking scope hierarchy
-            # Example: outer.inner.var would need to check outer.var as well
-            # This is documented as a known limitation for nested functions
+            # DESIGN DECISION: No parent scope lookup
+            # We consciously choose NOT to implement parent scope traversal
+            # to keep complexity low. This is a permanent limitation, not
+            # a temporary one. Nested function variables from parent scopes
+            # will remain unresolvable.
 
             # Try module scope (for module-level variables)
             module_var = f"__module__.{var_name}"
@@ -279,7 +307,7 @@ def _extract_call_name(self, node: ast.Call) -> str | None:
 
 ### Step 6: Comprehensive Test Coverage
 
-**File**: `tests/unit/test_call_counter_scopes.py`
+**File**: Add these tests to existing `tests/unit/test_call_counter.py` or create new `test_call_counter_scopes.py`
 
 ```python
 def test_scope_isolation():
@@ -355,7 +383,7 @@ logger.log("at module level")  # Module-level call
     assert count_dict["Logger.log"] == 3  # All three calls
 
 def test_nested_functions():
-    """Test nested function scoping - Phase 1 limitation documented."""
+    """Test nested function scoping - permanent design limitation."""
     test_file = tmp_path / "test_nested.py"
     test_file.write_text("""
 class Handler:
@@ -365,9 +393,9 @@ def outer():
     h = Handler()
 
     def inner():
-        # Phase 1 limitation: Cannot resolve parent scope variables
-        # h.handle() would need parent scope lookup (not implemented)
-        pass
+        # PERMANENT LIMITATION: Parent scope variables not resolved
+        # This is a conscious design decision to keep complexity low
+        h.handle()  # Will NOT be counted (unresolvable)
 
     h.handle()  # This call in outer scope WILL be counted
 """)
@@ -376,14 +404,16 @@ def outer():
     call_counts = count_function_calls(str(test_file), functions)
     count_dict = {cc.function_qualified_name: cc.call_count for cc in call_counts}
 
-    # Phase 1: Only handles direct scope (current function or module level)
-    # Parent scope traversal is a known limitation
+    # Only direct scope supported (current function or module level)
+    # Parent scope traversal is intentionally not implemented
     assert count_dict["Handler.handle"] == 1  # Only the outer scope call
 ```
 
-## What We Track vs What We Don't
+## What We Will Track vs What We Won't (After Implementation)
 
-### Phase 1: What We Track (High Confidence)
+Once this plan is implemented, here's what the tool will be capable of tracking:
+
+### What We Will Track (High Confidence)
 
 ✅ **Direct instantiation**:
 ```python
@@ -410,14 +440,14 @@ def foo():
     logger.log("msg")  # Counted
 ```
 
-### Phase 1: What We Don't Track (Marked Unresolvable)
+### What We Won't Track (Will Remain Unresolvable)
 
-❌ **Nested function parent scope variables**:
+❌ **Nested function parent scope variables** (Permanent design limitation):
 ```python
 def outer():
     h = Handler()
     def inner():
-        h.handle()  # Parent scope lookup not implemented
+        h.handle()  # Parent scope lookup intentionally not implemented
 ```
 
 ❌ **Unannotated parameters**:
@@ -446,12 +476,12 @@ calc = some_list[0]
 calc = getattr(obj, 'calculator')
 ```
 
-❌ **Class attributes**:
+❌ **Class attributes** (Deferred to future enhancement):
 ```python
 class Foo:
     calc = Calculator()  # Class-level attribute
     def use_it(self):
-        self.calc.add()  # Won't be tracked
+        self.calc.add()  # Won't be tracked in this implementation
 ```
 
 ❌ **Import aliases**:
@@ -518,36 +548,40 @@ c = Calc()  # Won't track that Calc is Calculator
 
 2. **Large Files with Many Variables**:
    - **Impact**: Memory usage grows with assignments
-   - **Mitigation**: Acceptable trade-off for correctness; could add size limit in future
+   - **Mitigation**: Acceptable trade-off for correctness; reassignments update the same key
 
-3. **Deeply Nested Functions**:
-   - **Impact**: Scope string concatenation overhead
-   - **Mitigation**: Phase 1 doesn't traverse parent scopes, keeping it simple
+3. **String Annotation Parsing**:
+   - **Impact**: Complex string annotations like "Optional[Calculator]" could cause issues
+   - **Mitigation**: Only parse simple identifiers; complex strings return None (unsupported)
 
 ## Implementation Sequence
 
-1. **Write failing test first** (5 min)
-   - Create `test_call_counter_bug.py` with test that demonstrates the bug
+1. **Update data models** (10 min)
+   - Add CallCountResult to models.py
+   - Update count_function_calls return type
+   - Update analyzer and output modules to handle new structure
+2. **Write failing test first** (5 min)
+   - Add bug test to existing test_call_counter.py
    - Run test to confirm it fails with current implementation
-2. **Add scope tracking infrastructure** (10 min)
+3. **Add scope tracking infrastructure** (10 min)
    - Add function_stack and scoped_variables
    - Implement get_current_scope()
-3. **Implement visit_FunctionDef** (15 min)
+4. **Implement visit_FunctionDef** (15 min)
    - Track function scope entry/exit
    - Extract parameter annotations
-4. **Implement assignment tracking** (20 min)
+5. **Implement assignment tracking** (20 min)
    - visit_Assign for direct instantiation
    - visit_AnnAssign for annotated variables
-5. **Update call resolution** (15 min)
+6. **Update call resolution** (15 min)
    - Modify _extract_call_name to use scoped lookups
-6. **Write comprehensive tests** (30 min)
+7. **Write comprehensive tests** (30 min)
    - Scope isolation tests
    - Parameter annotation tests
    - Module variable tests
-7. **Test with demo files** (10 min)
-8. **Run full test suite with coverage** (5 min)
+8. **Test with demo files** (10 min)
+9. **Run full test suite with coverage** (5 min)
 
-**Total estimated time**: ~2 hours
+**Total estimated time**: ~2 hours 10 min
 
 ## Edge Cases and Decisions
 
@@ -563,6 +597,8 @@ c = Calc()  # Won't track that Calc is Calculator
 - **Unknown variables**: Return None (unresolvable) rather than guess
 - **Complex types**: Skip rather than partially handle
 - **Parameters without annotations**: Don't try to infer
+- **Parent scope variables**: Intentionally not supported (permanent limitation)
+- **Variable deletion**: `del` statements not tracked (documented limitation)
 
 ### Future Considerations
 
@@ -601,3 +637,98 @@ def process_data(calc_param: Calculator):  # Parameter
 This implementation provides accurate, scope-aware variable tracking that fixes the method call attribution bug while maintaining the project's philosophy of conservative, accurate analysis. By building our own focused solution rather than depending on complex type checkers, we achieve our goals with minimal complexity and maximum control.
 
 The phased approach allows us to start with high-confidence patterns and expand only if real-world usage shows many unresolvable calls. This pragmatic strategy balances accuracy, simplicity, and maintainability - the key goals of the annotation prioritizer project.
+
+## Appendix: Future Enhancement - Class-Level Attributes
+
+### The Problem
+
+Class-level attributes are a common pattern in Python but are not handled by this implementation:
+
+```python
+class DatabaseManager:
+    connection_pool = ConnectionPool()  # Class attribute
+
+    def query(self, sql):
+        conn = self.connection_pool.get()  # self.connection_pool not tracked
+        return conn.execute(sql)
+```
+
+Currently, `self.connection_pool.get()` would be unresolvable because we don't track that `connection_pool` is a class attribute of type `ConnectionPool`.
+
+### Why Not Included in This Implementation
+
+1. **Complexity**: Requires tracking class definition context separately from function context
+2. **Ambiguity**: Python allows instance attributes to shadow class attributes
+3. **Scope**: The current bug fix focuses on instance variables; class attributes are a separate issue
+
+### Proposed Future Implementation
+
+This design is **fully compatible** with future class attribute support. Here's how it could be added:
+
+#### 1. Track Class Definition Context
+
+```python
+class CallCountVisitor(ast.NodeVisitor):
+    def __init__(self, call_counts: dict[str, int]) -> None:
+        # ... existing fields ...
+        self.class_attributes: dict[str, str] = {}  # "ClassName.attr" -> "Type"
+
+    @override
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        self.class_stack.append(node.name)
+
+        # NEW: Process class-level assignments
+        for item in node.body:
+            if isinstance(item, ast.Assign):
+                # Track class attribute assignments
+                self._process_class_attribute(item, node.name)
+            elif isinstance(item, ast.AnnAssign):
+                # Track annotated class attributes
+                self._process_annotated_class_attribute(item, node.name)
+
+        self.generic_visit(node)
+        self.class_stack.pop()
+```
+
+#### 2. Extend Call Resolution
+
+```python
+def _extract_call_name(self, node: ast.Call) -> str | None:
+    # ... existing code ...
+
+    # NEW: Check for self.attribute where attribute is a class attribute
+    if isinstance(func.value, ast.Name) and func.value.id == "self":
+        if self.class_stack:
+            # First check instance variables (existing)
+            # ... existing instance variable logic ...
+
+            # NEW: Then check class attributes
+            class_name = self.class_stack[-1]
+            class_attr_key = f"{class_name}.{func.value.attr}"
+            if class_attr_key in self.class_attributes:
+                attr_type = self.class_attributes[class_attr_key]
+                return f"{attr_type}.{func.attr}"
+```
+
+#### 3. Handle Inheritance
+
+For full support, we'd also need to:
+- Track base classes in class definitions
+- Resolve attributes through the inheritance chain
+- Handle method resolution order (MRO)
+
+### Implementation Complexity
+
+- **Estimated effort**: 1-2 days
+- **Risk**: Medium (inheritance and shadowing edge cases)
+- **Testing needs**: Comprehensive test suite for class attributes, inheritance, shadowing
+
+### Why This Design Enables Future Enhancement
+
+The current implementation's design choices make this enhancement straightforward:
+
+1. **Separate tracking dictionaries**: `scoped_variables` for instance vars, future `class_attributes` for class vars
+2. **Layered lookup**: Can check multiple sources in sequence without conflicts
+3. **No structural changes needed**: Pure addition of new tracking, no refactoring required
+
+This demonstrates that the current implementation is not a dead-end but rather a solid foundation for incremental improvements.

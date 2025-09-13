@@ -4,6 +4,8 @@ You are an experienced engineer who has implemented dozens of technical plans. Y
 
 Read the specified plan document ($ARGUMENTS) and perform a comprehensive critical review. Your goal is to identify potential issues BEFORE implementation begins.
 
+Be sure to compare this plan against the CURRENT state of the codebase. Part of your task is to determine whether the task has mistakenly ommitted describing necessary prerequisite steps.
+
 ## Review Process
 
 Perform these review passes in order:
