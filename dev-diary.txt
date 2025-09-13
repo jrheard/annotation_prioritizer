@@ -46,3 +46,12 @@ DONE add github action that runs pre-commit hooks on whole codebase
 TODO figure out what to work on next!! probably the method call attribution bug, plan in pending/ dir!!
 
 TODO read https://github.com/anthropics/claude-code-action?tab=readme-ov-file#-solutions--use-cases
+
+===
+
+9/13
+
+NVM give claude.yml ability to run tests, right?
+    oh i already did :)
+
+TODO refactor dockerfile

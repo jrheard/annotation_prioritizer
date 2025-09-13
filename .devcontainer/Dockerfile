@@ -53,7 +53,10 @@ RUN SNIPPET="export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhisto
     && mkdir -p /commandhistory/.local/share/fish \
     && touch /commandhistory/.bash_history \
     && touch /commandhistory/.fzf_history \
-    && chown -R $USERNAME /commandhistory
+    && chown -R $USERNAME /commandhistory \
+    && echo "" >> /home/$USERNAME/.bashrc \
+    && echo "# Add local npm bin to PATH for user-installed packages" >> /home/$USERNAME/.bashrc \
+    && echo "export PATH=\"/home/$USERNAME/.local/bin:\$PATH\"" >> /home/$USERNAME/.bashrc
 
 # Set `DEVCONTAINER` environment variable to help with orientation
 ENV DEVCONTAINER=true
@@ -70,10 +73,9 @@ RUN ARCH=$(dpkg --print-architecture) && \
     dpkg -i "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb" && \
     rm "git-delta_${GIT_DELTA_VERSION}_${ARCH}.deb"
 
-# Install Claude Code CLI via npm (keeping Node.js installation for this specific tool)
+# Install Node.js for Claude Code CLI
 RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION}
+    apt-get install -y nodejs
 
 # Set up non-root user
 USER python
@@ -93,6 +95,7 @@ RUN sh -c "$(wget -O- https://github.com/deluan/zsh-in-docker/releases/download/
     -a "source /usr/share/doc/fzf/examples/key-bindings.zsh" \
     -a "source /usr/share/doc/fzf/examples/completion.zsh" \
     -a "export PROMPT_COMMAND='history -a' && export HISTFILE=/commandhistory/.bash_history" \
+    -a "export PATH=\"/home/python/.local/bin:\$PATH\"" \
     -x
 
 
@@ -104,6 +107,11 @@ RUN chmod +x /usr/local/bin/init-firewall.sh && \
     chmod 0440 /etc/sudoers.d/python-firewall
 USER python
 
+# Install Claude Code CLI locally for the python user (allows self-updating)
+RUN npm install -g --prefix=/home/python/.local @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && \
+    rm /home/python/.local/bin/claude && \
+    ln -s /home/python/.local/lib/node_modules/@anthropic-ai/claude-code/cli.js /home/python/.local/bin/claude
+
 # Install project dependencies
 COPY pyproject.toml README.md ./
 COPY src/ src/
@@ -111,7 +119,10 @@ RUN uv sync --dev
 
 # Create container-safe fish config that preserves PATH and activates virtual environment
 RUN mkdir -p /home/python/.config/fish && \
-    echo "if status is-interactive" > /home/python/.config/fish/config.fish && \
+    echo "# Add local npm bin to PATH for user-installed packages (global setting)" > /home/python/.config/fish/config.fish && \
+    echo "set -gx PATH /home/python/.local/bin \$PATH" >> /home/python/.config/fish/config.fish && \
+    echo "" >> /home/python/.config/fish/config.fish && \
+    echo "if status is-interactive" >> /home/python/.config/fish/config.fish && \
     echo "    # Preserve container PATH for Claude CLI and other tools" >> /home/python/.config/fish/config.fish && \
     echo "    # Host functions will be available via mounted functions directory" >> /home/python/.config/fish/config.fish && \
     echo "    # Configure persistent history locations" >> /home/python/.config/fish/config.fish && \
