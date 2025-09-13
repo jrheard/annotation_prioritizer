@@ -63,6 +63,45 @@ This ensures complete isolation between scopes while maintaining simplicity.
 
 ## Detailed Implementation Steps
 
+### Step 0: Create Failing Tests First (Prerequisite)
+
+**File**: `tests/unit/test_call_counter_bug.py`
+
+Before fixing the bug, we need tests that demonstrate the current broken behavior:
+
+```python
+def test_instance_method_calls_bug():
+    """Test that demonstrates the current bug - THIS SHOULD FAIL INITIALLY."""
+    code = """
+class Calculator:
+    def add(self, a, b):
+        return a + b
+
+def foo():
+    calc = Calculator()
+    return calc.add(5, 7)  # Currently NOT counted
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="add",
+                qualified_name="Calculator.add",
+                parameters=(...),  # details omitted for brevity
+                has_return_annotation=False,
+                line_number=3,
+                file_path=temp_path,
+            ),
+        )
+
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # This assertion SHOULD FAIL with current code (returns 0)
+        # After our fix, it should PASS (returns 1)
+        assert call_counts["Calculator.add"] == 1
+```
+
 ### Step 1: Update CallCountVisitor Data Structures
 
 **File**: `src/annotation_prioritizer/call_counter.py`
@@ -142,17 +181,26 @@ def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
 ```python
 def _extract_type_from_annotation(self, annotation: ast.expr) -> str | None:
     """Extract type name from annotation node."""
-    # Phase 1: Handle simple annotations only
+    # Handle simple name annotations: Calculator
     if isinstance(annotation, ast.Name):
         return annotation.id
 
-    # Handle string annotations (forward references)
+    # Handle string annotations (forward references): "Calculator"
     if isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
         return annotation.value
 
-    # Phase 2 (future): Handle Optional, Union, etc.
-    # For now, return None for complex types
-    return None
+    # Handle qualified type annotations: typing.Optional (just for detection)
+    if isinstance(annotation, ast.Attribute):
+        # We don't support these yet, but explicitly check to document
+        return None  # Unsupported: typing.Optional, etc.
+
+    # Handle subscript annotations: Optional[Calculator], List[Calculator]
+    if isinstance(annotation, ast.Subscript):
+        # We don't support generics yet, but explicitly check to document
+        return None  # Unsupported: generics
+
+    # Any other annotation type we don't recognize
+    return None  # Unsupported: unknown annotation type
 
 def _extract_constructor_name(self, node: ast.expr) -> str | None:
     """Extract class name from constructor call expressions."""
@@ -201,6 +249,12 @@ def _extract_call_name(self, node: ast.Call) -> str | None:
             if scoped_var in self.scoped_variables:
                 class_name = self.scoped_variables[scoped_var]
                 return f"{class_name}.{func.attr}"
+
+            # For nested functions, try parent scopes
+            # NOTE: Phase 1 limitation - we only check current and module scope
+            # Full parent scope traversal would require tracking scope hierarchy
+            # Example: outer.inner.var would need to check outer.var as well
+            # This is documented as a known limitation for nested functions
 
             # Try module scope (for module-level variables)
             module_var = f"__module__.{var_name}"
@@ -301,7 +355,7 @@ logger.log("at module level")  # Module-level call
     assert count_dict["Logger.log"] == 3  # All three calls
 
 def test_nested_functions():
-    """Test nested function scoping."""
+    """Test nested function scoping - Phase 1 limitation documented."""
     test_file = tmp_path / "test_nested.py"
     test_file.write_text("""
 class Handler:
@@ -311,25 +365,20 @@ def outer():
     h = Handler()
 
     def inner():
-        h.handle()  # Should look up to outer scope
+        # Phase 1 limitation: Cannot resolve parent scope variables
+        # h.handle() would need parent scope lookup (not implemented)
+        pass
 
-        def deeply_nested():
-            h2 = Handler()
-            h2.handle()  # Different variable in deeply nested scope
-
-        deeply_nested()
-
-    inner()
-    h.handle()  # Call in outer scope
+    h.handle()  # This call in outer scope WILL be counted
 """)
 
     functions = parse_function_definitions(str(test_file))
     call_counts = count_function_calls(str(test_file), functions)
     count_dict = {cc.function_qualified_name: cc.call_count for cc in call_counts}
 
-    # All calls should be counted (exact scope lookup is complex for nested)
-    # For Phase 1, we might only handle the simple cases
-    assert count_dict.get("Handler.handle", 0) >= 2  # At least the clear cases
+    # Phase 1: Only handles direct scope (current function or module level)
+    # Parent scope traversal is a known limitation
+    assert count_dict["Handler.handle"] == 1  # Only the outer scope call
 ```
 
 ## What We Track vs What We Don't
@@ -363,6 +412,14 @@ def foo():
 
 ### Phase 1: What We Don't Track (Marked Unresolvable)
 
+❌ **Nested function parent scope variables**:
+```python
+def outer():
+    h = Handler()
+    def inner():
+        h.handle()  # Parent scope lookup not implemented
+```
+
 ❌ **Unannotated parameters**:
 ```python
 def foo(calc):  # No type annotation
@@ -387,6 +444,20 @@ calc.add(1, 2)  # Unresolvable
 calc = x if condition else y
 calc = some_list[0]
 calc = getattr(obj, 'calculator')
+```
+
+❌ **Class attributes**:
+```python
+class Foo:
+    calc = Calculator()  # Class-level attribute
+    def use_it(self):
+        self.calc.add()  # Won't be tracked
+```
+
+❌ **Import aliases**:
+```python
+from calculators import Calculator as Calc
+c = Calc()  # Won't track that Calc is Calculator
 ```
 
 ### Future Phases (If Needed)
@@ -439,9 +510,25 @@ calc = getattr(obj, 'calculator')
 - **Memory**: O(n) where n = number of assignments + annotations
 - **Scalability**: Handles large files efficiently
 
+### Performance Risks and Mitigations
+
+1. **Dictionary Lookup Overhead**: Each method call requires dictionary lookup
+   - **Impact**: O(1) average case, negligible for most files
+   - **Mitigation**: Python's dict is highly optimized, no action needed
+
+2. **Large Files with Many Variables**:
+   - **Impact**: Memory usage grows with assignments
+   - **Mitigation**: Acceptable trade-off for correctness; could add size limit in future
+
+3. **Deeply Nested Functions**:
+   - **Impact**: Scope string concatenation overhead
+   - **Mitigation**: Phase 1 doesn't traverse parent scopes, keeping it simple
+
 ## Implementation Sequence
 
-1. **Create backup branch** (2 min)
+1. **Write failing test first** (5 min)
+   - Create `test_call_counter_bug.py` with test that demonstrates the bug
+   - Run test to confirm it fails with current implementation
 2. **Add scope tracking infrastructure** (10 min)
    - Add function_stack and scoped_variables
    - Implement get_current_scope()
