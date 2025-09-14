@@ -69,6 +69,7 @@ This project follows functional programming principles:
   - `test:` - Test changes
   - `chore:` - Tooling, dependencies, build config, CI/CD
 - Always include changes to `dev-diary.txt` and `TODO.md` in commits (user edits these files during work)
+- **Keep project_status.md updated**: When adding, removing, or changing features, always update `docs/project_status.md` to reflect the current state. This document serves as the authoritative source of truth for what functionality is implemented, planned, or out of scope.
 
 ## Project Structure
 
