@@ -2,8 +2,8 @@
 
 import pytest
 
+from annotation_prioritizer.function_parser import parse_function_definitions
 from annotation_prioritizer.models import ParameterInfo
-from annotation_prioritizer.parser import parse_function_definitions
 from tests.helpers.temp_files import temp_python_file
 
 
