@@ -64,7 +64,7 @@ This project follows functional programming principles:
 - **Commit messages**: Use conventional commits format with precise types:
   - `feat:` - New user-facing functionality only (core app features)
   - `fix:` - Bug fixes
-  - `docs:` - Documentation changes (docstrings, comments, README, etc.)
+  - `docs:` - Documentation changes (docstrings, comments, README, planning docs, Claude-related markdown files, etc.)
   - `refactor:` - Code restructuring without behavior changes
   - `test:` - Test changes
   - `chore:` - Tooling, dependencies, build config, CI/CD

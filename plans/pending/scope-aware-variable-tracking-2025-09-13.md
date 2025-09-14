@@ -80,6 +80,17 @@ class CallCountResult:
 
 This will require updating `count_function_calls()` to return `CallCountResult` instead of `tuple[CallCount, ...]`, and updating the analyzer and output modules accordingly.
 
+**Updates needed in analyzer.py**:
+```python
+# Change line 30 from:
+call_counts = count_function_calls(file_path, function_infos)
+call_count_map = {cc.function_qualified_name: cc.call_count for cc in call_counts}
+
+# To:
+result = count_function_calls(file_path, function_infos)
+call_count_map = {cc.function_qualified_name: cc.call_count for cc in result.resolved_counts}
+```
+
 ## Detailed Implementation Steps
 
 ### Step 0: Create Failing Tests First (Prerequisite)
@@ -130,7 +141,7 @@ class CallCountVisitor(ast.NodeVisitor):
     def __init__(self, call_counts: dict[str, int]) -> None:
         super().__init__()
         self.call_counts = call_counts
-        self.class_stack: list[str] = []
+        self._class_stack: list[str] = []
 
         # NEW: Scope-aware tracking
         self.function_stack: list[str] = []  # Track function nesting
@@ -263,8 +274,8 @@ def _extract_call_name(self, node: ast.Call) -> str | None:
     if isinstance(func, ast.Attribute):
         # Handle self.method_name() calls (unchanged)
         if isinstance(func.value, ast.Name) and func.value.id == "self":
-            if self.class_stack:
-                return ".".join([*self.class_stack, func.attr])
+            if self._class_stack:
+                return ".".join([*self._class_stack, func.attr])
             return func.attr
 
         # NEW: Handle instance method calls via variables
@@ -556,32 +567,31 @@ c = Calc()  # Won't track that Calc is Calculator
 
 ## Implementation Sequence
 
-1. **Update data models** (10 min)
+1. **Update data models**
    - Add CallCountResult to models.py
    - Update count_function_calls return type
-   - Update analyzer and output modules to handle new structure
-2. **Write failing test first** (5 min)
+   - Update analyzer.py line 30-31 to use result.resolved_counts
+   - Update any output module references if needed
+2. **Write failing test first**
    - Add bug test to existing test_call_counter.py
    - Run test to confirm it fails with current implementation
-3. **Add scope tracking infrastructure** (10 min)
+3. **Add scope tracking infrastructure**
    - Add function_stack and scoped_variables
    - Implement get_current_scope()
-4. **Implement visit_FunctionDef** (15 min)
+4. **Implement visit_FunctionDef**
    - Track function scope entry/exit
    - Extract parameter annotations
-5. **Implement assignment tracking** (20 min)
+5. **Implement assignment tracking**
    - visit_Assign for direct instantiation
    - visit_AnnAssign for annotated variables
-6. **Update call resolution** (15 min)
+6. **Update call resolution**
    - Modify _extract_call_name to use scoped lookups
-7. **Write comprehensive tests** (30 min)
+7. **Write comprehensive tests**
    - Scope isolation tests
    - Parameter annotation tests
    - Module variable tests
-8. **Test with demo files** (10 min)
-9. **Run full test suite with coverage** (5 min)
-
-**Total estimated time**: ~2 hours 10 min
+8. **Test with demo files**
+9. **Run full test suite with coverage**
 
 ## Edge Cases and Decisions
 
@@ -703,7 +713,7 @@ def _extract_call_name(self, node: ast.Call) -> str | None:
             # ... existing instance variable logic ...
 
             # NEW: Then check class attributes
-            class_name = self.class_stack[-1]
+            class_name = self._class_stack[-1]
             class_attr_key = f"{class_name}.{func.value.attr}"
             if class_attr_key in self.class_attributes:
                 attr_type = self.class_attributes[class_attr_key]
