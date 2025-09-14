@@ -24,7 +24,7 @@ For initial testing of the Type Annotation Priority Analyzer, we want codebases 
 
 ### Developer Tools
 - **Black** (~15k LOC) - Code formatter with some type annotations but not complete coverage
-- **Pytest** (core modules) - Well-structured with plugins and inheritance, partial typing
+- **Pytest** (core modules) - Well-structured with plugins and inheritance, partial typing. Investigation shows ~50% of files (34/68) have `mypy: allow-untyped-defs` directive, with fully typed modules like `outcomes.py`, `deprecated.py` vs partially typed `fixtures.py`, `config/__init__.py`. Properties and abstract methods frequently lack return type annotations (e.g., `def node(self):`, `def function(self):` in fixtures.py). Pre-commit runs both mypy (strict mode) and pyright (basic mode), with a comment noting pyright passing is "work in progress". Test files also mixed - some like `test_fixture.py` have `disallow-untyped-defs` while most allow untyped.
 - **Flake8** - Linting tool with plugin architecture, good for testing import resolution
 - **Twine** (~5k LOC) - PyPI upload tool, smaller but non-trivial
 
