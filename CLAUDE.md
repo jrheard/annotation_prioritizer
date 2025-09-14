@@ -63,11 +63,11 @@ This project follows functional programming principles:
 - **Test structure**: Tests should be bare functions, not methods in test classes. Don't use wrapper classes like `TestSomething` - pytest doesn't need them
 - **Commit messages**: Use conventional commits format with precise types:
   - `feat:` - New user-facing functionality only (core app features)
-  - `chore:` - Tooling, deps, dev env, config (most non-feat changes)
   - `fix:` - Bug fixes
+  - `docs:` - Documentation changes (docstrings, comments, README, etc.)
   - `refactor:` - Code restructuring without behavior changes
   - `test:` - Test changes
-  - `docs:` - Documentation
+  - `chore:` - Tooling, dependencies, build config, CI/CD
 - Always include changes to `dev-diary.txt` and `TODO.md` in commits (user edits these files during work)
 
 ## Project Structure
