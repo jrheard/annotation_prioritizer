@@ -1,0 +1,11 @@
+version: 2
+updates:
+  - package-ecosystem: "pip" # Python dependencies
+    directory: "/" # Location of package manifests (pyproject.toml is at root)
+    schedule:
+      interval: "weekly"
+    groups:
+      # Group all development dependencies (pytest, ruff, pyright, etc.) into a single PR
+      # to reduce noise and test related changes together
+      dev-dependencies:
+        dependency-type: "development"
