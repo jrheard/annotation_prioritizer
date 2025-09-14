@@ -85,7 +85,7 @@ tree = ast.parse(code)
 visitor = MyVisitor()
 visitor.visit(tree)
 print(f"Functions: {visitor.functions_found}")  # ['greet', 'main']
-print(f"Calls: {visitor.calls_found}")  # ['greet', 'print']
+print(f"Calls: {visitor.calls_found}")  # ['print', 'greet', 'print']
 ```
 
 **Key insight**: The visitor automatically dispatches to `visit_ClassName` methods based on node type. If no specific method exists, it calls `generic_visit`. The traversal is depth-first, meaning it processes a node before its children (unless you override this behavior).
@@ -129,16 +129,16 @@ inspector.visit(tree)
 
 # Output:
 # Variable 'x' has context: Store
-# Variable 'x' has context: Load
 # Variable 'y' has context: Store
+# Variable 'x' has context: Load
 # Variable 'print' has context: Load
 # Variable 'x' has context: Load
 # Variable 'y' has context: Del
-# Variable 'obj' has context: Load
 # Attribute '.attr' has context: Store
-# Variable 'z' has context: Store
 # Variable 'obj' has context: Load
+# Variable 'z' has context: Store
 # Attribute '.attr' has context: Load
+# Variable 'obj' has context: Load
 ```
 
 This is crucial for distinguishing between variable usage and assignment. In our scope-aware variable tracking, we only record type information when we see Store context (assignments), and we look up type information when we see Load context (usage).
