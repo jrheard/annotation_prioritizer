@@ -1,4 +1,30 @@
-"""AST parsing for counting function calls within the same module."""
+"""AST-based counting of function calls for annotation priority analysis.
+
+This module traverses Python source files to count how many times each known function
+is called. These call counts feed into the priority analysis to identify frequently-used
+functions that lack type annotations.
+
+The call counter uses conservative resolution - it only counts calls it can confidently
+attribute to specific functions. Ambiguous or dynamic calls are excluded from counts
+rather than guessed at, ensuring accuracy over completeness.
+
+Key Design Decisions:
+    - Conservative attribution: Only count calls we're confident about
+    - Qualified name matching: Uses full qualified names (e.g., "Calculator.add")
+      to distinguish methods from module-level functions
+
+Relationship to Other Modules:
+    - function_parser.py: Provides the FunctionInfo definitions to count calls for
+    - analyzer.py: Combines call counts with function definitions for prioritization
+    - models.py: Defines CallCount data structure
+
+Limitations:
+    - Intentional: No support for star imports (from module import *)
+    - Intentional: No support for dynamic method calls (getattr, exec, etc.)
+    - Not Yet Implemented: Cross-module call tracking (import resolution)
+    - Not Yet Implemented: Instance method calls via variables (e.g., calc.add())
+    - Not Yet Implemented: Inheritance resolution for method calls
+"""
 
 import ast
 from pathlib import Path
@@ -47,20 +73,51 @@ def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ..
 
 
 class CallCountVisitor(ast.NodeVisitor):
-    """AST visitor to count function calls."""
+    """AST visitor that counts calls to known functions.
+
+    Traverses the AST to identify and count function calls, maintaining context
+    about the current class scope to properly resolve self.method() calls.
+    Uses conservative resolution - when the target of a call cannot be determined
+    with confidence, it is not counted rather than guessed at.
+
+    Usage:
+        After calling visit() on an AST tree, access the 'call_counts' dictionary
+        to retrieve the updated call counts for each function:
+
+        >>> visitor = CallCountVisitor(call_counts_dict)
+        >>> visitor.visit(tree)
+        >>> updated_counts = visitor.call_counts
+
+    Call Resolution Patterns:
+        Currently handles:
+        - Direct function calls: function_name()
+        - Self method calls: self.method_name() (uses class context)
+        - Static/class method calls: ClassName.method_name()
+
+        Not yet implemented:
+        - Instance method calls: obj.method_name() where obj is a variable
+        - Imported function calls: imported_module.function()
+        - Chained calls: obj.attr.method()
+
+    The visitor maintains state during traversal (_class_stack) to track the
+    current class context, enabling proper resolution of self.method() calls
+    to their qualified names (e.g., "Calculator.add").
+    """
 
     def __init__(self, call_counts: dict[str, int]) -> None:
         """Initialize visitor with call count tracking dictionary."""
         super().__init__()
         self.call_counts = call_counts
-        self.class_stack: list[str] = []
+        # Internal: Tracks current class context during traversal for building qualified names
+        # Stack is pushed when entering a class and popped when exiting
+        self._class_stack: list[str] = []
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Visit class definition to track context for method calls."""
-        self.class_stack.append(node.name)
+        self._class_stack.append(node.name)
         self.generic_visit(node)
-        self.class_stack.pop()
+        self._class_stack.pop()
 
     @override
     def visit_Call(self, node: ast.Call) -> None:
@@ -72,31 +129,39 @@ class CallCountVisitor(ast.NodeVisitor):
         self.generic_visit(node)
 
     def _extract_call_name(self, node: ast.Call) -> str | None:
-        """Extract the qualified name of the called function."""
+        """Extract the qualified name of the called function.
+
+        Uses conservative resolution - only returns names for calls that can be
+        confidently attributed to specific functions. Ambiguous or dynamic calls
+        return None and are excluded from counting.
+
+        Returns:
+            Qualified function name if resolvable, None otherwise.
+        """
         func = node.func
 
-        # Direct function call: function_name()
+        # Direct calls to module-level functions: function_name()
         if isinstance(func, ast.Name):
             return func.id
 
-        # Method call: obj.method_name()
+        # Method calls: obj.method_name()
         if isinstance(func, ast.Attribute):
-            # Handle self.method_name() calls
+            # Self method calls: self.method_name() - use current class context
             if isinstance(func.value, ast.Name) and func.value.id == "self":
-                # Build qualified name with current class context
-                if self.class_stack:
-                    return ".".join([*self.class_stack, func.attr])
+                if self._class_stack:
+                    return ".".join([*self._class_stack, func.attr])
                 return func.attr
 
-            # Handle ClassName.static_method() calls
+            # Static/class method calls: ClassName.method_name()
             if isinstance(func.value, ast.Name):
                 class_name = func.value.id
                 return f"{class_name}.{func.attr}"
 
-            # Handle qualified calls within same module (e.g., outer.inner.method)
+            # Complex qualified calls: obj.attr.method() or module.submodule.function()
+            # Currently simplified to just final attribute - full resolution not yet implemented
             if isinstance(func.value, ast.Attribute):
-                # This could be a more complex qualified name
-                # For now, we'll extract just the final attribute
                 return func.attr
 
+        # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
+        # Cannot be resolved statically - return None
         return None

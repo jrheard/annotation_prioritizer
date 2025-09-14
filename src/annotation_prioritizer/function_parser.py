@@ -27,7 +27,7 @@ Relationship to Other Modules:
 Limitations:
     - Intentional: No support for dynamically created functions (exec, type(), etc.)
     - Intentional: No type inference for unannotated parameters
-    - Temporary: Import and inheritance resolution not yet implemented
+    - Not Yet Implemented: Import and inheritance resolution
 """
 
 import ast

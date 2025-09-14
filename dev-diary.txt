@@ -64,6 +64,6 @@ i'm also having claude write up a doc in docs/guides/
 
 https://docs.python.org/3/library/ast.html#ast.NodeVisitor
 
-TODO add much more detailed docstrings to class, methods, and module of parser
+DONE add much more detailed docstrings to class, methods, and module of parser
 
 TODO some kind of architecture doc explaining how we use the ast module to solve this problem, and what the current features / limitations are, etc?
