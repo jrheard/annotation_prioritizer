@@ -2,6 +2,10 @@
 
 This is a Python type annotation priority analyzer that identifies high-impact functions needing type annotations. The project uses modern Python tooling with uv for dependency management.
 
+# Development Environment
+
+This project runs in a VS Code dev container with restricted network access. Only traffic to domains configured in `.devcontainer/init-firewall.sh` is allowed.
+
 # Development Commands
 
 ## Common Commands
@@ -58,6 +62,7 @@ This project follows functional programming principles:
 - No inheritance: Avoid inheritance unless absolutely necessary (e.g., when integrating with libraries like Python's AST module). Use bare functions instead
 - No pytest fixtures: Prefer normal helper functions over pytest fixtures for test setup
 - Test structure: Tests should be bare functions, not methods in test classes. Don't use wrapper classes like `TestSomething` - pytest doesn't need them
+- Use `@pytest.mark.parametrize` to test multiple scenarios efficiently instead of writing repetitive test functions
 - File organization: Keep non-test Python files focused and split them into smaller modules if they exceed ~400-500 lines of non-documentation code (actual logic, not counting docstrings/comments)
 
 # Documentation Updates

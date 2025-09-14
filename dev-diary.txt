@@ -73,3 +73,11 @@ DONE some kind of doc explaining what the current features / limitations are, et
 9/14
 
 TODO read ast guide doc
+
+TODO someday investigate serena
+
+DONE context7?
+
+DONE try sequential thinking
+
+TODO experiment more with suggesting that claude use subagents -- both for parallelism and for context efficiency
