@@ -55,3 +55,11 @@ NVM give claude.yml ability to run tests, right?
     oh i already did :)
 
 DONE refactor dockerfile
+
+ok i'm trying to actually understand how the ast module works
+
+https://docs.python.org/3/library/ast.html#ast-helpers
+
+i'm also having claude write up a doc in docs/guides/
+
+https://docs.python.org/3/library/ast.html#ast.NodeVisitor
