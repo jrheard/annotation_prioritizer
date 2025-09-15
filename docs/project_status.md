@@ -30,7 +30,7 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
 
 ### CLI and Output
 - **Rich Console Output**: Formatted tables with color coding
-- **Single File Analysis**: Processes individual Python files
+- **Single File Analysis**: Processes individual Python files (temporary MVP - directory analysis is the primary goal)
 - **Summary Statistics**: Total functions, fully annotated count, high-priority alerts
 
 ### Development Infrastructure
@@ -55,7 +55,7 @@ def process():
 
 ### Other Limitations
 - **Complex Qualified Calls**: `obj.attr1.attr2.method()` pattern incomplete
-- **Single File Only**: No directory or project-wide analysis
+- **Single File Only**: No directory or project-wide analysis (temporary limitation - directory analysis is the primary roadmap goal)
 - **No Import Tracking**: Cross-module calls not resolved
 - **No Unresolvable Call Reporting**: Missing calls aren't tracked or reported
 
@@ -72,10 +72,11 @@ Currently no features are actively being developed. The primary focus should be 
    - Resolve method calls on variables (`calc.add()`)
    - Maintain scope isolation between functions
 
-2. **Directory Analysis**
+2. **Directory Analysis** (Primary Goal)
    - Process entire Python projects
    - Analyze multiple files in a single run
    - Aggregate statistics across modules
+   - Will replace single-file analysis as the primary interface
 
 3. **Unresolvable Call Reporting**
    - Track and report calls that can't be resolved

@@ -646,6 +646,8 @@ def process_data(calc_param: Calculator):  # Parameter
 
 This implementation provides accurate, scope-aware variable tracking that fixes the method call attribution bug while maintaining the project's philosophy of conservative, accurate analysis. By building our own focused solution rather than depending on complex type checkers, we achieve our goals with minimal complexity and maximum control.
 
+**Important Note**: While this plan focuses on single-file analysis to fix the immediate bug, **directory analysis is the primary long-term goal** of this project. Single-file analysis is a temporary MVP limitation that will be replaced by directory-wide analysis as the primary interface. The scope-aware infrastructure designed here provides an excellent foundation for the upcoming directory analysis implementation.
+
 The phased approach allows us to start with high-confidence patterns and expand only if real-world usage shows many unresolvable calls. This pragmatic strategy balances accuracy, simplicity, and maintainability - the key goals of the annotation prioritizer project.
 
 ## Appendix: Future Enhancement - Class-Level Attributes
@@ -742,3 +744,371 @@ The current implementation's design choices make this enhancement straightforwar
 3. **No structural changes needed**: Pure addition of new tracking, no refactoring required
 
 This demonstrates that the current implementation is not a dead-end but rather a solid foundation for incremental improvements.
+
+## Appendix B: Import Resolution - Future Implementation Strategy
+
+**Analysis Date**: 2025-09-14
+**Compatibility Assessment**: ✅ **Fully Compatible** - The scope-aware design provides an excellent foundation for import tracking
+
+### Overview
+
+The scope-aware variable tracking implementation creates infrastructure that naturally extends to support import resolution without requiring architectural changes. This appendix provides detailed guidance for future maintainers implementing cross-module call tracking.
+
+### Why This Design Enables Import Support
+
+The current implementation's design choices make import resolution a natural extension:
+
+1. **Extensible Data Structures**: The `scoped_variables` dictionary can evolve from storing simple names to fully qualified module paths
+2. **Visitor Pattern Foundation**: Adding `visit_Import` and `visit_ImportFrom` methods fits naturally into the existing architecture
+3. **Helper Method Extension Points**: `_extract_constructor_name` and `_extract_type_from_annotation` provide clear places to add import resolution logic
+4. **Conservative Philosophy**: The project's emphasis on "only track what we're confident about" aligns with import resolution challenges
+
+### High-Level Implementation Approach
+
+#### Phase 1: Basic Import Tracking
+
+**Goal**: Track simple import statements and resolve basic imported types
+
+**Implementation Strategy**:
+```python
+class CallCountVisitor(ast.NodeVisitor):
+    def __init__(self, call_counts: dict[str, int]) -> None:
+        # ... existing fields ...
+        self.imports: dict[str, str] = {}  # "LocalName" -> "module.path.FullName"
+        self.module_aliases: dict[str, str] = {}  # "alias" -> "actual.module"
+
+    def visit_Import(self, node: ast.Import) -> None:
+        """Track 'import module' statements."""
+        for alias in node.names:
+            if alias.asname:
+                # import calculator.Calculator as Calc
+                self.module_aliases[alias.asname] = alias.name
+            else:
+                # import calculator
+                self.module_aliases[alias.name.split('.')[-1]] = alias.name
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        """Track 'from module import name' statements."""
+        if node.module is None:
+            return  # Skip relative imports for now
+
+        for alias in node.names:
+            local_name = alias.asname if alias.asname else alias.name
+            full_name = f"{node.module}.{alias.name}"
+            self.imports[local_name] = full_name
+```
+
+**Data Model Evolution**:
+```python
+# Current storage:
+scoped_variables["foo.calc"] = "Calculator"
+
+# With import support:
+scoped_variables["foo.calc"] = "mypackage.calculator.Calculator"
+```
+
+#### Phase 2: Enhanced Type Resolution
+
+**Enhanced Constructor Detection**:
+```python
+def _extract_constructor_name(self, node: ast.expr) -> str | None:
+    """Extract class name, now with import resolution."""
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+        name = node.func.id
+        if name and name[0].isupper():
+            # Check if it's an imported type
+            if name in self.imports:
+                return self.imports[name]  # Return fully qualified name
+            return name  # Local class
+
+    # Handle module.ClassName() with import aliases
+    if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute):
+        if isinstance(node.func.value, ast.Name):
+            module_name = node.func.value.id
+            class_name = node.func.attr
+            if module_name in self.module_aliases:
+                full_module = self.module_aliases[module_name]
+                return f"{full_module}.{class_name}"
+
+        # Fallback to current behavior
+        name = node.func.attr
+        if name and name[0].isupper():
+            return name
+
+    return None
+```
+
+### Multi-File Analysis Architecture
+
+#### Directory Processing Strategy
+
+**Recommended Approach**: Two-pass analysis for dependency resolution
+
+```python
+def analyze_project(project_path: Path) -> ProjectAnalysisResult:
+    """Analyze entire Python project with import resolution."""
+
+    # Pass 1: Build module map and extract all function definitions
+    module_map = {}  # module_path -> {classes, functions, imports}
+    all_functions = []
+
+    for py_file in project_path.rglob("*.py"):
+        module_info = extract_module_info(py_file)
+        module_map[py_file] = module_info
+        all_functions.extend(module_info.functions)
+
+    # Pass 2: Analyze calls with full import context
+    all_call_counts = []
+    for py_file, module_info in module_map.items():
+        call_counts = count_function_calls_with_imports(
+            py_file, all_functions, module_info.imports
+        )
+        all_call_counts.extend(call_counts)
+
+    return ProjectAnalysisResult(all_call_counts)
+```
+
+#### Import Resolution Challenges
+
+**Challenge 1: Relative Imports**
+```python
+# These require package structure analysis
+from .calculator import Calculator
+from ..utils.math import advanced_calc
+```
+
+**Recommendation**: Start with absolute imports only. Add relative import support in a later phase after measuring real-world usage patterns.
+
+**Challenge 2: Star Imports**
+```python
+from calculator import *  # Imports unknown set of names
+```
+
+**Recommendation**: Treat as unresolvable. Document this limitation clearly. Most well-structured codebases avoid star imports.
+
+**Challenge 3: Dynamic Imports**
+```python
+Calculator = getattr(some_module, "Calculator")
+imported_module = importlib.import_module("calculator")
+```
+
+**Recommendation**: Mark as unresolvable. These patterns are rare and would require runtime analysis to resolve properly.
+
+### Implementation Phases and Risk Assessment
+
+#### Phase 1: Foundation (Low Risk)
+- **Scope**: Single-module imports (`from calculator import Calculator`)
+- **Risk Level**: Low - natural extension of existing infrastructure
+- **Estimated Effort**: 2-3 days
+- **Success Criteria**: Basic import statements enable variable type resolution
+
+#### Phase 2: Module Aliases (Medium Risk)
+- **Scope**: Handle `import calculator as calc` patterns
+- **Risk Level**: Medium - requires tracking module aliases separately
+- **Estimated Effort**: 3-4 days
+- **Success Criteria**: Aliased imports work correctly
+
+#### Phase 3: Project-Wide Analysis (High Risk)
+- **Scope**: Multi-file analysis with dependency resolution
+- **Risk Level**: High - requires fundamental architecture changes
+- **Estimated Effort**: 1-2 weeks
+- **Success Criteria**: Entire Python packages can be analyzed
+
+#### Phase 4: Advanced Imports (Very High Risk)
+- **Scope**: Relative imports, complex package structures
+- **Risk Level**: Very High - Python import semantics are complex
+- **Estimated Effort**: 2-3 weeks
+- **Success Criteria**: Real-world packages with complex imports work
+
+### Data Model Changes Required
+
+#### New Data Structures
+
+```python
+@dataclass(frozen=True)
+class ImportInfo:
+    """Information about an import statement."""
+    local_name: str  # Name used in the importing module
+    full_qualified_name: str  # Full module path
+    import_type: Literal["direct", "from", "alias"]  # How it was imported
+
+@dataclass(frozen=True)
+class ModuleAnalysisResult:
+    """Results of analyzing a single module."""
+    file_path: Path
+    imports: tuple[ImportInfo, ...]
+    functions: tuple[FunctionInfo, ...]
+    call_counts: tuple[CallCount, ...]
+    unresolvable_calls: int
+
+@dataclass(frozen=True)
+class ProjectAnalysisResult:
+    """Results of analyzing an entire project."""
+    modules: tuple[ModuleAnalysisResult, ...]
+    total_functions: int
+    total_calls: int
+    cross_module_calls: int
+    unresolvable_calls: int
+```
+
+#### Backward Compatibility Strategy
+
+**Principle**: All changes must be backward compatible with single-file analysis
+
+```python
+# Current API (must continue to work):
+def count_function_calls(file_path: str, functions: tuple[FunctionInfo, ...]) -> CallCountResult:
+    """Single-file analysis (existing API)."""
+    # Implementation stays the same, just enhanced internally
+
+# New API for multi-file:
+def count_function_calls_project(
+    project_path: Path,
+    include_patterns: list[str] = ["**/*.py"]
+) -> ProjectAnalysisResult:
+    """Multi-file project analysis (new API)."""
+```
+
+### Testing Strategy for Import Support
+
+#### Unit Test Categories
+
+**Import Statement Parsing Tests**:
+```python
+def test_simple_from_import():
+    """Test 'from module import Class' parsing."""
+
+def test_import_with_alias():
+    """Test 'import module as alias' parsing."""
+
+def test_multiple_imports():
+    """Test 'from module import Class1, Class2' parsing."""
+```
+
+**Cross-Module Resolution Tests**:
+```python
+def test_cross_module_method_calls():
+    """Test that imported classes enable method call resolution."""
+    # Create module A with Calculator class
+    # Create module B that imports Calculator and uses it
+    # Verify calls are counted correctly
+```
+
+**Edge Case Tests**:
+```python
+def test_import_name_conflicts():
+    """Test handling of name conflicts between imports and local classes."""
+
+def test_circular_imports():
+    """Test handling of circular import dependencies."""
+```
+
+#### Integration Test Strategy
+
+**Real-World Package Testing**:
+- Test against well-known open-source packages
+- Start with simple packages, gradually increase complexity
+- Measure analysis completeness (resolved vs unresolvable calls)
+- Identify common patterns that need support
+
+### Performance Considerations
+
+#### Memory Usage Scaling
+
+**Current**: O(variables per file)
+**With Imports**: O(variables per project + imports per project)
+
+**Mitigation Strategy**:
+- Use string interning for repeated module names
+- Consider lazy loading of module information
+- Profile memory usage with large projects
+
+#### Analysis Time Complexity
+
+**Current**: O(AST nodes per file)
+**With Multi-File**: O(AST nodes per project + dependency resolution)
+
+**Optimization Opportunities**:
+- Cache parsed import information
+- Parallelize file processing where possible
+- Skip analysis of files that haven't changed
+
+### Configuration and Flexibility
+
+#### Recommended Configuration Options
+
+```python
+@dataclass(frozen=True)
+class ImportAnalysisConfig:
+    """Configuration for import resolution behavior."""
+    resolve_relative_imports: bool = False  # Start with False
+    follow_star_imports: bool = False  # Always False for now
+    max_import_depth: int = 10  # Prevent infinite recursion
+    ignore_patterns: tuple[str, ...] = ("test_*.py", "*_test.py")
+    strict_mode: bool = True  # Fail on unresolvable imports vs skip
+```
+
+#### Fallback Behavior
+
+**Principle**: When import resolution fails, fall back to current behavior
+
+```python
+def resolve_variable_type(var_name: str, scope: str) -> str | None:
+    """Resolve variable type with import fallback."""
+    # Try import-aware resolution first
+    if full_type := resolve_with_imports(var_name, scope):
+        return full_type
+
+    # Fall back to current simple resolution
+    return resolve_without_imports(var_name, scope)
+```
+
+### Migration Strategy
+
+#### Incremental Implementation Path
+
+1. **Add import tracking infrastructure** (no behavior change)
+2. **Enable import resolution for single files** (enhance existing behavior)
+3. **Add multi-file analysis as new API** (no existing API changes)
+4. **Gradually expand import support** (relative imports, aliases, etc.)
+
+#### Compatibility Guarantees
+
+- Single-file analysis API remains unchanged
+- All existing test cases continue to pass
+- New functionality is opt-in
+- Clear documentation of supported vs unsupported import patterns
+
+### Success Metrics and Evaluation
+
+#### Quantitative Goals
+
+- **Coverage**: >80% of method calls in typical projects should be resolvable
+- **Performance**: Multi-file analysis should complete in <30 seconds for medium projects (1000+ files)
+- **Accuracy**: <5% false positive rate in call attribution
+
+#### Qualitative Evaluation
+
+- **Maintainability**: New code should follow existing patterns and be well-tested
+- **Documentation**: Clear explanation of supported import patterns
+- **Error Handling**: Graceful degradation when imports can't be resolved
+
+### Known Limitations and Future Work
+
+#### Permanent Limitations (By Design)
+
+- **Dynamic imports**: `importlib.import_module()` patterns
+- **Computed import names**: `from module import getattr(obj, 'name')`
+- **Runtime import modification**: Monkey-patching of imported modules
+
+#### Future Enhancement Opportunities
+
+- **Type stub support**: Use `.pyi` files for better type resolution
+- **Package.json equivalents**: Parse `pyproject.toml` for dependency information
+- **IDE integration**: Export results in Language Server Protocol format
+
+### Conclusion
+
+The scope-aware variable tracking implementation provides an excellent foundation for import resolution. The key insight is that imports are essentially another form of variable assignment - they bind names to types, just like `calc = Calculator()` does.
+
+By following the phased implementation approach outlined here, future maintainers can add import support incrementally while maintaining the project's core philosophy of conservative, accurate analysis. The existing infrastructure naturally extends to handle imports without requiring architectural changes, making this a low-risk, high-value enhancement path.

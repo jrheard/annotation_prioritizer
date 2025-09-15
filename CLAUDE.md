@@ -90,3 +90,11 @@ Use conventional commits format with precise types:
   - `plans/pending/` - Implementation plans awaiting work
   - `plans/completed/` - Finished implementations
   - `plans/persistent/` - Reference documents
+
+# Planning and Implementation Guidance
+
+When planning or implementing features, ask clarifying questions about priorities and use cases when:
+- The user's stated goals seem to conflict with plan assumptions
+- Multiple implementation approaches have significantly different trade-offs
+
+Present options with clear pros/cons rather than assuming the "obvious" choice.
