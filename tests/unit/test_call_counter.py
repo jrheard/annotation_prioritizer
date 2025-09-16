@@ -382,3 +382,319 @@ def test_complex_qualified_calls() -> None:
     # Test by actually visiting the call - this should increment the count
     visitor.visit_Call(call_node)
     assert call_counts["__module__.method"] == 1  # This covers line 81
+
+
+def test_function_calls_in_nested_functions() -> None:
+    """Test counting calls made inside nested functions."""
+    code = """
+def outer_function():
+    def inner_function():
+        return outer_function()  # Call to outer function from inside inner
+
+    def another_inner():
+        return inner_function() + helper_function()  # Calls to other functions
+
+    return inner_function() + another_inner()
+
+def helper_function():
+    return 42
+
+def top_level_caller():
+    return outer_function() + helper_function()
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="outer_function",
+                qualified_name="__module__.outer_function",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=2,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="inner_function",
+                qualified_name="__module__.outer_function.inner_function",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=3,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="another_inner",
+                qualified_name="__module__.outer_function.another_inner",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=6,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="helper_function",
+                qualified_name="__module__.helper_function",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=11,
+                file_path=temp_path,
+            ),
+        )
+
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # outer_function() called:
+        # - once from inner_function
+        # - once from top_level_caller
+        # Total: 2 calls
+        assert call_counts["__module__.outer_function"] == 2
+
+        # inner_function() called:
+        # - once from another_inner
+        # - once from outer_function itself
+        # Total: 2 calls
+        assert call_counts["__module__.outer_function.inner_function"] == 2
+
+        # another_inner() called:
+        # - once from outer_function
+        # Total: 1 call
+        assert call_counts["__module__.outer_function.another_inner"] == 1
+
+        # helper_function() called:
+        # - once from another_inner
+        # - once from top_level_caller
+        # Total: 2 calls
+        assert call_counts["__module__.helper_function"] == 2
+
+
+def test_method_calls_in_nested_functions() -> None:
+    """Test counting method calls inside nested functions within classes."""
+    code = """
+class Calculator:
+    def complex_operation(self):
+        def inner_helper():
+            return self.add(1, 2)  # Method call from nested function
+
+        def another_helper():
+            base = self.multiply(3, 4)  # Another method call from nested function
+            return base + inner_helper()
+
+        return another_helper() + self.add(5, 6)  # Direct method call
+
+    def add(self, a, b):
+        return a + b
+
+    def multiply(self, a, b):
+        return a * b
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="add",
+                qualified_name="__module__.Calculator.add",
+                parameters=(
+                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
+                    ParameterInfo(name="a", has_annotation=False, is_variadic=False, is_keyword=False),
+                    ParameterInfo(name="b", has_annotation=False, is_variadic=False, is_keyword=False),
+                ),
+                has_return_annotation=False,
+                line_number=14,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="multiply",
+                qualified_name="__module__.Calculator.multiply",
+                parameters=(
+                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
+                    ParameterInfo(name="a", has_annotation=False, is_variadic=False, is_keyword=False),
+                    ParameterInfo(name="b", has_annotation=False, is_variadic=False, is_keyword=False),
+                ),
+                has_return_annotation=False,
+                line_number=17,
+                file_path=temp_path,
+            ),
+        )
+
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # self.add() called:
+        # - once from inner_helper nested function
+        # - once from complex_operation directly
+        # Total: 2 calls
+        assert call_counts["__module__.Calculator.add"] == 2
+
+        # self.multiply() called:
+        # - once from another_helper nested function
+        # Total: 1 call
+        assert call_counts["__module__.Calculator.multiply"] == 1
+
+
+def test_deeply_nested_function_calls() -> None:
+    """Test function calls in deeply nested structures."""
+    code = """
+class OuterClass:
+    def outer_method(self):
+        def level1_function():
+            def level2_function():
+                def level3_function():
+                    return self.helper_method()  # Deep nested method call
+                return level3_function() + module_function()  # Call to module function
+            return level2_function()
+        return level1_function()
+
+    def helper_method(self):
+        return 42
+
+def module_function():
+    return 100
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="helper_method",
+                qualified_name="__module__.OuterClass.helper_method",
+                parameters=(
+                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
+                ),
+                has_return_annotation=False,
+                line_number=10,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="module_function",
+                qualified_name="__module__.module_function",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=13,
+                file_path=temp_path,
+            ),
+        )
+
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # self.helper_method() called once from level3_function
+        assert call_counts["__module__.OuterClass.helper_method"] == 1
+
+        # module_function() called once from level2_function
+        assert call_counts["__module__.module_function"] == 1
+
+
+def test_nested_class_with_function_calls() -> None:
+    """Test function calls inside methods of nested classes."""
+    code = """
+class Outer:
+    class Inner:
+        def inner_method(self):
+            def nested_function():
+                return module_helper()  # Call to module function from nested function
+            return nested_function() + self.other_inner_method()
+
+        def other_inner_method(self):
+            return 10
+
+def module_helper():
+    return 5
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="other_inner_method",
+                qualified_name="__module__.Outer.Inner.other_inner_method",
+                parameters=(
+                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
+                ),
+                has_return_annotation=False,
+                line_number=8,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="module_helper",
+                qualified_name="__module__.module_helper",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=11,
+                file_path=temp_path,
+            ),
+        )
+
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # self.other_inner_method() called once from inner_method
+        assert call_counts["__module__.Outer.Inner.other_inner_method"] == 1
+
+        # module_helper() called once from nested_function
+        assert call_counts["__module__.module_helper"] == 1
+
+
+def test_async_function_calls() -> None:
+    """Test counting calls to and from async functions."""
+    code = """
+async def async_outer():
+    async def async_inner():
+        return await async_outer()  # Call to outer async function
+
+    def sync_inner():
+        return regular_helper()  # Call to regular function from sync inner
+
+    result = await async_inner()
+    return result + sync_inner()
+
+def regular_helper():
+    return 10
+
+async def top_level_async():
+    return await async_outer() + regular_helper()
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="async_outer",
+                qualified_name="__module__.async_outer",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=2,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="async_inner",
+                qualified_name="__module__.async_outer.async_inner",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=3,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="regular_helper",
+                qualified_name="__module__.regular_helper",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=12,
+                file_path=temp_path,
+            ),
+        )
+
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # async_outer() called:
+        # - once from async_inner (await async_outer())
+        # - once from top_level_async (await async_outer())
+        # Total: 2 calls
+        assert call_counts["__module__.async_outer"] == 2
+
+        # async_inner() called:
+        # - once from async_outer (await async_inner())
+        # Total: 1 call
+        assert call_counts["__module__.async_outer.async_inner"] == 1
+
+        # regular_helper() called:
+        # - once from sync_inner nested function
+        # - once from top_level_async
+        # Total: 2 calls
+        assert call_counts["__module__.regular_helper"] == 2

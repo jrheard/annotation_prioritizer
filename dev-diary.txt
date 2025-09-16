@@ -252,5 +252,18 @@ which is a list of Scope, which has fields name and kind, where kind is an enum
 ok i'm having it do that
 this will probably interfere with the scope-aware doc but so be it
 
+DONE also do this in call_counter
+
 TODO instead of taking call_counts, CallCountVisitor should take known_functions - less confusing
 ie a list/tuple of FunctionInfos
+
+hm, one interesting note is that subagents appear to default to sonnet
+i bet i could have it use opus in subagents in cases where i really care about that (eg complex plan manipulation?)
+
+TODO call_counter currently special-cases `self` - should we also special-case `cls`?
+should we add just-in-case sanity checks to verify that these special-cases are appropriate / aren't being false positives on pathological code?
+or just leave a to-do comment and move on?
+
+maybe an /opus-agent command would be useful someday?
+
+TODO figure out how to deduplicate between call_counter and function_parser

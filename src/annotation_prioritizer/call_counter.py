@@ -30,7 +30,7 @@ import ast
 from pathlib import Path
 from typing import override
 
-from .models import CallCount, FunctionInfo
+from .models import CallCount, FunctionInfo, Scope, ScopeKind
 
 
 def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ...]) -> tuple[CallCount, ...]:
@@ -76,7 +76,7 @@ class CallCountVisitor(ast.NodeVisitor):
     """AST visitor that counts calls to known functions.
 
     Traverses the AST to identify and count function calls, maintaining context
-    about the current class scope to properly resolve self.method() calls.
+    about the current scope (classes and functions) to properly resolve self.method() calls.
     Uses conservative resolution - when the target of a call cannot be determined
     with confidence, it is not counted rather than guessed at.
 
@@ -91,7 +91,7 @@ class CallCountVisitor(ast.NodeVisitor):
     Call Resolution Patterns:
         Currently handles:
         - Direct function calls: function_name()
-        - Self method calls: self.method_name() (uses class context)
+        - Self method calls: self.method_name() (uses scope context)
         - Static/class method calls: ClassName.method_name()
 
         Not yet implemented:
@@ -99,8 +99,8 @@ class CallCountVisitor(ast.NodeVisitor):
         - Imported function calls: imported_module.function()
         - Chained calls: obj.attr.method()
 
-    The visitor maintains state during traversal (_class_stack) to track the
-    current class context, enabling proper resolution of self.method() calls
+    The visitor maintains state during traversal (_scope_stack) to track the
+    current scope context, enabling proper resolution of self.method() calls
     to their qualified names (e.g., "__module__.Calculator.add").
     """
 
@@ -108,16 +108,31 @@ class CallCountVisitor(ast.NodeVisitor):
         """Initialize visitor with call count tracking dictionary."""
         super().__init__()
         self.call_counts = call_counts
-        # Internal: Tracks current class context during traversal for building qualified names
-        # Stack is pushed when entering a class and popped when exiting
-        self._class_stack: list[str] = []
+        # Internal: Tracks current scope context during traversal for building qualified names.
+        # Stack is pushed when entering a scope (class or function) and popped when exiting.
+        # Always starts with module scope as the root.
+        self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        """Visit class definition to track context for method calls."""
-        self._class_stack.append(node.name)
+        """Visit class definition to track scope context for method calls."""
+        self._scope_stack.append(Scope(kind=ScopeKind.CLASS, name=node.name))
         self.generic_visit(node)
-        self._class_stack.pop()
+        self._scope_stack.pop()
+
+    @override
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Visit function definition to track scope context for nested function calls."""
+        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self.generic_visit(node)
+        self._scope_stack.pop()
+
+    @override
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Visit async function definition to track scope context for nested function calls."""
+        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self.generic_visit(node)
+        self._scope_stack.pop()
 
     @override
     def visit_Call(self, node: ast.Call) -> None:
@@ -140,17 +155,19 @@ class CallCountVisitor(ast.NodeVisitor):
         """
         func = node.func
 
-        # Direct calls to module-level functions: function_name()
+        # Direct calls to functions: function_name()
+        # Try to resolve to nested functions first, then fall back to module level
         if isinstance(func, ast.Name):
-            return f"__module__.{func.id}"
+            return self._resolve_function_call(func.id)
 
         # Method calls: obj.method_name()
         if isinstance(func, ast.Attribute):
-            # Self method calls: self.method_name() - use current class context
+            # Self method calls: self.method_name() - use current scope context
             if isinstance(func.value, ast.Name) and func.value.id == "self":
-                if self._class_stack:
-                    return f"__module__.{'.'.join([*self._class_stack, func.attr])}"
-                return f"__module__.{func.attr}"
+                # Build qualified name from current scope stack, excluding function scopes
+                # since self.method() calls should resolve to the class method, not nested function
+                scope_names = [scope.name for scope in self._scope_stack if scope.kind != ScopeKind.FUNCTION]
+                return ".".join([*scope_names, func.attr])
 
             # Static/class method calls: ClassName.method_name()
             if isinstance(func.value, ast.Name):
@@ -164,4 +181,38 @@ class CallCountVisitor(ast.NodeVisitor):
 
         # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
         # Cannot be resolved statically - return None
+        return None
+
+    def _resolve_function_call(self, function_name: str) -> str | None:
+        """Resolve a direct function call to its qualified name.
+
+        Tries to resolve the function call by checking different scope levels,
+        starting from more specific (nested) scopes and falling back to module level.
+        Only returns names for functions that exist in the known functions list.
+
+        Args:
+            function_name: The local name of the function being called
+
+        Returns:
+            Qualified function name if found in known functions, None otherwise
+        """
+        # Generate candidate qualified names from most specific to least specific scope
+        candidates: list[str] = []
+
+        # For nested function calls, try sibling functions in containing function scopes
+        # Work backwards through the scope stack to find function scopes
+        for i in range(len(self._scope_stack)):
+            if self._scope_stack[i].kind == ScopeKind.FUNCTION:
+                # Try resolving as a sibling function in this function's scope
+                scope_names = [scope.name for scope in self._scope_stack[: i + 1]]
+                candidates.append(".".join([*scope_names, function_name]))
+
+        # Always try module level as fallback
+        candidates.append(f"__module__.{function_name}")
+
+        # Return the first candidate that exists in our known functions
+        for candidate in candidates:
+            if candidate in self.call_counts:
+                return candidate
+
         return None
