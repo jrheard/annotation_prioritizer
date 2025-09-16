@@ -735,6 +735,47 @@ class Calculator:
 4. Use existing Scope infrastructure - don't reinvent
 5. Conservative approach: When in doubt, return False for `is_class()`
 
+## Commit Breakdown
+
+This work will be implemented in 6 logical commits that build on each other:
+
+### Commit 1: feat: add ClassRegistry data structure and Python builtin types
+- Add `ClassRegistry` dataclass to `models.py`
+- Implement `PYTHON_BUILTIN_TYPES` constant using `builtins` module
+- Add `is_class()` and `merge()` methods
+- Write unit tests for ClassRegistry
+
+### Commit 2: feat: implement ClassDiscoveryVisitor for AST class detection
+- Add `ClassDiscoveryVisitor` class (either in `call_counter.py` or new module)
+- Implement `build_class_registry()` function
+- Handle nested classes and scope tracking
+- Write unit tests for class discovery
+
+### Commit 3: refactor: integrate ClassRegistry into CallCountVisitor (breaking change)
+- Update `CallCountVisitor.__init__()` to require `class_registry` parameter
+- Add `_resolve_class_name()` method
+- Update `_extract_call_name()` to use registry instead of heuristics
+- **Fix ALL existing tests** that instantiate `CallCountVisitor` directly
+- This is an intentional breaking API change to force proper class detection
+
+### Commit 4: feat: wire up class registry in count_function_calls entry point
+- Update `count_function_calls()` to build registry from AST
+- Pass registry to `CallCountVisitor`
+- Complete the end-to-end integration
+
+### Commit 5: test: add comprehensive tests for class detection feature
+- Integration tests for false positive elimination
+- Tests for nested classes and forward references
+- Tests verifying imported classes are not counted
+- Edge case coverage
+
+### Commit 6: docs: update documentation for class detection improvements
+- Update docstrings on new/modified functions
+- Update `project_status.md`
+- Move plan from `pending/` to `completed/`
+
+Each commit is individually testable and maintains a working test suite. Commit 3 is particularly critical as it's a breaking change that requires updating all existing test files.
+
 ---
 
 **Next Steps After This:**
