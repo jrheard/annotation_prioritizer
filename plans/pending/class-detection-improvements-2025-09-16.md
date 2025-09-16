@@ -13,44 +13,43 @@ Replace the current naive class detection heuristic (`name[0].isupper()`) with d
 
 ### Current Broken Behavior
 
-The call counter currently uses this naive check in `_extract_call_name()`:
+The call counter currently treats ANY identifier before a dot as a potential class in `_extract_call_name()`:
 
 ```python
-# Line 177 in call_counter.py
+# Lines 176-179 in call_counter.py
 if isinstance(func.value, ast.Name):
     class_name = func.value.id
     # TODO: is this right? why is `class_name` guaranteed to live directly on `__module__`?
     return f"__module__.{class_name}.{func.attr}"
 ```
 
-This assumes ANY identifier before a dot might be a class, leading to:
+This naive approach causes serious issues:
 
-**False Positives:**
+**False Positives (Main Problem):**
 ```python
 MAX_SIZE = 100
-result = MAX_SIZE.bit_length()  # MAX_SIZE wrongly treated as class
+result = MAX_SIZE.bit_length()  # Wrongly treated as __module__.MAX_SIZE.bit_length
+
 DEFAULT_CONFIG = {"key": "value"}
-value = DEFAULT_CONFIG.get("key")  # DEFAULT_CONFIG wrongly treated as class
+value = DEFAULT_CONFIG.get("key")  # Wrongly treated as __module__.DEFAULT_CONFIG.get
 ```
 
-**False Negatives:**
-```python
-class xmlParser:  # Non-PEP8 class name
-    def parse(self, data): ...
+**Note:** Non-PEP8 class names like `xmlParser` and `dataProcessor` ARE currently recognized correctly. The issue is that we treat ALL identifiers as classes, not that we miss certain class naming patterns.
 
-parser = xmlParser()
-parser.parse(data)  # xmlParser not recognized as class
-```
-
-**Critical Bug Impact:**
+**Critical Bug - Instance Method Calls:**
 ```python
 class Calculator:
     def add(self, a, b): ...
 
 def process():
-    calc = Calculator()  # Can't track - don't know Calculator is a class
-    return calc.add(5, 7)  # Call NOT counted - shows 0 calls!
+    calc = Calculator()  # Variable assignment - not tracked
+    return calc.add(5, 7)  # calc.add NOT counted - treated as __module__.calc.add
 ```
+
+The fundamental problem is we have no way to distinguish between:
+- Actual class names (`Calculator.add()`)
+- Constants/variables (`MAX_SIZE.bit_length()`)
+- Instance variables (`calc.add()`)
 
 ## Solution Design
 
@@ -181,11 +180,106 @@ def build_class_registry(tree: ast.AST) -> ClassRegistry:
     )
 ```
 
+## Import Handling - Current Limitations and Future Path
+
+### What We're NOT Handling (Yet)
+
+This implementation focuses exclusively on classes defined within the analyzed file. We explicitly do NOT handle:
+
+1. **Standard Library Imports**
+   ```python
+   import math
+   import json
+   from collections import defaultdict
+   from pathlib import Path
+
+   # These class method calls will NOT be recognized:
+   math.sqrt(16)
+   json.loads("{}")
+   defaultdict.fromkeys([1, 2])
+   Path.home()
+   ```
+
+2. **Type Annotation Imports**
+   ```python
+   from typing import List, Dict, Optional
+
+   # These are commonly used as classes but won't be recognized:
+   List.copy([])
+   Dict.fromkeys(["a", "b"])
+   ```
+
+3. **Third-Party Package Classes**
+   ```python
+   import pandas as pd
+   import numpy as np
+   from requests import Session
+
+   # None of these will be recognized:
+   pd.DataFrame.from_dict({})
+   np.array.reshape(arr, (2, 3))
+   Session.get("http://example.com")
+   ```
+
+### Why This Matters
+
+In real-world Python code, a significant portion of "class method" calls are on imported classes:
+- DataFrame operations in data science code
+- Path manipulations in file handling code
+- Type constructors in typed Python code
+
+**This means our initial implementation will have limited effectiveness on codebases that heavily use imports.**
+
+### Our Temporary Solution
+
+When encountering `SomeName.method()` where `SomeName` isn't in our class registry:
+1. We return `None` from `_extract_call_name()`
+2. The call is silently ignored (not counted)
+3. No error is raised or logged
+
+This conservative approach ensures:
+- No false positives (incorrectly counting non-class method calls)
+- Clean upgrade path (when we add import support, more calls will simply start being counted)
+- Clear scope boundaries (we only claim to handle what we can actually handle)
+
+### What This Means for Testing
+
+The tool will work best on:
+- Self-contained modules with minimal imports
+- Code that defines its own classes rather than using library classes
+- Files where the primary logic is in local classes
+
+The tool will have limited value for:
+- Scripts that primarily orchestrate library calls
+- Data science notebooks full of pandas/numpy operations
+- Thin wrappers around third-party APIs
+
+### Future Implementation Path
+
+When we implement import resolution (planned for after variable tracking), we'll need to:
+1. Parse import statements to build an import registry
+2. Attempt to resolve imported names to their modules
+3. Potentially analyze imported modules to find their class definitions
+4. Handle aliased imports (`import pandas as pd`)
+5. Deal with star imports (`from module import *`)
+
+For now, we're keeping the implementation simple and focused on accurate local class detection.
+
+### Adding to PYTHON_BUILTIN_TYPES
+
+We include Python built-in types in our registry because:
+- They're always available without imports
+- They're frequently used (`str.format()`, `dict.fromkeys()`, etc.)
+- They have well-known, stable APIs
+- No ambiguity about what they refer to
+
+The `PYTHON_BUILTIN_TYPES` set provides value immediately without the complexity of import resolution.
+
 ## Integration Points
 
 ### 1. Update call_counter.py
 
-The `CallCountVisitor` needs to accept and use a `ClassRegistry`:
+The `CallCountVisitor` needs to accept and use a `ClassRegistry` with a new resolver method:
 
 ```python
 class CallCountVisitor(ast.NodeVisitor):
@@ -194,6 +288,57 @@ class CallCountVisitor(ast.NodeVisitor):
         self.call_counts: dict[str, int] = {func.qualified_name: 0 for func in known_functions}
         self.class_registry = class_registry  # NEW
         self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
+
+    def _resolve_class_name(self, class_name: str) -> str | None:
+        """Resolve a class name to its qualified form based on current scope.
+
+        Checks from most specific (nested class) to least specific (module) scope.
+        This handles cases like:
+        - Inner.method() inside Outer class -> __module__.Outer.Inner
+        - Calculator.add() at module level -> __module__.Calculator
+
+        NOTE: Currently only resolves classes defined in the current file and Python
+        built-in types. Imported classes (from typing, collections, third-party packages)
+        are not recognized and their method calls won't be counted.
+
+        Args:
+            class_name: The local name to resolve (e.g., "Calculator", "Inner")
+
+        Returns:
+            Qualified class name if found in registry, None otherwise
+
+        Examples:
+            "Calculator" -> "__module__.Calculator" (if defined in file)
+            "int" -> "int" (built-in type)
+            "List" -> None (imported from typing, not yet supported)
+            "defaultdict" -> None (imported from collections, not yet supported)
+        """
+        candidates: list[str] = []
+
+        # Build candidates from current scope outward
+        # If we're in Outer.method(), seeing "Inner" should check:
+        # 1. __module__.Outer.Inner (sibling class)
+        # 2. __module__.Inner (module-level class)
+
+        for i in range(len(self._scope_stack)):
+            if self._scope_stack[i].kind == ScopeKind.CLASS:
+                # Try as sibling class in this class's scope
+                scope_names = [s.name for s in self._scope_stack[:i+1]]
+                candidates.append(".".join([*scope_names, class_name]))
+
+        # Always try module level as fallback
+        candidates.append(f"__module__.{class_name}")
+
+        # Check built-in types directly (they don't have __module__ prefix)
+        if class_name in self.class_registry.builtin_classes:
+            return class_name
+
+        # Return first match found in AST classes registry
+        for candidate in candidates:
+            if candidate in self.class_registry.ast_classes:
+                return candidate
+
+        return None
 
     def _extract_call_name(self, node: ast.Call) -> str | None:
         """Extract the qualified name of the called function."""
@@ -209,12 +354,12 @@ class CallCountVisitor(ast.NodeVisitor):
             if isinstance(func.value, ast.Name):
                 potential_class = func.value.id
 
-                # NEW: Only treat as class method if definitively a class
-                if self.class_registry.is_class(f"__module__.{potential_class}"):
-                    return f"__module__.{potential_class}.{func.attr}"
+                # NEW: Use resolver to check all possible scopes
+                resolved_class = self._resolve_class_name(potential_class)
+                if resolved_class:
+                    return f"{resolved_class}.{func.attr}"
 
-                # Otherwise, it might be a variable - return None for now
-                # (Will be handled by variable tracking in Step 3)
+                # Not a class - might be a variable (future work)
                 return None
 ```
 
@@ -386,6 +531,34 @@ def use_constants():
     assert registry.is_class("int") is True  # Built-in
 ```
 
+3. **Test Imported Classes Not Counted**
+```python
+def test_imported_classes_not_counted():
+    """Verify that imported classes are not recognized (temporary behavior)."""
+    source = """
+from typing import List
+from collections import defaultdict
+import math
+
+def use_imports():
+    List.append([], "item")  # Should NOT be counted
+    defaultdict.fromkeys([1, 2])  # Should NOT be counted
+    math.sqrt(16)  # Should NOT be counted
+    int.from_bytes(b"test", "big")  # Should be counted (built-in)
+"""
+    tree = ast.parse(source)
+    registry = build_class_registry(tree)
+
+    # Imported classes not in registry
+    assert not registry.is_class("List")
+    assert not registry.is_class("__module__.List")
+    assert not registry.is_class("defaultdict")
+    assert not registry.is_class("math")
+
+    # Built-in is recognized
+    assert registry.is_class("int")
+```
+
 ### Integration Tests
 
 1. **Test End-to-End with New Registry**
@@ -417,7 +590,38 @@ def main():
     assert proc_process.call_count == 1
 ```
 
-2. **Test Forward References**
+2. **Test Nested Classes**
+```python
+def test_nested_class_method_calls():
+    """Test that nested class method calls are correctly resolved."""
+    test_file = write_temp_file("""
+class Outer:
+    class Inner:
+        def process(self):
+            return "processing"
+
+    def use_inner(self):
+        # Should resolve to __module__.Outer.Inner.process
+        Inner.process(None)
+
+def use_at_module():
+    # Won't be counted - Inner not accessible at module level
+    Inner.process(None)
+    # This will be counted
+    Outer.Inner.process(None)
+""")
+
+    functions = parse_function_definitions(test_file)
+    counts = count_function_calls(test_file, functions)
+
+    inner_process = next(
+        c for c in counts
+        if c.function_qualified_name == "__module__.Outer.Inner.process"
+    )
+    assert inner_process.call_count == 2  # Once from use_inner, once from use_at_module
+```
+
+3. **Test Forward References**
 ```python
 def test_forward_reference_handling():
     test_file = write_temp_file("""
@@ -450,20 +654,30 @@ class Calculator:
 
 3. **Update CallCountVisitor** (1 hour)
    - Accept ClassRegistry parameter
-   - Update `_extract_call_name()` to use registry
+   - Add `_resolve_class_name()` method
+   - Update `_extract_call_name()` to use resolver
    - Remove naive heuristics
 
 4. **Update count_function_calls()** (30 min)
    - Build registry from AST
    - Pass to visitor
 
-5. **Write comprehensive tests** (1 hour)
+5. **Fix all existing tests** (45 min)
+   - Update test files that instantiate `CallCountVisitor`
+   - Files that need updating:
+     - `tests/unit/test_call_counter.py` - Multiple test functions create CallCountVisitor
+     - `tests/integration/test_end_to_end.py` - May need updates if it directly uses call_counter
+   - Add class_registry parameter to all CallCountVisitor instantiations
+
+6. **Write comprehensive new tests** (1 hour)
    - Unit tests for ClassRegistry
    - Unit tests for ClassDiscoveryVisitor
+   - Test for `_resolve_class_name()` method
    - Integration tests for call counting
+   - Test for imported classes behavior
    - Edge case coverage
 
-6. **Update documentation** (15 min)
+7. **Update documentation** (15 min)
    - Update docstrings
    - Update project_status.md
 

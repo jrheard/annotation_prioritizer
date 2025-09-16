@@ -57,9 +57,32 @@ def process():
 
 ### Other Limitations
 - **Complex Qualified Calls**: `obj.attr1.attr2.method()` pattern incomplete
-- **Single File Only**: No directory or project-wide analysis (temporary limitation - directory analysis is the primary roadmap goal)
-- **No Import Tracking**: Cross-module calls not resolved
+- **Single File Only**: No directory or project-wide analysis (temporary limitation)
+- **No Import Support**: Imported classes and functions not tracked
 - **No Unresolvable Call Reporting**: Missing calls aren't tracked or reported
+
+### Import and Multi-File Support Status
+
+**Current State:**
+- Tool analyzes one file at a time in isolation
+- Cannot resolve imports (`from typing import List`, `import math`, etc.)
+- Cannot track calls to imported functions or class methods
+- Limited effectiveness on import-heavy codebases
+
+**Future Implementation Path:**
+1. **Phase 1: Import Resolution** (Single File)
+   - Parse import statements within the analyzed file
+   - Build import registry mapping names to modules
+   - Resolve imported class/function references
+   - Handle common patterns (aliased imports, from imports)
+   - Still single-file, but with much better call attribution
+
+2. **Phase 2: Multi-File Analysis** (Directory Support)
+   - Analyze entire directories/projects
+   - Build cross-file dependency graphs
+   - Track calls across module boundaries
+   - Aggregate metrics at project level
+   - This is the ultimate goal for maximum value
 
 ## In Progress 🚧
 
@@ -90,7 +113,16 @@ These improvements must be completed in order to achieve very accurate single-fi
 ## Planned Features 📋
 
 ### High Priority
-1. **Scope-Aware Variable Tracking**
+1. **Import Resolution** (Phase 1 - Single File)
+   - Parse and track import statements
+   - Resolve imported names to their modules
+   - Support common import patterns:
+     - `import math` → `math.sqrt()`
+     - `from typing import List` → `List.append()`
+     - `import pandas as pd` → `pd.DataFrame()`
+   - Still single-file analysis, but much more effective
+
+2. **Scope-Aware Variable Tracking**
    - Fix instance method call counting bug
    - Track variable assignments (`calc = Calculator()`)
    - Resolve method calls on variables (`calc.add()`)
@@ -111,23 +143,16 @@ These improvements must be completed in order to achieve very accurate single-fi
    - Dynamic imports and star imports (too complex for reliable static analysis)
    - Decorators (too complex for static analysis)
 
-2. **Directory Analysis** (Primary Goal)
-   - Process entire Python projects
-   - Analyze multiple files in a single run
-   - Aggregate statistics across modules
-   - Will replace single-file analysis as the primary interface
-
 3. **Unresolvable Call Reporting**
    - Track and report calls that can't be resolved
    - Provide statistics on analysis completeness
    - Help identify missing functionality
 
 ### Medium Priority
-4. **Import Resolution**
-   - Track function imports across modules
-   - Handle `from module import function`
-   - Support import aliases (`from calc import Calculator as Calc`)
-   - Enable cross-module call counting
+
+4. **@property Support**
+   - Distinguish properties from regular attributes
+   - Count property access as method calls
 
 5. **Enhanced Call Attribution**
    - Support chained calls (`get_calc().add()`)

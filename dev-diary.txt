@@ -312,3 +312,7 @@ i'm tempted to rewind to that conversation and do it again
 gonna stash my changes for now
 
 ok this is much better :)
+
+TODO use /review-plan on each of these new docs
+
+TODO think about when to implement import support. should we do this before or after "scope-aware" variable resolution?
