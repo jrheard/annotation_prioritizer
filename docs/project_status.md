@@ -17,7 +17,7 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
   - Async functions (`async def`)
   - Parameter type annotations (including *args, **kwargs)
   - Return type annotations
-  - Proper qualified names (e.g., `Calculator.add`)
+  - Proper qualified names with full scope hierarchy (e.g., `__module__.Calculator.add`)
 
 ### Analysis Capabilities
 - **Annotation Scoring**: Weighted completeness scoring (75% parameters, 25% return type)
@@ -25,8 +25,10 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
   - Direct function calls (`function_name()`)
   - Self method calls (`self.method()`)
   - Static/class method calls (`Calculator.static_method()`)
+  - Nested function calls (functions defined inside other functions)
 - **Priority Calculation**: Combined metric based on call frequency × annotation incompleteness
 - **Conservative Methodology**: Only tracks function calls that can be confidently resolved, avoiding uncertain inferences
+- **Scope-Aware Tracking**: Complete scope hierarchy tracking (module/class/function) with typed `Scope` dataclass
 
 ### CLI and Output
 - **Rich Console Output**: Formatted tables with color coding
@@ -61,7 +63,11 @@ def process():
 
 ## In Progress 🚧
 
-Currently no features are actively being developed. The primary focus should be on fixing the instance method call counting bug using scope-aware variable tracking.
+### Scope Infrastructure (Partially Complete)
+- ✅ **Scope Stack Foundation**: Replaced `_class_stack` with typed `_scope_stack` using `Scope` dataclass
+- ✅ **Function Scope Tracking**: Both parsers now track function scopes in addition to classes
+- ✅ **Nested Function Support**: Calls within nested functions can now be resolved
+- 🚧 **Variable Tracking**: Next step is to implement scope-aware variable tracking on top of this foundation
 
 ## Planned Features 📋
 

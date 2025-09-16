@@ -1146,6 +1146,144 @@ The scope-aware variable tracking implementation provides an excellent foundatio
 
 By following the phased implementation approach outlined here, future maintainers can add import support incrementally while maintaining the project's core philosophy of conservative, accurate analysis. The existing infrastructure naturally extends to handle imports without requiring architectural changes, making this a low-risk, high-value enhancement path.
 
+## Appendix: Completed Prerequisite Work - Scope Stack Infrastructure
+
+**Implementation Date**: September 16, 2025
+**Status**: ✅ **COMPLETED** - Foundation infrastructure is now in place
+
+### Overview
+
+Before implementing the scope-aware variable tracking described in this plan, we completed critical prerequisite work to establish proper scope tracking infrastructure in both `function_parser.py` and `call_counter.py`. This work replaces the simple class-only tracking with a comprehensive scope hierarchy system.
+
+### What Was Implemented
+
+#### 1. Typed Scope Data Model
+
+Added to `models.py`:
+```python
+class ScopeKind(StrEnum):
+    MODULE = "module"
+    CLASS = "class"
+    FUNCTION = "function"
+
+@dataclass(frozen=True)
+class Scope:
+    kind: ScopeKind
+    name: str
+```
+
+This provides type-safe, semantic scope tracking instead of raw strings.
+
+#### 2. Function Parser Scope Tracking
+
+**Before**: Used `_class_stack: list[str]` that only tracked class nesting
+**After**: Uses `_scope_stack: list[Scope]` that tracks the complete hierarchy
+
+Key changes in `function_parser.py`:
+- Initialize with module scope: `[Scope(kind=ScopeKind.MODULE, name="__module__")]`
+- Track function scopes via `visit_FunctionDef` and `visit_AsyncFunctionDef`
+- Qualified names now include full scope: `__module__.Foo.Bar.foo.Baz.quux`
+
+**Critical Bug Fixed**: Functions defined inside other functions are now correctly represented:
+```python
+class Foo:
+    class Bar:
+        def foo():
+            class Baz:
+                def quux():  # Was: Foo.Bar.Baz.quux (wrong!)
+                            # Now: __module__.Foo.Bar.foo.Baz.quux (correct!)
+```
+
+#### 3. Call Counter Scope Tracking
+
+Updated `call_counter.py` to use the same scope_stack approach:
+- Replaced `_class_stack: list[str]` with `_scope_stack: list[Scope]`
+- Added `visit_FunctionDef` and `visit_AsyncFunctionDef` to track function contexts
+- Enhanced `_resolve_function_call` for intelligent nested function resolution
+
+**New Capability**: The call counter now attempts to resolve calls in nested scopes:
+```python
+def outer():
+    def inner():
+        pass
+    def another():
+        inner()  # This call can now be resolved to __module__.outer.inner
+```
+
+### Why This Was Done First
+
+This scope infrastructure work was completed as a prerequisite because:
+
+1. **Foundation for Variable Tracking**: The scope-aware variable tracking needs to know the current scope to properly track `scope.variable_name` mappings
+2. **Bug Prevention**: The original bug (functions in functions being misrepresented) would have broken variable tracking
+3. **Architectural Alignment**: Both modules now use the same scope model, ensuring consistency
+
+### Technical Implementation Details
+
+#### Scope Stack Behavior
+
+The scope stack always maintains at least one element (the module scope) and grows/shrinks as the AST visitor traverses:
+
+1. **Initial State**: `[Scope(MODULE, "__module__")]`
+2. **Enter Class**: Push `Scope(CLASS, "ClassName")`
+3. **Enter Function**: Push `Scope(FUNCTION, "function_name")`
+4. **Exit**: Pop the scope
+
+#### Qualified Name Generation
+
+All qualified names now explicitly include the module scope:
+- Module function: `__module__.function_name`
+- Class method: `__module__.ClassName.method_name`
+- Nested function: `__module__.outer_func.inner_func`
+- Complex nesting: `__module__.Class.method.LocalClass.nested_method`
+
+#### Smart Call Resolution in call_counter
+
+The enhanced `_resolve_function_call` method now:
+1. Tries to resolve in nested function scopes first
+2. Falls back to module-level resolution
+3. Only returns names that exist in known_functions (conservative approach)
+
+For `self.method()` calls, function scopes are filtered out to ensure proper class method resolution.
+
+### What This Enables
+
+With this foundation in place, the scope-aware variable tracking can now:
+
+1. **Use `get_current_scope()`**: Already implemented in call_counter
+2. **Build scoped variable names**: Can create `"function_name.variable_name"` keys
+3. **Track nested contexts properly**: Function and class nesting is accurately represented
+4. **Maintain scope isolation**: Variables in different scopes won't contaminate each other
+
+### Testing Coverage
+
+Comprehensive tests were added for:
+- Nested functions and their calls
+- Functions inside classes inside functions
+- Deeply nested structures with mixed scope types
+- Async function scope tracking
+- Call resolution in various nesting scenarios
+
+All 78 tests pass with 100% coverage maintained.
+
+### Migration Notes
+
+**Important API Changes**:
+- All qualified names now include `__module__.` prefix
+- This affects call counting, scoring, and output modules
+- All test files were updated to expect the new format
+
+### Next Steps
+
+With this scope infrastructure complete, the implementation of scope-aware variable tracking (the main plan in this document) can proceed. The key integration points are:
+
+1. Use the existing `_scope_stack` to track current scope
+2. Leverage `get_current_scope()` method (already in call_counter)
+3. Build on the visitor pattern with new `visit_Assign` and `visit_AnnAssign` methods
+4. Store variables as `"scope.varname": "ClassName"` in scoped_variables dict
+
+The foundation is solid and ready for the variable tracking implementation.
+
 ## Appendix C: Class Detection Improvements - Beyond Naming Conventions
 
 **Analysis Date**: 2025-09-15

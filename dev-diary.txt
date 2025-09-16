@@ -267,3 +267,5 @@ or just leave a to-do comment and move on?
 maybe an /opus-agent command would be useful someday?
 
 TODO figure out how to deduplicate between call_counter and function_parser
+
+TODO note "full resolution not yet implemented" comment in call_counter._extract_call_name
