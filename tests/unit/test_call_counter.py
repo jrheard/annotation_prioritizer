@@ -353,10 +353,19 @@ def some_function():
     pass
 """
 
-    with temp_python_file(code):
+    with temp_python_file(code) as temp_path:
         # Create a visitor and manually test the edge case
-        call_counts = {"__module__.method": 0}
-        visitor = CallCountVisitor(call_counts)
+        known_functions = (
+            FunctionInfo(
+                name="method",
+                qualified_name="__module__.method",
+                parameters=(),
+                has_return_annotation=False,
+                line_number=1,
+                file_path=temp_path,
+            ),
+        )
+        visitor = CallCountVisitor(known_functions)
 
         # Create a mock Call node that represents self.method() outside class
         func_node = ast.Attribute(value=ast.Name(id="self", ctx=ast.Load()), attr="method", ctx=ast.Load())
@@ -364,14 +373,23 @@ def some_function():
 
         # Test by actually visiting the call - this should increment the count
         visitor.visit_Call(call_node)
-        assert call_counts["__module__.method"] == 1  # This covers line 70
+        assert visitor.call_counts["__module__.method"] == 1  # This covers line 70
 
 
 def test_complex_qualified_calls() -> None:
     """Test complex qualified calls to cover line 81."""
     # Create a visitor and manually test the complex qualified call case
-    call_counts = {"__module__.method": 0}
-    visitor = CallCountVisitor(call_counts)
+    known_functions = (
+        FunctionInfo(
+            name="method",
+            qualified_name="__module__.method",
+            parameters=(),
+            has_return_annotation=False,
+            line_number=1,
+            file_path="dummy.py",
+        ),
+    )
+    visitor = CallCountVisitor(known_functions)
 
     # Create a mock Call node that represents outer.inner.method()
     # This creates: outer.inner.method() where func.value is ast.Attribute
@@ -381,7 +399,7 @@ def test_complex_qualified_calls() -> None:
 
     # Test by actually visiting the call - this should increment the count
     visitor.visit_Call(call_node)
-    assert call_counts["__module__.method"] == 1  # This covers line 81
+    assert visitor.call_counts["__module__.method"] == 1  # This covers line 81
 
 
 def test_function_calls_in_nested_functions() -> None:

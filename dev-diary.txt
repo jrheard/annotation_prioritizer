@@ -254,18 +254,41 @@ this will probably interfere with the scope-aware doc but so be it
 
 DONE also do this in call_counter
 
-TODO instead of taking call_counts, CallCountVisitor should take known_functions - less confusing
+DONE instead of taking call_counts, CallCountVisitor should take known_functions - less confusing
 ie a list/tuple of FunctionInfos
 
 hm, one interesting note is that subagents appear to default to sonnet
 i bet i could have it use opus in subagents in cases where i really care about that (eg complex plan manipulation?)
 
-TODO call_counter currently special-cases `self` - should we also special-case `cls`?
+NVM call_counter currently special-cases `self` - should we also special-case `cls`?
 should we add just-in-case sanity checks to verify that these special-cases are appropriate / aren't being false positives on pathological code?
 or just leave a to-do comment and move on?
 
 maybe an /opus-agent command would be useful someday?
 
-TODO figure out how to deduplicate between call_counter and function_parser
+DONE figure out how to deduplicate between call_counter and function_parser
+
+nvm:
+
+● After analyzing both files and thinking through the implications, I recommend keeping the current duplication. Here's why:
+
+  The Duplication is Minimal and Beneficial
+
+  The scope stack logic is nearly identical between the files - about 15-20 lines of simple push/pop operations. However, this duplication is actually good because:
+
+  1. Different purposes: function_parser builds qualified names once per function definition, while call_counter resolves calls repeatedly with complex filtering logic (e.g., excluding function scopes for self.method() calls)
+  2. Future divergence: According to the project status, call_counter will soon need scope-aware variable tracking to fix the instance method bug. This will make its scope tracking significantly more complex, while function_parser
+  will remain simple.
+  3. Project principles: The codebase avoids inheritance unless absolutely necessary. Creating a base class would violate this principle for minimal benefit.
+  4. Simplicity: Each visitor is self-contained and easy to understand. The duplication is trivial (just AST traversal boilerplate), while the unique logic in each file is complex and different.
+
+  Alternative Considered but Rejected
+
+  I considered extracting a ScopeTracker helper class, but this would add unnecessary abstraction for such simple code that's going to diverge anyway when variable tracking is implemented.
+
+  Conclusion
+
+  The current design is clean and appropriate. The "duplication" is really just standard AST visitor boilerplate that keeps each module focused on its specific responsibility. No changes recommended.
+
 
 TODO note "full resolution not yet implemented" comment in call_counter._extract_call_name

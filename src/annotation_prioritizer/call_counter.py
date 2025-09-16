@@ -60,15 +60,12 @@ def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ..
     except (OSError, SyntaxError):
         return ()
 
-    # Create mapping from qualified names to track calls
-    known_function_names = {func.qualified_name for func in known_functions}
-    call_counts: dict[str, int] = dict.fromkeys(known_function_names, 0)
-
-    visitor = CallCountVisitor(call_counts)
+    visitor = CallCountVisitor(known_functions)
     visitor.visit(tree)
 
     return tuple(
-        CallCount(function_qualified_name=name, call_count=count) for name, count in call_counts.items()
+        CallCount(function_qualified_name=name, call_count=count)
+        for name, count in visitor.call_counts.items()
     )
 
 
@@ -84,9 +81,9 @@ class CallCountVisitor(ast.NodeVisitor):
         After calling visit() on an AST tree, access the 'call_counts' dictionary
         to retrieve the updated call counts for each function:
 
-        >>> visitor = CallCountVisitor(call_counts_dict)
+        >>> visitor = CallCountVisitor(known_functions)
         >>> visitor.visit(tree)
-        >>> updated_counts = visitor.call_counts
+        >>> call_counts = visitor.call_counts
 
     Call Resolution Patterns:
         Currently handles:
@@ -104,10 +101,15 @@ class CallCountVisitor(ast.NodeVisitor):
     to their qualified names (e.g., "__module__.Calculator.add").
     """
 
-    def __init__(self, call_counts: dict[str, int]) -> None:
-        """Initialize visitor with call count tracking dictionary."""
+    def __init__(self, known_functions: tuple[FunctionInfo, ...]) -> None:
+        """Initialize visitor with functions to track.
+
+        Args:
+            known_functions: Functions to count calls for, matched by qualified_name
+        """
         super().__init__()
-        self.call_counts = call_counts
+        # Create internal call count tracking from known functions
+        self.call_counts: dict[str, int] = {func.qualified_name: 0 for func in known_functions}
         # Internal: Tracks current scope context during traversal for building qualified names.
         # Stack is pushed when entering a scope (class or function) and popped when exiting.
         # Always starts with module scope as the root.
@@ -163,6 +165,7 @@ class CallCountVisitor(ast.NodeVisitor):
         # Method calls: obj.method_name()
         if isinstance(func, ast.Attribute):
             # Self method calls: self.method_name() - use current scope context
+            # TODO: Should we also special-case `cls` in addition to `self`?
             if isinstance(func.value, ast.Name) and func.value.id == "self":
                 # Build qualified name from current scope stack, excluding function scopes
                 # since self.method() calls should resolve to the class method, not nested function

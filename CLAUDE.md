@@ -59,6 +59,7 @@ This project follows functional programming principles:
 - Pure functions: Write pure functions wherever possible - functions that don't have side effects and return the same output for the same input
 - Frozen dataclasses: Always use `@dataclass(frozen=True)` for structured data. Never use namedtuples or regular classes for data
 - Enums: Enums are great. Literal["foo", "bar", "baz"] is OK too in the simplest cases, otherwise prefer enums.
+- Immutability: Where possible, functions/methods/classes should take tuples, frozensets, etc. as input rather than lists, sets, etc.
 - No inheritance: Avoid inheritance unless absolutely necessary (e.g., when integrating with libraries like Python's AST module). Use bare functions instead
 - No pytest fixtures: Prefer normal helper functions over pytest fixtures for test setup
 - Test structure: Tests should be bare functions, not methods in test classes. Don't use wrapper classes like `TestSomething` - pytest doesn't need them
@@ -98,3 +99,7 @@ When planning or implementing features, ask clarifying questions about prioritie
 - Multiple implementation approaches have significantly different trade-offs
 
 Present options with clear pros/cons rather than assuming the "obvious" choice.
+
+# Sub-agents
+
+Proactively use sub-agents for complex tasks to conserve context in our main conversation thread. Use opus, not sonnet, when spawning sub-agents.
