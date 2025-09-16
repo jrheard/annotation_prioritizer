@@ -316,3 +316,5 @@ ok this is much better :)
 TODO use /review-plan on each of these new docs
 
 TODO think about when to implement import support. should we do this before or after "scope-aware" variable resolution?
+
+TODO is there any way to simplify / condense _resolve_class_name and _resolve_compound_class_name?

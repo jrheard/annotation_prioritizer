@@ -289,9 +289,20 @@ class CallCountVisitor(ast.NodeVisitor):
             return full_qualified
 
         # Try from current scope context
-        # If we're inside a class, the compound name might be relative to that class
-        for i in range(len(self._scope_stack)):
-            if self._scope_stack[i].kind == ScopeKind.CLASS:
+        # Check both function and class scopes (working backwards from most specific)
+        for i in range(len(self._scope_stack) - 1, -1, -1):
+            scope = self._scope_stack[i]
+
+            # If we're inside a function, the compound name might be relative to that function
+            if scope.kind == ScopeKind.FUNCTION:
+                # Build scope prefix including the function
+                scope_names = [s.name for s in self._scope_stack[: i + 1]]
+                candidate = ".".join([*scope_names, compound_name])
+                if candidate in self._class_registry.ast_classes:
+                    return candidate
+
+            # If we're inside a class, the compound name might be relative to that class
+            elif scope.kind == ScopeKind.CLASS:
                 # Build scope prefix
                 scope_names = [s.name for s in self._scope_stack[: i + 1]]
                 candidate = ".".join([*scope_names, compound_name])

@@ -721,6 +721,39 @@ class Outer:
     assert result is None
 
 
+def test_resolve_compound_class_in_function_scope() -> None:
+    """Test compound class resolution for classes defined in functions."""
+    source = """
+def my_function():
+    class Outer:
+        class Inner:
+            def method(self):
+                pass
+
+    # This compound call should be resolved
+    Outer.Inner.method()
+"""
+    tree = ast.parse(source)
+    class_registry = build_class_registry(tree)
+
+    # Create a visitor with the Inner.method as a known function
+    known_functions = (
+        FunctionInfo(
+            name="method",
+            qualified_name="__module__.my_function.Outer.Inner.method",
+            parameters=(),
+            has_return_annotation=False,
+            line_number=5,
+            file_path="test.py",
+        ),
+    )
+
+    visitor = CallCountVisitor(known_functions, class_registry)
+    visitor.visit(tree)
+
+    assert visitor.call_counts["__module__.my_function.Outer.Inner.method"] == 1
+
+
 def test_async_function_calls() -> None:
     """Test counting calls to and from async functions."""
     code = """
