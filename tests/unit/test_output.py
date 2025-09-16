@@ -19,14 +19,14 @@ def test_format_results_table_with_data() -> None:
     priority1 = FunctionPriority(
         function_info=FunctionInfo(
             name="high_priority",
-            qualified_name="high_priority",
+            qualified_name="__module__.high_priority",
             parameters=(ParameterInfo("x", False, False, False),),
             has_return_annotation=False,
             line_number=1,
             file_path="test.py",
         ),
         annotation_score=AnnotationScore(
-            function_qualified_name="high_priority",
+            function_qualified_name="__module__.high_priority",
             parameter_score=0.0,
             return_score=0.0,
             total_score=0.0,
@@ -39,14 +39,14 @@ def test_format_results_table_with_data() -> None:
     priority2 = FunctionPriority(
         function_info=FunctionInfo(
             name="medium_priority",
-            qualified_name="medium_priority",
+            qualified_name="__module__.medium_priority",
             parameters=(ParameterInfo("x", True, False, False),),
             has_return_annotation=False,
             line_number=2,
             file_path="test.py",
         ),
         annotation_score=AnnotationScore(
-            function_qualified_name="medium_priority",
+            function_qualified_name="__module__.medium_priority",
             parameter_score=1.0,
             return_score=0.0,
             total_score=0.6,  # 60% annotation for yellow styling
@@ -68,14 +68,14 @@ def test_format_results_table_color_styling() -> None:
     priority1 = FunctionPriority(
         function_info=FunctionInfo(
             name="low_priority_high_annotation",
-            qualified_name="low_priority_high_annotation",
+            qualified_name="__module__.low_priority_high_annotation",
             parameters=(),
             has_return_annotation=True,
             line_number=1,
             file_path="test.py",
         ),
         annotation_score=AnnotationScore(
-            function_qualified_name="low_priority_high_annotation",
+            function_qualified_name="__module__.low_priority_high_annotation",
             parameter_score=1.0,
             return_score=1.0,
             total_score=0.9,  # 90% annotation for green styling
@@ -103,14 +103,14 @@ def test_print_summary_stats_all_annotated() -> None:
     priority = FunctionPriority(
         function_info=FunctionInfo(
             name="test_func",
-            qualified_name="test_func",
+            qualified_name="__module__.test_func",
             parameters=(ParameterInfo("x", True, False, False),),
             has_return_annotation=True,
             line_number=1,
             file_path="test.py",
         ),
         annotation_score=AnnotationScore(
-            function_qualified_name="test_func",
+            function_qualified_name="__module__.test_func",
             parameter_score=1.0,
             return_score=1.0,
             total_score=1.0,
@@ -135,14 +135,14 @@ def test_print_summary_stats_with_high_priority() -> None:
     priority1 = FunctionPriority(
         function_info=FunctionInfo(
             name="high_priority",
-            qualified_name="high_priority",
+            qualified_name="__module__.high_priority",
             parameters=(),
             has_return_annotation=False,
             line_number=1,
             file_path="test.py",
         ),
         annotation_score=AnnotationScore(
-            function_qualified_name="high_priority",
+            function_qualified_name="__module__.high_priority",
             parameter_score=1.0,
             return_score=0.0,
             total_score=0.25,
@@ -154,14 +154,14 @@ def test_print_summary_stats_with_high_priority() -> None:
     priority2 = FunctionPriority(
         function_info=FunctionInfo(
             name="low_priority",
-            qualified_name="low_priority",
+            qualified_name="__module__.low_priority",
             parameters=(),
             has_return_annotation=True,
             line_number=2,
             file_path="test.py",
         ),
         annotation_score=AnnotationScore(
-            function_qualified_name="low_priority",
+            function_qualified_name="__module__.low_priority",
             parameter_score=1.0,
             return_score=1.0,
             total_score=1.0,
@@ -193,14 +193,14 @@ def test_display_results_with_data() -> None:
     priority = FunctionPriority(
         function_info=FunctionInfo(
             name="test_func",
-            qualified_name="test_func",
+            qualified_name="__module__.test_func",
             parameters=(),
             has_return_annotation=False,
             line_number=1,
             file_path="test.py",
         ),
         annotation_score=AnnotationScore(
-            function_qualified_name="test_func",
+            function_qualified_name="__module__.test_func",
             parameter_score=1.0,
             return_score=0.0,
             total_score=0.25,

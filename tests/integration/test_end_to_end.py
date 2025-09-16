@@ -134,30 +134,30 @@ def use_calculator():
         # Check qualified names include class prefix
         qualified_names = {p.function_info.qualified_name for p in priorities}
         expected_names = {
-            "Calculator.add",
-            "Calculator.subtract",
-            "Calculator.multiply",
-            "Calculator.calculate_all",
-            "use_calculator",
+            "__module__.Calculator.add",
+            "__module__.Calculator.subtract",
+            "__module__.Calculator.multiply",
+            "__module__.Calculator.calculate_all",
+            "__module__.use_calculator",
         }
         assert qualified_names == expected_names
 
         # Find the method with highest priority (most calls, least annotated)
         priorities_by_name = {p.function_info.qualified_name: p for p in priorities}
 
-        subtract = priorities_by_name["Calculator.subtract"]
+        subtract = priorities_by_name["__module__.Calculator.subtract"]
         # self is ignored, x and y are unannotated, return is unannotated
         # parameter_score = 0/2, return_score = 0.0, total = 0.75 * 0 + 0.25 * 0 = 0.0
         assert subtract.annotation_score.total_score == 0.0
         assert subtract.call_count == 1
 
-        multiply = priorities_by_name["Calculator.multiply"]
+        multiply = priorities_by_name["__module__.Calculator.multiply"]
         # self is ignored, x is annotated, y is unannotated, return is annotated
         # parameter_score = 1/2, return_score = 1.0, total = 0.75 * 0.5 + 0.25 * 1.0 = 0.625
         assert multiply.annotation_score.total_score == 0.625
         assert multiply.call_count == 1
 
-        add = priorities_by_name["Calculator.add"]
+        add = priorities_by_name["__module__.Calculator.add"]
         # self is ignored, x and y are annotated, return is annotated
         # parameter_score = 2/2, return_score = 1.0, total = 0.75 * 1.0 + 0.25 * 1.0 = 1.0
         assert add.annotation_score.total_score == 1.0

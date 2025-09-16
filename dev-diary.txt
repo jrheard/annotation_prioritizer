@@ -239,3 +239,18 @@ ok lol doc 6 just contained a dupe of section 24
 removing it
 
 ok i guess i know ast stuff now!!
+
+ok
+let's review our visitors
+
+yeah i kinda feel like we should do inheritance _before_ multi file? not sure
+
+yeah so in functionparser we're doing class_stack
+i think we should do .scope_stack
+which is a list of Scope, which has fields name and kind, where kind is an enum
+
+ok i'm having it do that
+this will probably interfere with the scope-aware doc but so be it
+
+TODO instead of taking call_counts, CallCountVisitor should take known_functions - less confusing
+ie a list/tuple of FunctionInfos

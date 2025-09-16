@@ -68,14 +68,14 @@ def test_main_successful_analysis() -> None:
         mock_priority = FunctionPriority(
             function_info=FunctionInfo(
                 name="test_func",
-                qualified_name="test_func",
+                qualified_name="__module__.test_func",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=1,
                 file_path=tmp.name,
             ),
             annotation_score=AnnotationScore(
-                function_qualified_name="test_func",
+                function_qualified_name="__module__.test_func",
                 parameter_score=1.0,
                 return_score=0.0,
                 total_score=0.25,
@@ -110,14 +110,14 @@ def test_main_with_min_calls_filter() -> None:
         mock_priority = FunctionPriority(
             function_info=FunctionInfo(
                 name="test_func",
-                qualified_name="test_func",
+                qualified_name="__module__.test_func",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=1,
                 file_path=tmp.name,
             ),
             annotation_score=AnnotationScore(
-                function_qualified_name="test_func",
+                function_qualified_name="__module__.test_func",
                 parameter_score=1.0,
                 return_score=0.0,
                 total_score=0.25,

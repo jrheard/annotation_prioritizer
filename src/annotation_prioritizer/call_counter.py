@@ -10,7 +10,7 @@ rather than guessed at, ensuring accuracy over completeness.
 
 Key Design Decisions:
     - Conservative attribution: Only count calls we're confident about
-    - Qualified name matching: Uses full qualified names (e.g., "Calculator.add")
+    - Qualified name matching: Uses full qualified names (e.g., "__module__.Calculator.add")
       to distinguish methods from module-level functions
 
 Relationship to Other Modules:
@@ -101,7 +101,7 @@ class CallCountVisitor(ast.NodeVisitor):
 
     The visitor maintains state during traversal (_class_stack) to track the
     current class context, enabling proper resolution of self.method() calls
-    to their qualified names (e.g., "Calculator.add").
+    to their qualified names (e.g., "__module__.Calculator.add").
     """
 
     def __init__(self, call_counts: dict[str, int]) -> None:
@@ -142,25 +142,25 @@ class CallCountVisitor(ast.NodeVisitor):
 
         # Direct calls to module-level functions: function_name()
         if isinstance(func, ast.Name):
-            return func.id
+            return f"__module__.{func.id}"
 
         # Method calls: obj.method_name()
         if isinstance(func, ast.Attribute):
             # Self method calls: self.method_name() - use current class context
             if isinstance(func.value, ast.Name) and func.value.id == "self":
                 if self._class_stack:
-                    return ".".join([*self._class_stack, func.attr])
-                return func.attr
+                    return f"__module__.{'.'.join([*self._class_stack, func.attr])}"
+                return f"__module__.{func.attr}"
 
             # Static/class method calls: ClassName.method_name()
             if isinstance(func.value, ast.Name):
                 class_name = func.value.id
-                return f"{class_name}.{func.attr}"
+                return f"__module__.{class_name}.{func.attr}"
 
             # Complex qualified calls: obj.attr.method() or module.submodule.function()
             # Currently simplified to just final attribute - full resolution not yet implemented
             if isinstance(func.value, ast.Attribute):
-                return func.attr
+                return f"__module__.{func.attr}"
 
         # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
         # Cannot be resolved statically - return None

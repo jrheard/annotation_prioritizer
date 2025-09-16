@@ -99,7 +99,7 @@ def test_fully_annotated_function() -> None:
     """Fully annotated function should get perfect total score."""
     function_info = FunctionInfo(
         name="test_func",
-        qualified_name="module.test_func",
+        qualified_name="__module__.test_func",
         parameters=(
             ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
             ParameterInfo("b", has_annotation=True, is_variadic=False, is_keyword=False),
@@ -111,7 +111,7 @@ def test_fully_annotated_function() -> None:
 
     score = calculate_annotation_score(function_info)
 
-    assert score.function_qualified_name == "module.test_func"
+    assert score.function_qualified_name == "__module__.test_func"
     assert score.parameter_score == 1.0
     assert score.return_score == 1.0
     assert score.total_score == 1.0
@@ -121,7 +121,7 @@ def test_no_annotations_function() -> None:
     """Function with no annotations should get zero total score."""
     function_info = FunctionInfo(
         name="test_func",
-        qualified_name="module.test_func",
+        qualified_name="__module__.test_func",
         parameters=(
             ParameterInfo("a", has_annotation=False, is_variadic=False, is_keyword=False),
             ParameterInfo("b", has_annotation=False, is_variadic=False, is_keyword=False),
@@ -142,7 +142,7 @@ def test_no_parameters_with_return_annotation() -> None:
     """Function with no parameters but return annotation should get partial score."""
     function_info = FunctionInfo(
         name="test_func",
-        qualified_name="module.test_func",
+        qualified_name="__module__.test_func",
         parameters=(),
         has_return_annotation=True,
         line_number=10,
@@ -160,7 +160,7 @@ def test_no_parameters_without_return_annotation() -> None:
     """Function with no parameters and no return annotation should get partial score."""
     function_info = FunctionInfo(
         name="test_func",
-        qualified_name="module.test_func",
+        qualified_name="__module__.test_func",
         parameters=(),
         has_return_annotation=False,
         line_number=10,
@@ -179,7 +179,7 @@ def test_partial_parameters_with_return_annotation() -> None:
     """Function with partial parameter annotations and return annotation."""
     function_info = FunctionInfo(
         name="test_func",
-        qualified_name="module.test_func",
+        qualified_name="__module__.test_func",
         parameters=(
             ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
             ParameterInfo("b", has_annotation=False, is_variadic=False, is_keyword=False),
@@ -202,7 +202,7 @@ def test_partial_parameters_without_return_annotation() -> None:
     """Function with partial parameter annotations and no return annotation."""
     function_info = FunctionInfo(
         name="test_func",
-        qualified_name="module.test_func",
+        qualified_name="__module__.test_func",
         parameters=(
             ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
             ParameterInfo("b", has_annotation=False, is_variadic=False, is_keyword=False),
@@ -230,7 +230,7 @@ def test_complex_parameter_mix() -> None:
     """Test scoring with a complex mix of parameter types."""
     function_info = FunctionInfo(
         name="complex_func",
-        qualified_name="module.ClassName.complex_func",
+        qualified_name="__module__.ClassName.complex_func",
         parameters=(
             ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),
             ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
@@ -247,7 +247,7 @@ def test_complex_parameter_mix() -> None:
     # self is ignored, 2 out of 3 relevant parameters annotated = 2/3
     assert score.parameter_score == 2.0 / 3.0
     assert score.return_score == 0.0
-    assert score.function_qualified_name == "module.ClassName.complex_func"
+    assert score.function_qualified_name == "__module__.ClassName.complex_func"
     expected_total = PARAMETERS_WEIGHT * (2.0 / 3.0)
     assert score.total_score == expected_total
 

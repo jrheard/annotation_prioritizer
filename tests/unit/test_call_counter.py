@@ -27,7 +27,7 @@ def caller():
         known_functions = (
             FunctionInfo(
                 name="func_a",
-                qualified_name="func_a",
+                qualified_name="__module__.func_a",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=2,
@@ -35,7 +35,7 @@ def caller():
             ),
             FunctionInfo(
                 name="func_b",
-                qualified_name="func_b",
+                qualified_name="__module__.func_b",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=5,
@@ -43,7 +43,7 @@ def caller():
             ),
             FunctionInfo(
                 name="caller",
-                qualified_name="caller",
+                qualified_name="__module__.caller",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=8,
@@ -56,9 +56,9 @@ def caller():
         # Convert to dict for easier testing
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        assert call_counts["func_a"] == 3  # Called 3 times
-        assert call_counts["func_b"] == 2  # Called 2 times
-        assert call_counts["caller"] == 0  # Not called
+        assert call_counts["__module__.func_a"] == 3  # Called 3 times
+        assert call_counts["__module__.func_b"] == 2  # Called 2 times
+        assert call_counts["__module__.caller"] == 0  # Not called
 
 
 def test_count_method_calls() -> None:
@@ -85,7 +85,7 @@ def use_calculator():
         known_functions = (
             FunctionInfo(
                 name="add",
-                qualified_name="Calculator.add",
+                qualified_name="__module__.Calculator.add",
                 parameters=(
                     ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
                     ParameterInfo(name="a", has_annotation=False, is_variadic=False, is_keyword=False),
@@ -97,7 +97,7 @@ def use_calculator():
             ),
             FunctionInfo(
                 name="multiply",
-                qualified_name="Calculator.multiply",
+                qualified_name="__module__.Calculator.multiply",
                 parameters=(
                     ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
                     ParameterInfo(name="a", has_annotation=False, is_variadic=False, is_keyword=False),
@@ -115,8 +115,8 @@ def use_calculator():
         # self.add() called twice in calculate method + once in use_calculator = 3 times
         # But we can't track the external call to calc.add() because it's not self.add()
         # So we should only count self.add() calls = 2 times
-        assert call_counts["Calculator.add"] == 2
-        assert call_counts["Calculator.multiply"] == 1
+        assert call_counts["__module__.Calculator.add"] == 2
+        assert call_counts["__module__.Calculator.multiply"] == 1
 
 
 def test_count_static_method_calls() -> None:
@@ -138,7 +138,7 @@ def external_use():
         known_functions = (
             FunctionInfo(
                 name="format_number",
-                qualified_name="Utils.format_number",
+                qualified_name="__module__.Utils.format_number",
                 parameters=(
                     ParameterInfo(name="n", has_annotation=False, is_variadic=False, is_keyword=False),
                 ),
@@ -152,7 +152,7 @@ def external_use():
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Utils.format_number() called twice
-        assert call_counts["Utils.format_number"] == 2
+        assert call_counts["__module__.Utils.format_number"] == 2
 
 
 def test_count_no_calls() -> None:
@@ -169,7 +169,7 @@ def another_unused():
         known_functions = (
             FunctionInfo(
                 name="unused_function",
-                qualified_name="unused_function",
+                qualified_name="__module__.unused_function",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=2,
@@ -177,7 +177,7 @@ def another_unused():
             ),
             FunctionInfo(
                 name="another_unused",
-                qualified_name="another_unused",
+                qualified_name="__module__.another_unused",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=5,
@@ -188,8 +188,8 @@ def another_unused():
         result = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        assert call_counts["unused_function"] == 0
-        assert call_counts["another_unused"] == 0
+        assert call_counts["__module__.unused_function"] == 0
+        assert call_counts["__module__.another_unused"] == 0
 
 
 def test_count_unknown_functions_ignored() -> None:
@@ -208,7 +208,7 @@ def caller():
         known_functions = (
             FunctionInfo(
                 name="known_func",
-                qualified_name="known_func",
+                qualified_name="__module__.known_func",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=2,
@@ -219,7 +219,7 @@ def caller():
         result = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        assert call_counts["known_func"] == 1
+        assert call_counts["__module__.known_func"] == 1
 
 
 def test_count_calls_nonexistent_file() -> None:
@@ -273,7 +273,7 @@ class Outer:
         known_functions = (
             FunctionInfo(
                 name="inner_method",
-                qualified_name="Outer.Inner.inner_method",
+                qualified_name="__module__.Outer.Inner.inner_method",
                 parameters=(
                     ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
                 ),
@@ -287,7 +287,7 @@ class Outer:
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Due to our simple implementation, these complex calls won't be tracked
-        assert call_counts["Outer.Inner.inner_method"] == 0
+        assert call_counts["__module__.Outer.Inner.inner_method"] == 0
 
 
 def test_count_edge_case_calls() -> None:
@@ -317,7 +317,7 @@ def test_self_without_class():
         known_functions = (
             FunctionInfo(
                 name="method_in_class",
-                qualified_name="MyClass.method_in_class",
+                qualified_name="__module__.MyClass.method_in_class",
                 parameters=(
                     ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
                 ),
@@ -327,7 +327,7 @@ def test_self_without_class():
             ),
             FunctionInfo(
                 name="standalone_method",
-                qualified_name="standalone_method",
+                qualified_name="__module__.standalone_method",
                 parameters=(),
                 has_return_annotation=False,
                 line_number=12,
@@ -340,8 +340,8 @@ def test_self_without_class():
 
         # The obj.method_in_class() call won't match our known function because
         # it's not self.method_in_class(), so count should be 0
-        assert call_counts["MyClass.method_in_class"] == 0
-        assert call_counts["standalone_method"] == 0
+        assert call_counts["__module__.MyClass.method_in_class"] == 0
+        assert call_counts["__module__.standalone_method"] == 0
 
 
 def test_self_call_outside_class_context() -> None:
@@ -355,7 +355,7 @@ def some_function():
 
     with temp_python_file(code):
         # Create a visitor and manually test the edge case
-        call_counts = {"method": 0}
+        call_counts = {"__module__.method": 0}
         visitor = CallCountVisitor(call_counts)
 
         # Create a mock Call node that represents self.method() outside class
@@ -364,13 +364,13 @@ def some_function():
 
         # Test by actually visiting the call - this should increment the count
         visitor.visit_Call(call_node)
-        assert call_counts["method"] == 1  # This covers line 70
+        assert call_counts["__module__.method"] == 1  # This covers line 70
 
 
 def test_complex_qualified_calls() -> None:
     """Test complex qualified calls to cover line 81."""
     # Create a visitor and manually test the complex qualified call case
-    call_counts = {"method": 0}
+    call_counts = {"__module__.method": 0}
     visitor = CallCountVisitor(call_counts)
 
     # Create a mock Call node that represents outer.inner.method()
@@ -381,4 +381,4 @@ def test_complex_qualified_calls() -> None:
 
     # Test by actually visiting the call - this should increment the count
     visitor.visit_Call(call_node)
-    assert call_counts["method"] == 1  # This covers line 81
+    assert call_counts["__module__.method"] == 1  # This covers line 81

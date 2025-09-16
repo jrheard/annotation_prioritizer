@@ -40,7 +40,7 @@ def simple_function(a, b):
 
         func = result[0]
         assert func.name == "simple_function"
-        assert func.qualified_name == "simple_function"
+        assert func.qualified_name == "__module__.simple_function"
         assert func.has_return_annotation is False
         assert func.line_number == 2
         assert func.file_path == path
@@ -145,18 +145,18 @@ class TestClass:
 
         # Check qualified names
         instance_method = next(f for f in result if f.name == "instance_method")
-        assert instance_method.qualified_name == "TestClass.instance_method"
+        assert instance_method.qualified_name == "__module__.TestClass.instance_method"
         assert instance_method.has_return_annotation is True
         assert len(instance_method.parameters) == 2
         assert instance_method.parameters[0] == ParameterInfo("self", False, False, False)
         assert instance_method.parameters[1] == ParameterInfo("x", True, False, False)
 
         class_method = next(f for f in result if f.name == "class_method")
-        assert class_method.qualified_name == "TestClass.class_method"
+        assert class_method.qualified_name == "__module__.TestClass.class_method"
         assert class_method.has_return_annotation is True
 
         static_method = next(f for f in result if f.name == "static_method")
-        assert static_method.qualified_name == "TestClass.static_method"
+        assert static_method.qualified_name == "__module__.TestClass.static_method"
         assert static_method.has_return_annotation is False
 
 
@@ -177,10 +177,10 @@ class OuterClass:
         assert len(result) == 2
 
         outer_method = next(f for f in result if f.name == "outer_method")
-        assert outer_method.qualified_name == "OuterClass.outer_method"
+        assert outer_method.qualified_name == "__module__.OuterClass.outer_method"
 
         inner_method = next(f for f in result if f.name == "inner_method")
-        assert inner_method.qualified_name == "OuterClass.InnerClass.inner_method"
+        assert inner_method.qualified_name == "__module__.OuterClass.InnerClass.inner_method"
 
 
 def test_parse_async_functions() -> None:
@@ -199,11 +199,11 @@ class AsyncClass:
         assert len(result) == 2
 
         async_func = next(f for f in result if f.name == "async_function")
-        assert async_func.qualified_name == "async_function"
+        assert async_func.qualified_name == "__module__.async_function"
         assert async_func.has_return_annotation is True
 
         async_method = next(f for f in result if f.name == "async_method")
-        assert async_method.qualified_name == "AsyncClass.async_method"
+        assert async_method.qualified_name == "__module__.AsyncClass.async_method"
         assert async_method.has_return_annotation is False
 
 
@@ -267,4 +267,212 @@ def func3() -> str:
         assert names == {"func1", "func2", "method1", "func3"}
 
         qualified_names = {f.qualified_name for f in result}
-        assert qualified_names == {"func1", "func2", "TestClass.method1", "func3"}
+        assert qualified_names == {
+            "__module__.func1",
+            "__module__.func2",
+            "__module__.TestClass.method1",
+            "__module__.func3",
+        }
+
+
+def test_parse_nested_functions() -> None:
+    """Test parsing functions nested inside other functions."""
+    source = """
+def outer_function(x):
+    def inner_function(y):
+        return y + 1
+
+    def another_inner(z: int) -> str:
+        return str(z)
+
+    return inner_function(x)
+"""
+
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
+        assert len(result) == 3
+
+        # Check all functions are found
+        names = {f.name for f in result}
+        assert names == {"outer_function", "inner_function", "another_inner"}
+
+        # Check qualified names include the nesting
+        qualified_names = {f.qualified_name for f in result}
+        assert qualified_names == {
+            "__module__.outer_function",
+            "__module__.outer_function.inner_function",
+            "__module__.outer_function.another_inner",
+        }
+
+        # Verify specific function details
+        outer_func = next(f for f in result if f.name == "outer_function")
+        assert outer_func.qualified_name == "__module__.outer_function"
+        assert outer_func.has_return_annotation is False
+
+        inner_func = next(f for f in result if f.name == "inner_function")
+        assert inner_func.qualified_name == "__module__.outer_function.inner_function"
+        assert inner_func.has_return_annotation is False
+
+        another_inner = next(f for f in result if f.name == "another_inner")
+        assert another_inner.qualified_name == "__module__.outer_function.another_inner"
+        assert another_inner.has_return_annotation is True
+
+
+def test_parse_functions_in_nested_classes() -> None:
+    """Test parsing functions defined inside methods of nested classes."""
+    source = """
+class Outer:
+    def outer_method(self):
+        def nested_func():
+            pass
+        return nested_func
+
+    class Inner:
+        def inner_method(self, x: int):
+            def deeply_nested(y):
+                return y * 2
+            return deeply_nested(x)
+"""
+
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
+        assert len(result) == 4
+
+        # Check all functions are found
+        names = {f.name for f in result}
+        assert names == {"outer_method", "nested_func", "inner_method", "deeply_nested"}
+
+        # Check qualified names
+        qualified_names = {f.qualified_name for f in result}
+        assert qualified_names == {
+            "__module__.Outer.outer_method",
+            "__module__.Outer.outer_method.nested_func",
+            "__module__.Outer.Inner.inner_method",
+            "__module__.Outer.Inner.inner_method.deeply_nested",
+        }
+
+
+def test_parse_classes_in_functions() -> None:
+    """Test parsing classes defined inside functions."""
+    source = """
+def factory_function():
+    class LocalClass:
+        def local_method(self, data: str) -> int:
+            return len(data)
+
+        def another_method(self):
+            def inner_func():
+                pass
+            return inner_func
+
+    return LocalClass
+"""
+
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
+        assert len(result) == 4
+
+        # Check all functions are found
+        names = {f.name for f in result}
+        assert names == {"factory_function", "local_method", "another_method", "inner_func"}
+
+        # Check qualified names
+        qualified_names = {f.qualified_name for f in result}
+        assert qualified_names == {
+            "__module__.factory_function",
+            "__module__.factory_function.LocalClass.local_method",
+            "__module__.factory_function.LocalClass.another_method",
+            "__module__.factory_function.LocalClass.another_method.inner_func",
+        }
+
+        # Verify the annotations are preserved
+        local_method = next(f for f in result if f.name == "local_method")
+        assert local_method.has_return_annotation is True
+        assert len(local_method.parameters) == 2
+        assert local_method.parameters[1].has_annotation is True
+
+
+def test_parse_deeply_nested_structure() -> None:
+    """Test parsing a deeply nested structure with mixed classes and functions."""
+    source = """
+class OuterClass:
+    def method1(self):
+        def inner_func():
+            class InnerClass:
+                def inner_method(self):
+                    def deeply_nested():
+                        pass
+                    return deeply_nested
+            return InnerClass
+        return inner_func
+
+    class NestedClass:
+        def nested_method(self):
+            pass
+"""
+
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
+        assert len(result) == 5
+
+        # Check all functions are found
+        names = {f.name for f in result}
+        assert names == {"method1", "inner_func", "inner_method", "deeply_nested", "nested_method"}
+
+        # Check qualified names reflect the complete nesting
+        qualified_names = {f.qualified_name for f in result}
+        assert qualified_names == {
+            "__module__.OuterClass.method1",
+            "__module__.OuterClass.method1.inner_func",
+            "__module__.OuterClass.method1.inner_func.InnerClass.inner_method",
+            "__module__.OuterClass.method1.inner_func.InnerClass.inner_method.deeply_nested",
+            "__module__.OuterClass.NestedClass.nested_method",
+        }
+
+
+def test_parse_async_nested_functions() -> None:
+    """Test parsing async functions in nested contexts."""
+    source = """
+async def async_outer():
+    async def async_inner():
+        return "inner"
+
+    def sync_inner():
+        async def async_deeply_nested():
+            pass
+        return async_deeply_nested
+
+    return await async_inner()
+
+class AsyncClass:
+    async def async_method(self):
+        def nested_in_async():
+            pass
+        return nested_in_async
+"""
+
+    with temp_python_file(source) as path:
+        result = parse_function_definitions(path)
+        assert len(result) == 6
+
+        # Check all functions are found
+        names = {f.name for f in result}
+        assert names == {
+            "async_outer",
+            "async_inner",
+            "sync_inner",
+            "async_deeply_nested",
+            "async_method",
+            "nested_in_async",
+        }
+
+        # Check qualified names
+        qualified_names = {f.qualified_name for f in result}
+        assert qualified_names == {
+            "__module__.async_outer",
+            "__module__.async_outer.async_inner",
+            "__module__.async_outer.sync_inner",
+            "__module__.async_outer.sync_inner.async_deeply_nested",
+            "__module__.AsyncClass.async_method",
+            "__module__.AsyncClass.async_method.nested_in_async",
+        }

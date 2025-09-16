@@ -11,16 +11,19 @@ This metadata feeds into the call counter and analyzer modules to determine whic
 functions are frequently called but lack proper type annotations.
 
 Key Design Decisions:
-    - Qualified names: Methods are tracked with their full class context (e.g.,
-      "Calculator.add") to distinguish them from module-level functions with the same name.
+    - Scope-aware qualified names: Functions are tracked with their full scope context
+      (e.g., "__module__.Calculator.add" for methods, "__module__.outer_func.inner_func" for nested functions)
+      to distinguish them from other functions with the same name.
     - Conservative extraction: Only handles statically defined functions; dynamic
       function creation (via exec, type(), etc.) is intentionally not supported.
+    - Complete scope tracking: Maintains a stack of both class and function scopes
+      during AST traversal to build accurate qualified names for nested structures.
 
 The module's primary entry point is parse_function_definitions(), which returns
 FunctionInfo objects containing all extracted metadata.
 
 Relationship to Other Modules:
-    - models.py: Defines the FunctionInfo and ParameterInfo data structures
+    - models.py: Defines the FunctionInfo, ParameterInfo, Scope, and ScopeKind data structures
     - call_counter.py: Uses function definitions to resolve and count calls
     - analyzer.py: Combines definitions and call counts to compute priorities
 
@@ -34,7 +37,7 @@ import ast
 from pathlib import Path
 from typing import override
 
-from .models import FunctionInfo, ParameterInfo
+from .models import FunctionInfo, ParameterInfo, Scope, ScopeKind
 
 
 def _extract_parameters(args: ast.arguments) -> tuple[ParameterInfo, ...]:
@@ -129,17 +132,17 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
     classes, building qualified names that preserve the full context of where each
     function is defined.
 
-    The visitor maintains state during traversal to track class nesting, which is
-    essential for building qualified names like "OuterClass.InnerClass.method".
-    This context-aware naming ensures that methods with identical names in different
-    classes are properly distinguished during call counting and analysis.
+    The visitor maintains state during traversal to track scope nesting (classes and
+    functions), which is essential for building qualified names like
+    "OuterClass.InnerClass.method" and "OuterClass.method.inner_func". This
+    scope-aware naming ensures that nested functions and methods are properly
+    distinguished during call counting and analysis.
 
     Traversal Behavior:
-        Classes are used solely for building qualified method names (e.g., 'Calculator.add'),
-        not analyzed as entities. FunctionDef and AsyncFunctionDef nodes trigger
-        extraction of full function metadata. The visitor continues traversing into
-        nested structures to find all functions, including nested functions and
-        methods in nested classes.
+        Classes and functions are tracked for building qualified names. FunctionDef
+        and AsyncFunctionDef nodes trigger extraction of full function metadata. The
+        visitor continues traversing into nested structures to find all functions,
+        including nested functions and methods in nested classes.
 
     Usage:
         After calling visit() on an AST tree, access the 'functions' attribute to
@@ -154,6 +157,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         - Treats async functions identically to regular functions for metadata extraction
         - Does not attempt to resolve inherited methods or overrides
         - Preserves all parameter types (positional, keyword-only, *args, **kwargs)
+        - Tracks both class and function scopes for accurate qualified naming
     """
 
     def __init__(self, file_path: str) -> None:
@@ -169,62 +173,75 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         self.functions: list[FunctionInfo] = []
         # Internal: Source file path to include in each FunctionInfo for traceability
         self._file_path = file_path
-        # Internal: Tracks current class context during traversal for building qualified names.
-        # Stack is pushed when entering a class and popped when exiting.
-        self._class_stack: list[str] = []
+        # Internal: Tracks current scope context during traversal for building qualified names.
+        # Stack is pushed when entering a scope (class or function) and popped when exiting.
+        # Always starts with module scope as the root.
+        self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Track class context for building qualified method names.
 
-        Maintains the class_stack to enable proper qualified name construction for
+        Maintains the scope_stack to enable proper qualified name construction for
         methods. For nested classes, this creates names like "Outer.Inner.method".
 
         Args:
             node: AST node representing a class definition.
 
         Side Effects:
-            Pushes class name to _class_stack before traversing the class body,
+            Pushes class scope to _scope_stack before traversing the class body,
             then pops it after traversal completes. This ensures methods get
             the correct qualified names.
         """
-        self._class_stack.append(node.name)
+        self._scope_stack.append(Scope(kind=ScopeKind.CLASS, name=node.name))
         self.generic_visit(node)
-        self._class_stack.pop()
+        self._scope_stack.pop()
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Extract metadata from a regular function definition.
 
         Processes the function node to extract its signature information and adds
-        it to the functions list. Continues traversal to find nested functions.
+        it to the functions list. Pushes the function onto the scope stack before
+        traversing nested functions to ensure proper qualified naming.
 
         Args:
             node: AST node representing a function definition.
 
         Side Effects:
             Adds a FunctionInfo object to self.functions.
-            Calls generic_visit to traverse nested functions.
+            Pushes function scope to _scope_stack, calls generic_visit to
+            traverse nested functions, then pops the function scope.
         """
+        # First record the function with the current scope
         self._process_function(node)
+        # Then push the function scope and traverse nested definitions
+        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
+        self._scope_stack.pop()
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Extract metadata from an async function definition.
 
         Handles async functions identically to regular functions since the
-        annotation priority analysis doesn't distinguish between them.
+        annotation priority analysis doesn't distinguish between them. Pushes
+        the function onto the scope stack before traversing nested functions.
 
         Args:
             node: AST node representing an async function definition.
 
         Side Effects:
             Adds a FunctionInfo object to self.functions.
-            Calls generic_visit to traverse nested functions.
+            Pushes function scope to _scope_stack, calls generic_visit to
+            traverse nested functions, then pops the function scope.
         """
+        # First record the function with the current scope
         self._process_function(node)
+        # Then push the function scope and traverse nested definitions
+        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
+        self._scope_stack.pop()
 
     def _process_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         """Extract and store metadata from a function definition node.
@@ -255,22 +272,23 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         self.functions.append(function_info)
 
     def _build_qualified_name(self, function_name: str) -> str:
-        """Construct a fully qualified name using the current class context.
+        """Construct a fully qualified name using the current scope context.
 
-        For methods, prepends the class name(s) to create qualified names like
-        "ClassName.method_name" or "Outer.Inner.method_name". For module-level
-        functions, returns the name unchanged.
+        Builds qualified names by combining all scopes in the current stack with
+        the function name. This creates names like "__module__.function_name" for
+        module-level functions, "__module__.ClassName.method_name" for methods,
+        and "__module__.OuterFunc.inner_func" for nested functions. The complete
+        scope hierarchy is preserved for full explicitness.
 
         Args:
             function_name: The local name of the function or method.
 
         Returns:
-            Qualified name string that uniquely identifies the function within
-            the module's namespace.
+            Qualified name string that uniquely identifies the function with
+            its complete scope hierarchy including the module scope.
         """
-        if self._class_stack:
-            return ".".join([*self._class_stack, function_name])
-        return function_name
+        scope_names = [scope.name for scope in self._scope_stack]
+        return ".".join([*scope_names, function_name])
 
 
 def parse_function_definitions(file_path: str) -> tuple[FunctionInfo, ...]:

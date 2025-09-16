@@ -8,6 +8,28 @@ Data Flow Through Models:
 """
 
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class ScopeKind(StrEnum):
+    """Enumeration of scope types for tracking nested definitions."""
+
+    MODULE = "module"
+    CLASS = "class"
+    FUNCTION = "function"
+
+
+@dataclass(frozen=True)
+class Scope:
+    """Represents a scope context for building qualified names.
+
+    Used to track the nested context of functions and classes during AST
+    traversal to build accurate qualified names that reflect the true
+    scope hierarchy.
+    """
+
+    kind: ScopeKind  # Type of scope (module, class, or function)
+    name: str  # Name of the scope (class name or function name)
 
 
 @dataclass(frozen=True)
@@ -37,13 +59,13 @@ class FunctionInfo:
     function within its module scope.
 
     Qualified Name Format:
-        - Module function: "function_name"
-        - Class method: "ClassName.method_name"
-        - Nested class method: "OuterClass.InnerClass.method_name"
+        - Module function: "__module__.function_name"
+        - Class method: "__module__.ClassName.method_name"
+        - Nested class method: "__module__.OuterClass.InnerClass.method_name"
     """
 
     name: str  # Local function name (e.g., 'add')
-    qualified_name: str  # Full name with class context (e.g., 'Calculator.add')
+    qualified_name: str  # Full name with complete scope hierarchy (e.g., '__module__.Calculator.add')
     parameters: tuple[ParameterInfo, ...]  # All parameters in definition order
     has_return_annotation: bool  # Whether return type is annotated
     line_number: int  # Line where function is defined (1-indexed)
@@ -59,7 +81,9 @@ class CallCount:
     "not called" and "not found".
     """
 
-    function_qualified_name: str  # Must match FunctionInfo.qualified_name exactly (e.g., "Calculator.add")
+    function_qualified_name: (
+        str  # Must match FunctionInfo.qualified_name exactly (e.g., "__module__.Calculator.add")
+    )
     call_count: int  # Number of resolved calls (can be 0)
 
 
@@ -76,7 +100,7 @@ class AnnotationScore:
         - 'self' and 'cls' parameters are excluded from scoring
     """
 
-    function_qualified_name: str  # Identifies the scored function (e.g., "Calculator.add")
+    function_qualified_name: str  # Identifies the scored function (e.g., "__module__.Calculator.add")
     parameter_score: float  # Ratio of annotated parameters (0.0 to 1.0)
     return_score: float  # 1.0 if return annotated, 0.0 otherwise
     total_score: float  # Weighted combination (0.0 = no annotations, 1.0 = fully annotated)
