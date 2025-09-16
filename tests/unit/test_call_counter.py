@@ -699,25 +699,25 @@ class Outer:
     visitor = CallCountVisitor((), class_registry)
 
     # Try to resolve a compound name that doesn't exist
-    result = visitor._resolve_compound_class_name("NonExistent.Inner")
+    result = visitor._resolve_class_name("NonExistent.Inner")
     assert result is None
 
     # Try within a class scope - test the successful case
     visitor._scope.push(Scope(kind=ScopeKind.CLASS, name="Outer"))
     # This should match since __module__.Outer.Inner.Nested exists
-    result = visitor._resolve_compound_class_name("Inner.Nested")
+    result = visitor._resolve_class_name("Inner.Nested")
     assert result == "__module__.Outer.Inner.Nested"
     visitor._scope.pop()
 
     # Try within a class scope (simulate being inside a different class)
     visitor._scope.push(Scope(kind=ScopeKind.CLASS, name="SomeClass"))
-    result = visitor._resolve_compound_class_name("Another.Nested")
+    result = visitor._resolve_class_name("Another.Nested")
     assert result is None
     visitor._scope.pop()
 
     # Also test when scope is a function (not a class)
     visitor._scope.push(Scope(kind=ScopeKind.FUNCTION, name="some_func"))
-    result = visitor._resolve_compound_class_name("Foo.Bar")
+    result = visitor._resolve_class_name("Foo.Bar")
     assert result is None
 
 
