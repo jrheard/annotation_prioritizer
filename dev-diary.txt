@@ -173,6 +173,14 @@ TODO what about foo.bar.baz()?? look into that before starting work on the scope
 
 TODO what about super().foo()? not worth worrying about?
 
-TODO split notebook into multiple smaller ones
+DONE split notebook into multiple smaller ones
 
-TODO fix incorrect simple parentheses claim
+DONE fix incorrect simple parentheses claim
+
+===
+
+9/16
+
+TODO make the guide not mention scope-aware stuff, or the bug, etc
+
+TODO add docs for the fields of each node type
