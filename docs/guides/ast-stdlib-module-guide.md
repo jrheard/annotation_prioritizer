@@ -41,6 +41,17 @@ import ast
 code = "x = 5 + 3"
 tree = ast.parse(code)
 print(ast.dump(tree, indent=2))  # Pretty-prints the tree structure
+
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='x', ctx=Store())],
+      value=BinOp(
+        left=Constant(value=5),
+        op=Add(),
+        right=Constant(value=3)))])
 ```
 
 Every node in the tree has a type (like Module, Assign, BinOp) and attributes specific to that type. Nodes also carry location information (line numbers, column offsets) that we use to report where functions are defined in the original source.
@@ -82,6 +93,43 @@ def main():
 """
 
 tree = ast.parse(code)
+print("AST structure:")
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    FunctionDef(
+      name='greet',
+      args=arguments(
+        args=[
+          arg(arg='name')]),
+      body=[
+        Expr(
+          value=Call(
+            func=Name(id='print', ctx=Load()),
+            args=[
+              JoinedStr(
+                values=[
+                  Constant(value='Hello, '),
+                  FormattedValue(
+                    value=Name(id='name', ctx=Load()),
+                    conversion=-1)])]))]),
+    FunctionDef(
+      name='main',
+      args=arguments(),
+      body=[
+        Expr(
+          value=Call(
+            func=Name(id='greet', ctx=Load()),
+            args=[
+              Constant(value='World')])),
+        Expr(
+          value=Call(
+            func=Name(id='print', ctx=Load()),
+            args=[
+              Constant(value='Done')]))])])
+
 visitor = MyVisitor()
 visitor.visit(tree)
 print(f"Functions: {visitor.functions_found}")  # ['greet', 'main']
@@ -112,6 +160,44 @@ z = obj.attr    # z has Store context, obj has Load, attr is being loaded
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='x', ctx=Store())],
+      value=Constant(value=5)),
+    Assign(
+      targets=[
+        Name(id='y', ctx=Store())],
+      value=BinOp(
+        left=Name(id='x', ctx=Load()),
+        op=Add(),
+        right=Constant(value=10))),
+    Expr(
+      value=Call(
+        func=Name(id='print', ctx=Load()),
+        args=[
+          Name(id='x', ctx=Load())])),
+    Delete(
+      targets=[
+        Name(id='y', ctx=Del())]),
+    Assign(
+      targets=[
+        Attribute(
+          value=Name(id='obj', ctx=Load()),
+          attr='attr',
+          ctx=Store())],
+      value=Constant(value=20)),
+    Assign(
+      targets=[
+        Name(id='z', ctx=Store())],
+      value=Attribute(
+        value=Name(id='obj', ctx=Load()),
+        attr='attr',
+        ctx=Load()))])
 
 class ContextInspector(ast.NodeVisitor):
     def visit_Name(self, node):
@@ -166,6 +252,50 @@ async def async_function(x: float) -> None:
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    FunctionDef(
+      name='regular_function',
+      args=arguments(
+        args=[
+          arg(
+            arg='a',
+            annotation=Name(id='int', ctx=Load())),
+          arg(arg='b')],
+        vararg=arg(arg='args'),
+        kwarg=arg(arg='kwargs'),
+        defaults=[
+          Constant(value=5)]),
+      body=[
+        Expr(
+          value=Constant(value='A docstring')),
+        Return(
+          value=Call(
+            func=Name(id='str', ctx=Load()),
+            args=[
+              BinOp(
+                left=Name(id='a', ctx=Load()),
+                op=Add(),
+                right=Name(id='b', ctx=Load()))]))],
+      returns=Name(id='str', ctx=Load())),
+    AsyncFunctionDef(
+      name='async_function',
+      args=arguments(
+        args=[
+          arg(
+            arg='x',
+            annotation=Name(id='float', ctx=Load()))]),
+      body=[
+        Expr(
+          value=Await(
+            value=Call(
+              func=Name(id='some_operation', ctx=Load()),
+              args=[
+                Name(id='x', ctx=Load())])))],
+      returns=Constant(value=None))])
 
 class FunctionAnalyzer(ast.NodeVisitor):
     def visit_FunctionDef(self, node):
@@ -244,6 +374,34 @@ def complex(a, b=10, /, c=20, *args, d, e=30, **kwargs) -> int:
     pass
 """
 tree = ast.parse(complex_func)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    FunctionDef(
+      name='complex',
+      args=arguments(
+        posonlyargs=[
+          arg(arg='a'),
+          arg(arg='b')],
+        args=[
+          arg(arg='c')],
+        vararg=arg(arg='args'),
+        kwonlyargs=[
+          arg(arg='d'),
+          arg(arg='e')],
+        kw_defaults=[
+          None,
+          Constant(value=30)],
+        kwarg=arg(arg='kwargs'),
+        defaults=[
+          Constant(value=10),
+          Constant(value=20)]),
+      body=[
+        Pass()],
+      returns=Name(id='int', ctx=Load()))])
+
 func_node = tree.body[0]
 analyze_parameters(func_node)
 ```
@@ -282,6 +440,73 @@ class Calculator(BaseCalculator, Protocol):
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    ClassDef(
+      name='Calculator',
+      bases=[
+        Name(id='BaseCalculator', ctx=Load()),
+        Name(id='Protocol', ctx=Load())],
+      body=[
+        Expr(
+          value=Constant(value='A calculator class')),
+        Assign(
+          targets=[
+            Name(id='class_var', ctx=Store())],
+          value=Constant(value=10)),
+        FunctionDef(
+          name='__init__',
+          args=arguments(
+            args=[
+              arg(arg='self')]),
+          body=[
+            Assign(
+              targets=[
+                Attribute(
+                  value=Name(id='self', ctx=Load()),
+                  attr='instance_var',
+                  ctx=Store())],
+              value=Constant(value=20))]),
+        FunctionDef(
+          name='add',
+          args=arguments(
+            args=[
+              arg(arg='self'),
+              arg(
+                arg='a',
+                annotation=Name(id='int', ctx=Load())),
+              arg(
+                arg='b',
+                annotation=Name(id='int', ctx=Load()))]),
+          body=[
+            Return(
+              value=BinOp(
+                left=Name(id='a', ctx=Load()),
+                op=Add(),
+                right=Name(id='b', ctx=Load())))],
+          returns=Name(id='int', ctx=Load())),
+        FunctionDef(
+          name='static_method',
+          args=arguments(),
+          body=[
+            Pass()],
+          decorator_list=[
+            Name(id='staticmethod', ctx=Load())]),
+        ClassDef(
+          name='NestedClass',
+          body=[
+            FunctionDef(
+              name='nested_method',
+              args=arguments(
+                args=[
+                  arg(arg='self')]),
+              body=[
+                Pass()])])],
+      decorator_list=[
+        Name(id='dataclass', ctx=Load())])])
 
 class ClassAnalyzer(ast.NodeVisitor):
     def __init__(self):
@@ -361,6 +586,89 @@ result8 = func(x=10, y=20)                  # Keyword arguments
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='result1', ctx=Store())],
+      value=Call(
+        func=Name(id='print', ctx=Load()),
+        args=[
+          Constant(value='hello')])),
+    Assign(
+      targets=[
+        Name(id='result2', ctx=Store())],
+      value=Call(
+        func=Attribute(
+          value=Name(id='calc', ctx=Load()),
+          attr='add',
+          ctx=Load()),
+        args=[
+          Constant(value=5),
+          Constant(value=10)])),
+    Assign(
+      targets=[
+        Name(id='result3', ctx=Store())],
+      value=Call(
+        func=Attribute(
+          value=Name(id='Calculator', ctx=Load()),
+          attr='static_method',
+          ctx=Load()))),
+    Assign(
+      targets=[
+        Name(id='result4', ctx=Store())],
+      value=Call(
+        func=Attribute(
+          value=Name(id='self', ctx=Load()),
+          attr='process',
+          ctx=Load()))),
+    Assign(
+      targets=[
+        Name(id='result5', ctx=Store())],
+      value=Call(
+        func=Attribute(
+          value=Call(
+            func=Name(id='super', ctx=Load())),
+          attr='parent_method',
+          ctx=Load()))),
+    Assign(
+      targets=[
+        Name(id='result6', ctx=Store())],
+      value=Call(
+        func=Attribute(
+          value=Call(
+            func=Name(id='get_calc', ctx=Load())),
+          attr='add',
+          ctx=Load()),
+        args=[
+          Constant(value=1),
+          Constant(value=2)])),
+    Assign(
+      targets=[
+        Name(id='result7', ctx=Store())],
+      value=Call(
+        func=Attribute(
+          value=Attribute(
+            value=Name(id='module', ctx=Load()),
+            attr='submodule',
+            ctx=Load()),
+          attr='function',
+          ctx=Load()))),
+    Assign(
+      targets=[
+        Name(id='result8', ctx=Store())],
+      value=Call(
+        func=Name(id='func', ctx=Load()),
+        keywords=[
+          keyword(
+            arg='x',
+            value=Constant(value=10)),
+          keyword(
+            arg='y',
+            value=Constant(value=20))]))])
 
 class CallPatternAnalyzer(ast.NodeVisitor):
     def visit_Call(self, node):
@@ -440,6 +748,70 @@ first, *rest = [1, 2, 3, 4]                 # Extended unpacking
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='calc', ctx=Store())],
+      value=Call(
+        func=Name(id='Calculator', ctx=Load()))),
+    Assign(
+      targets=[
+        Name(id='result', ctx=Store())],
+      value=Call(
+        func=Attribute(
+          value=Name(id='calc', ctx=Load()),
+          attr='add',
+          ctx=Load()),
+        args=[
+          Constant(value=5),
+          Constant(value=10)])),
+    Assign(
+      targets=[
+        Name(id='data', ctx=Store())],
+      value=List(
+        elts=[
+          Constant(value=1),
+          Constant(value=2),
+          Constant(value=3)],
+        ctx=Load())),
+    Assign(
+      targets=[
+        Name(id='x', ctx=Store()),
+        Name(id='y', ctx=Store()),
+        Name(id='z', ctx=Store())],
+      value=Constant(value=10)),
+    Assign(
+      targets=[
+        Tuple(
+          elts=[
+            Name(id='a', ctx=Store()),
+            Name(id='b', ctx=Store())],
+          ctx=Store())],
+      value=Tuple(
+        elts=[
+          Constant(value=1),
+          Constant(value=2)],
+        ctx=Load())),
+    Assign(
+      targets=[
+        Tuple(
+          elts=[
+            Name(id='first', ctx=Store()),
+            Starred(
+              value=Name(id='rest', ctx=Store()),
+              ctx=Store())],
+          ctx=Store())],
+      value=List(
+        elts=[
+          Constant(value=1),
+          Constant(value=2),
+          Constant(value=3),
+          Constant(value=4)],
+        ctx=Load()))])
 
 class AssignmentTracker(ast.NodeVisitor):
     def visit_Assign(self, node):
@@ -501,6 +873,48 @@ future_value: str                           # Declaration only, no assignment
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    AnnAssign(
+      target=Name(id='calc', ctx=Store()),
+      annotation=Name(id='Calculator', ctx=Load()),
+      value=Call(
+        func=Name(id='Calculator', ctx=Load())),
+      simple=1),
+    AnnAssign(
+      target=Name(id='processor', ctx=Store()),
+      annotation=Name(id='DataProcessor', ctx=Load()),
+      value=Call(
+        func=Name(id='get_processor', ctx=Load())),
+      simple=1),
+    AnnAssign(
+      target=Name(id='count', ctx=Store()),
+      annotation=Name(id='int', ctx=Load()),
+      value=Constant(value=0),
+      simple=1),
+    AnnAssign(
+      target=Name(id='items', ctx=Store()),
+      annotation=Subscript(
+        value=Name(id='List', ctx=Load()),
+        slice=Name(id='str', ctx=Load()),
+        ctx=Load()),
+      value=List(ctx=Load()),
+      simple=1),
+    AnnAssign(
+      target=Name(id='maybe_calc', ctx=Store()),
+      annotation=Subscript(
+        value=Name(id='Optional', ctx=Load()),
+        slice=Name(id='Calculator', ctx=Load()),
+        ctx=Load()),
+      value=Constant(value=None),
+      simple=1),
+    AnnAssign(
+      target=Name(id='future_value', ctx=Store()),
+      annotation=Name(id='str', ctx=Load()),
+      simple=1)])
 
 class AnnotatedAssignmentTracker(ast.NodeVisitor):
     def visit_AnnAssign(self, node):
@@ -569,6 +983,45 @@ def process(data):                      # process and data are names
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='Calculator', ctx=Store())],
+      value=Name(id='imported_class', ctx=Load())),
+    Assign(
+      targets=[
+        Name(id='x', ctx=Store())],
+      value=Constant(value=5)),
+    Assign(
+      targets=[
+        Name(id='y', ctx=Store())],
+      value=BinOp(
+        left=Name(id='x', ctx=Load()),
+        op=Add(),
+        right=Constant(value=10))),
+    Expr(
+      value=Call(
+        func=Name(id='print', ctx=Load()),
+        args=[
+          Name(id='y', ctx=Load())])),
+    Delete(
+      targets=[
+        Name(id='x', ctx=Del())]),
+    FunctionDef(
+      name='process',
+      args=arguments(
+        args=[
+          arg(arg='data')]),
+      body=[
+        Return(
+          value=Call(
+            func=Name(id='len', ctx=Load()),
+            args=[
+              Name(id='data', ctx=Load())]))])])
 
 class NameAnalyzer(ast.NodeVisitor):
     def __init__(self):
@@ -614,6 +1067,55 @@ module.submodule.function()             # Nested attributes
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='result', ctx=Store())],
+      value=Attribute(
+        value=Name(id='obj', ctx=Load()),
+        attr='attribute',
+        ctx=Load())),
+    Assign(
+      targets=[
+        Name(id='value', ctx=Store())],
+      value=Attribute(
+        value=Name(id='self', ctx=Load()),
+        attr='instance_var',
+        ctx=Load())),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Name(id='self', ctx=Load()),
+          attr='method',
+          ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Name(id='Calculator', ctx=Load()),
+          attr='static_method',
+          ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Attribute(
+            value=Name(id='module', ctx=Load()),
+            attr='submodule',
+            ctx=Load()),
+          attr='function',
+          ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=BinOp(
+            left=Name(id='a', ctx=Load()),
+            op=Add(),
+            right=Name(id='b', ctx=Load())),
+          attr='bit_length',
+          ctx=Load())))])
 
 class AttributeAnalyzer(ast.NodeVisitor):
     def visit_Attribute(self, node):
@@ -688,6 +1190,67 @@ class DataHandler:
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    FunctionDef(
+      name='process',
+      args=arguments(
+        args=[
+          arg(
+            arg='x',
+            annotation=Name(id='int', ctx=Load())),
+          arg(
+            arg='calc',
+            annotation=Name(id='Calculator', ctx=Load())),
+          arg(
+            arg='name',
+            annotation=Name(id='str', ctx=Load()))]),
+      body=[
+        AnnAssign(
+          target=Name(id='result', ctx=Store()),
+          annotation=Name(id='float', ctx=Load()),
+          value=Call(
+            func=Attribute(
+              value=Name(id='calc', ctx=Load()),
+              attr='compute',
+              ctx=Load()),
+            args=[
+              Name(id='x', ctx=Load())]),
+          simple=1),
+        AnnAssign(
+          target=Name(id='status', ctx=Store()),
+          annotation=Name(id='bool', ctx=Load()),
+          value=Constant(value=True),
+          simple=1),
+        Return(
+          value=Name(id='status', ctx=Load()))],
+      returns=Name(id='bool', ctx=Load())),
+    ClassDef(
+      name='DataHandler',
+      body=[
+        AnnAssign(
+          target=Name(id='count', ctx=Store()),
+          annotation=Name(id='int', ctx=Load()),
+          value=Constant(value=0),
+          simple=1),
+        AnnAssign(
+          target=Name(id='processor', ctx=Store()),
+          annotation=Name(id='Calculator', ctx=Load()),
+          simple=1),
+        FunctionDef(
+          name='handle',
+          args=arguments(
+            args=[
+              arg(arg='self'),
+              arg(
+                arg='data',
+                annotation=Name(id='bytes', ctx=Load()))]),
+          body=[
+            Pass()],
+          returns=Constant(value=None))])])
 
 class SimpleAnnotationExtractor(ast.NodeVisitor):
     def __init__(self):
@@ -760,6 +1323,94 @@ class B:
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    ImportFrom(
+      module='__future__',
+      names=[
+        alias(name='annotations')],
+      level=0),
+    ClassDef(
+      name='Node',
+      body=[
+        FunctionDef(
+          name='set_parent',
+          args=arguments(
+            args=[
+              arg(arg='self'),
+              arg(
+                arg='parent',
+                annotation=Constant(value='Node'))]),
+          body=[
+            Assign(
+              targets=[
+                Attribute(
+                  value=Name(id='self', ctx=Load()),
+                  attr='parent',
+                  ctx=Store())],
+              value=Name(id='parent', ctx=Load()))],
+          returns=Constant(value=None)),
+        FunctionDef(
+          name='get_children',
+          args=arguments(
+            args=[
+              arg(arg='self')]),
+          body=[
+            Return(
+              value=Attribute(
+                value=Name(id='self', ctx=Load()),
+                attr='children',
+                ctx=Load()))],
+          returns=Subscript(
+            value=Name(id='List', ctx=Load()),
+            slice=Constant(value='Node'),
+            ctx=Load()))]),
+    FunctionDef(
+      name='process_handler',
+      args=arguments(
+        args=[
+          arg(
+            arg='h',
+            annotation=Constant(value='Handler'))]),
+      body=[
+        Return(
+          value=Call(
+            func=Attribute(
+              value=Name(id='h', ctx=Load()),
+              attr='handle',
+              ctx=Load())))],
+      returns=Constant(value='Result')),
+    ClassDef(
+      name='A',
+      body=[
+        FunctionDef(
+          name='use_b',
+          args=arguments(
+            args=[
+              arg(arg='self'),
+              arg(
+                arg='b',
+                annotation=Constant(value='B'))]),
+          body=[
+            Pass()],
+          returns=Constant(value=None))]),
+    ClassDef(
+      name='B',
+      body=[
+        FunctionDef(
+          name='use_a',
+          args=arguments(
+            args=[
+              arg(arg='self'),
+              arg(
+                arg='a',
+                annotation=Name(id='A', ctx=Load()))]),
+          body=[
+            Pass()],
+          returns=Constant(value=None))])])
 
 class StringAnnotationAnalyzer(ast.NodeVisitor):
     def analyze_annotation(self, annotation, context=""):
@@ -844,6 +1495,109 @@ def complex_signatures(
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    ImportFrom(
+      module='typing',
+      names=[
+        alias(name='Optional'),
+        alias(name='Union'),
+        alias(name='List'),
+        alias(name='Dict'),
+        alias(name='Callable'),
+        alias(name='TypeVar')],
+      level=0),
+    Assign(
+      targets=[
+        Name(id='T', ctx=Store())],
+      value=Call(
+        func=Name(id='TypeVar', ctx=Load()),
+        args=[
+          Constant(value='T')])),
+    FunctionDef(
+      name='complex_signatures',
+      args=arguments(
+        args=[
+          arg(
+            arg='value',
+            annotation=Subscript(
+              value=Name(id='Union', ctx=Load()),
+              slice=Tuple(
+                elts=[
+                  Name(id='int', ctx=Load()),
+                  Name(id='str', ctx=Load())],
+                ctx=Load()),
+              ctx=Load())),
+          arg(
+            arg='modern_union',
+            annotation=BinOp(
+              left=Name(id='int', ctx=Load()),
+              op=BitOr(),
+              right=Name(id='str', ctx=Load()))),
+          arg(
+            arg='maybe_calc',
+            annotation=Subscript(
+              value=Name(id='Optional', ctx=Load()),
+              slice=Name(id='Calculator', ctx=Load()),
+              ctx=Load())),
+          arg(
+            arg='items',
+            annotation=Subscript(
+              value=Name(id='List', ctx=Load()),
+              slice=Name(id='str', ctx=Load()),
+              ctx=Load())),
+          arg(
+            arg='mapping',
+            annotation=Subscript(
+              value=Name(id='Dict', ctx=Load()),
+              slice=Tuple(
+                elts=[
+                  Name(id='str', ctx=Load()),
+                  Name(id='int', ctx=Load())],
+                ctx=Load()),
+              ctx=Load())),
+          arg(
+            arg='nested',
+            annotation=Subscript(
+              value=Name(id='List', ctx=Load()),
+              slice=Subscript(
+                value=Name(id='Dict', ctx=Load()),
+                slice=Tuple(
+                  elts=[
+                    Name(id='str', ctx=Load()),
+                    Name(id='Calculator', ctx=Load())],
+                  ctx=Load()),
+                ctx=Load()),
+              ctx=Load())),
+          arg(
+            arg='callback',
+            annotation=Subscript(
+              value=Name(id='Callable', ctx=Load()),
+              slice=Tuple(
+                elts=[
+                  List(
+                    elts=[
+                      Name(id='int', ctx=Load()),
+                      Name(id='str', ctx=Load())],
+                    ctx=Load()),
+                  Name(id='bool', ctx=Load())],
+                ctx=Load()),
+              ctx=Load())),
+          arg(
+            arg='generic',
+            annotation=Name(id='T', ctx=Load()))]),
+      body=[
+        Pass()],
+      returns=Subscript(
+        value=Name(id='Optional', ctx=Load()),
+        slice=Subscript(
+          value=Name(id='List', ctx=Load()),
+          slice=Name(id='T', ctx=Load()),
+          ctx=Load()),
+        ctx=Load()))])
 
 class ComplexAnnotationAnalyzer(ast.NodeVisitor):
     def analyze_complex_annotation(self, node, depth=0):
@@ -947,6 +1701,63 @@ def module_function():
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    ClassDef(
+      name='Outer',
+      body=[
+        ClassDef(
+          name='Middle',
+          body=[
+            ClassDef(
+              name='Inner',
+              body=[
+                FunctionDef(
+                  name='deep_method',
+                  args=arguments(
+                    args=[
+                      arg(arg='self')]),
+                  body=[
+                    FunctionDef(
+                      name='local_func',
+                      args=arguments(),
+                      body=[
+                        Assign(
+                          targets=[
+                            Name(id='x', ctx=Store())],
+                          value=Constant(value=10)),
+                        Return(
+                          value=Name(id='x', ctx=Load()))]),
+                    Return(
+                      value=Call(
+                        func=Name(id='local_func', ctx=Load())))])])]),
+        FunctionDef(
+          name='outer_method',
+          args=arguments(
+            args=[
+              arg(arg='self')]),
+          body=[
+            Pass()])]),
+    FunctionDef(
+      name='module_function',
+      args=arguments(),
+      body=[
+        FunctionDef(
+          name='nested_function',
+          args=arguments(),
+          body=[
+            FunctionDef(
+              name='deeply_nested',
+              args=arguments(),
+              body=[
+                Pass()]),
+            Return(
+              value=Name(id='deeply_nested', ctx=Load()))]),
+        Return(
+          value=Name(id='nested_function', ctx=Load()))])])
 
 class ContextTracker(ast.NodeVisitor):
     def __init__(self):
@@ -1068,6 +1879,79 @@ def process_data(input_data):
 """
 
 tree = ast.parse(code)
+print(ast.dump(tree, indent=2))
+
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='logger', ctx=Store())],
+      value=Call(
+        func=Name(id='Logger', ctx=Load()))),
+    ClassDef(
+      name='Calculator',
+      body=[
+        Assign(
+          targets=[
+            Name(id='default_precision', ctx=Store())],
+          value=Constant(value=2)),
+        FunctionDef(
+          name='add',
+          args=arguments(
+            args=[
+              arg(arg='self'),
+              arg(arg='a'),
+              arg(arg='b')]),
+          body=[
+            Assign(
+              targets=[
+                Name(id='result', ctx=Store())],
+              value=BinOp(
+                left=Name(id='a', ctx=Load()),
+                op=Add(),
+                right=Name(id='b', ctx=Load()))),
+            Return(
+              value=Name(id='result', ctx=Load()))]),
+        ClassDef(
+          name='InternalHelper',
+          body=[
+            FunctionDef(
+              name='helper_method',
+              args=arguments(
+                args=[
+                  arg(arg='self')]),
+              body=[
+                Assign(
+                  targets=[
+                    Name(id='temp', ctx=Store())],
+                  value=Constant(value=10)),
+                Return(
+                  value=Name(id='temp', ctx=Load()))])])]),
+    FunctionDef(
+      name='process_data',
+      args=arguments(
+        args=[
+          arg(arg='input_data')]),
+      body=[
+        Assign(
+          targets=[
+            Name(id='processor', ctx=Store())],
+          value=Call(
+            func=Name(id='DataProcessor', ctx=Load()))),
+        FunctionDef(
+          name='validate',
+          args=arguments(),
+          body=[
+            Assign(
+              targets=[
+                Name(id='is_valid', ctx=Store())],
+              value=Constant(value=True)),
+            Return(
+              value=Name(id='is_valid', ctx=Load()))]),
+        Return(
+          value=Call(
+            func=Name(id='validate', ctx=Load())))])])
 
 class QualifiedNameBuilder(ast.NodeVisitor):
     def __init__(self):
@@ -1306,6 +2190,46 @@ def analyze_data():
 """
 
 tree = ast.parse(code)
+
+# Output:
+Module(
+  body=[
+    FunctionDef(
+      name='process_data',
+      args=arguments(),
+      body=[
+        Assign(
+          targets=[
+            Name(id='calc', ctx=Store())],
+          value=Call(
+            func=Name(id='Calculator', ctx=Load()))),
+        Assign(
+          targets=[
+            Name(id='result', ctx=Store())],
+          value=Call(
+            func=Attribute(
+              value=Name(id='calc', ctx=Load()),
+              attr='add',
+              ctx=Load()),
+            args=[
+              Constant(value=10),
+              Constant(value=20)]))]),
+    FunctionDef(
+      name='analyze_data',
+      args=arguments(),
+      body=[
+        Assign(
+          targets=[
+            Name(id='calc', ctx=Store())],
+          value=Call(
+            func=Name(id='Analyzer', ctx=Load()))),
+        Expr(
+          value=Call(
+            func=Attribute(
+              value=Name(id='calc', ctx=Load()),
+              attr='analyze',
+              ctx=Load())))])])
+
 resolver = ScopeAwareResolver()
 resolver.visit(tree)
 
@@ -1446,6 +2370,25 @@ debug_tree = ast.parse(debug_code)
 print("\nDebugging a specific pattern:")
 print(ast.dump(debug_tree, indent=2))
 
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='result', ctx=Store())],
+      value=Call(
+        func=Attribute(
+          value=Name(id='obj', ctx=Load()),
+          attr='method',
+          ctx=Load()),
+        keywords=[
+          keyword(
+            arg='x',
+            value=Constant(value=10)),
+          keyword(
+            arg='y',
+            value=Constant(value=20))]))])
+
 # This shows us:
 # - The Call node structure
 # - How keyword arguments are represented
@@ -1550,6 +2493,71 @@ call(*args, **kwargs)
 """
 
 tree = ast.parse(test_code)
+
+# Output:
+Module(
+  body=[
+    Expr(
+      value=Call(
+        func=Name(id='simple_call', ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Name(id='obj', ctx=Load()),
+          attr='method',
+          ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Attribute(
+            value=Name(id='module', ctx=Load()),
+            attr='sub',
+            ctx=Load()),
+          attr='func',
+          ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Call(
+            func=Name(id='get_handler', ctx=Load())),
+          attr='process',
+          ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Lambda(
+          args=arguments(
+            args=[
+              arg(arg='x')]),
+          body=BinOp(
+            left=Name(id='x', ctx=Load()),
+            op=Add(),
+            right=Constant(value=1))),
+        args=[
+          Constant(value=5)])),
+    Expr(
+      value=Call(
+        func=Name(id='func', ctx=Load()),
+        args=[
+          Constant(value=1),
+          Constant(value=2)],
+        keywords=[
+          keyword(
+            arg='x',
+            value=Constant(value=3)),
+          keyword(
+            arg='y',
+            value=Constant(value=4))])),
+    Expr(
+      value=Call(
+        func=Name(id='call', ctx=Load()),
+        args=[
+          Starred(
+            value=Name(id='args', ctx=Load()),
+            ctx=Load())],
+        keywords=[
+          keyword(
+            value=Name(id='kwargs', ctx=Load()))]))])
+
 analyzer = SafeCallAnalyzer()
 analyzer.visit(tree)
 
@@ -1610,6 +2618,37 @@ def outer():
 """
 
 tree = ast.parse(code)
+
+# Output:
+Module(
+  body=[
+    ClassDef(
+      name='Calculator',
+      body=[
+        FunctionDef(
+          name='add',
+          args=arguments(
+            args=[
+              arg(arg='self')]),
+          body=[
+            FunctionDef(
+              name='helper',
+              args=arguments(),
+              body=[
+                Pass()]),
+            Return(
+              value=Call(
+                func=Name(id='helper', ctx=Load())))])]),
+    FunctionDef(
+      name='outer',
+      args=arguments(),
+      body=[
+        FunctionDef(
+          name='inner',
+          args=arguments(),
+          body=[
+            Pass()])])])
+
 broken = BrokenVisitor()
 broken.visit(tree)
 print(f"Broken visitor found: {broken.functions_found}")  # Only finds 'outer'!
@@ -1680,6 +2719,58 @@ class Example:
 """
 
 tree = ast.parse(code)
+
+# Output:
+Module(
+  body=[
+    FunctionDef(
+      name='fully_annotated',
+      args=arguments(
+        args=[
+          arg(
+            arg='x',
+            annotation=Name(id='int', ctx=Load())),
+          arg(
+            arg='y',
+            annotation=Name(id='str', ctx=Load()))],
+        defaults=[
+          Constant(value='default')]),
+      body=[
+        Return(
+          value=Constant(value=True))],
+      returns=Name(id='bool', ctx=Load())),
+    FunctionDef(
+      name='no_annotations',
+      args=arguments(
+        args=[
+          arg(arg='x'),
+          arg(arg='y')]),
+      body=[
+        Return(
+          value=BinOp(
+            left=Name(id='x', ctx=Load()),
+            op=Add(),
+            right=Name(id='y', ctx=Load())))]),
+    FunctionDef(
+      name='partial_annotations',
+      args=arguments(
+        args=[
+          arg(
+            arg='x',
+            annotation=Name(id='int', ctx=Load())),
+          arg(arg='y')]),
+      body=[
+        Pass()]),
+    ClassDef(
+      name='Example',
+      body=[
+        FunctionDef(
+          name='method',
+          args=arguments(
+            args=[
+              arg(arg='self')]),
+          body=[
+            Pass()])])])
 
 class UnsafeAnalyzer(ast.NodeVisitor):
     """This will CRASH on code without annotations."""
@@ -1787,6 +2878,71 @@ async def complex_async():
 """
 
 tree = ast.parse(code)
+
+# Output:
+Module(
+  body=[
+    FunctionDef(
+      name='regular_function',
+      args=arguments(),
+      body=[
+        Return(
+          value=Constant(value='sync'))]),
+    AsyncFunctionDef(
+      name='async_function',
+      args=arguments(),
+      body=[
+        Return(
+          value=Constant(value='async'))]),
+    ClassDef(
+      name='Service',
+      body=[
+        FunctionDef(
+          name='sync_method',
+          args=arguments(
+            args=[
+              arg(arg='self')]),
+          body=[
+            Pass()]),
+        AsyncFunctionDef(
+          name='async_method',
+          args=arguments(
+            args=[
+              arg(arg='self')]),
+          body=[
+            Expr(
+              value=Await(
+                value=Call(
+                  func=Name(id='something', ctx=Load()))))]),
+        AsyncFunctionDef(
+          name='async_static',
+          args=arguments(),
+          body=[
+            Pass()],
+          decorator_list=[
+            Name(id='staticmethod', ctx=Load())])]),
+    AsyncFunctionDef(
+      name='complex_async',
+      args=arguments(),
+      body=[
+        AsyncWith(
+          items=[
+            withitem(
+              context_expr=Call(
+                func=Name(id='get_connection', ctx=Load())),
+              optional_vars=Name(id='conn', ctx=Store()))],
+          body=[
+            AsyncFor(
+              target=Name(id='item', ctx=Store()),
+              iter=Call(
+                func=Name(id='get_items', ctx=Load())),
+              body=[
+                Expr(
+                  value=Await(
+                    value=Call(
+                      func=Name(id='process', ctx=Load()),
+                      args=[
+                        Name(id='item', ctx=Load())])))])])])
 
 # WRONG: Only handles regular functions
 class IncompleteVisitor(ast.NodeVisitor):
@@ -1959,7 +3115,7 @@ def extract_complete_parameters(args: ast.arguments):
 code = """
 def complex_function(
     pos_only_1, pos_only_2=10, /,  # Positional-only
-    regular_1, regular_2: int = 20,  # Regular (positional or keyword)
+    regular_1=15, regular_2: int = 20,  # Regular (positional or keyword)
     *args,  # Variadic positional
     kw_only_1, kw_only_2: str = "default",  # Keyword-only
     **kwargs  # Variadic keyword
@@ -1968,6 +3124,38 @@ def complex_function(
 """
 
 tree = ast.parse(code)
+
+# Output:
+Module(
+  body=[
+    FunctionDef(
+      name='complex_function',
+      args=arguments(
+        posonlyargs=[
+          arg(arg='pos_only_1'),
+          arg(arg='pos_only_2')],
+        args=[
+          arg(arg='regular_1'),
+          arg(
+            arg='regular_2',
+            annotation=Name(id='int', ctx=Load()))],
+        vararg=arg(arg='args'),
+        kwonlyargs=[
+          arg(arg='kw_only_1'),
+          arg(
+            arg='kw_only_2',
+            annotation=Name(id='str', ctx=Load()))],
+        kw_defaults=[
+          None,
+          Constant(value='default')],
+        kwarg=arg(arg='kwargs'),
+        defaults=[
+          Constant(value=10),
+          Constant(value=15),
+          Constant(value=20)]),
+      body=[
+        Pass()],
+      returns=Name(id='bool', ctx=Load()))])
 func_node = tree.body[0]
 parameters = extract_complete_parameters(func_node.args)
 
@@ -2122,6 +3310,49 @@ def process():
 """
 
 tree = ast.parse(code)
+
+# Output:
+Module(
+  body=[
+    ClassDef(
+      name='Calculator',
+      body=[
+        FunctionDef(
+          name='add',
+          args=arguments(
+            args=[
+              arg(arg='self'),
+              arg(arg='a'),
+              arg(arg='b')]),
+          body=[
+            Return(
+              value=BinOp(
+                left=Name(id='a', ctx=Load()),
+                op=Add(),
+                right=Name(id='b', ctx=Load())))])]),
+    FunctionDef(
+      name='process',
+      args=arguments(),
+      body=[
+        Assign(
+          targets=[
+            Name(id='calc', ctx=Store())],
+          value=Call(
+            func=Name(id='Calculator', ctx=Load()))),
+        Assign(
+          targets=[
+            Name(id='result', ctx=Store())],
+          value=Call(
+            func=Attribute(
+              value=Name(id='calc', ctx=Load()),
+              attr='add',
+              ctx=Load()),
+            args=[
+              Constant(value=1),
+              Constant(value=2)])),
+        Return(
+          value=Name(id='result', ctx=Load()))])])
+
 known = {"Calculator.add", "Calculator.multiply"}
 resolver = MethodCallResolver(known)
 resolver.visit(tree)
@@ -2297,9 +3528,23 @@ parsed_tree = ast.parse(original_code)
 created_tree = create_test_module()
 
 print("\nParsed AST:")
-print(ast.dump(parsed_tree))
+print(ast.dump(parsed_tree, indent=2))
+
+# Output for parsed_tree:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='x', ctx=Store())],
+      value=Constant(value=5)),
+    Expr(
+      value=Call(
+        func=Name(id='print', ctx=Load()),
+        args=[
+          Name(id='x', ctx=Load())]))])
+
 print("\nCreated AST:")
-print(ast.dump(created_tree))
+print(ast.dump(created_tree, indent=2))
 # They should be structurally identical!
 ```
 
@@ -2339,6 +3584,24 @@ debug_pattern(
     """calc = Calculator()
 calc.add(1, 2)"""
 )
+
+# Output for "Instance method call (the bug)" example:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='calc', ctx=Store())],
+      value=Call(
+        func=Name(id='Calculator', ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Name(id='calc', ctx=Load()),
+          attr='add',
+          ctx=Load()),
+        args=[
+          Constant(value=1),
+          Constant(value=2)]))])
 
 # Start simple, then add complexity
 debugging_sequence = [
@@ -2421,6 +3684,42 @@ unknown.method()
 """
 
 tree = ast.parse(test_code)
+
+# Output:
+Module(
+  body=[
+    Assign(
+      targets=[
+        Name(id='calc', ctx=Store())],
+      value=Call(
+        func=Name(id='Calculator', ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Name(id='calc', ctx=Load()),
+          attr='add',
+          ctx=Load()),
+        args=[
+          Constant(value=1),
+          Constant(value=2)])),
+    Assign(
+      targets=[
+        Name(id='proc', ctx=Store())],
+      value=Call(
+        func=Name(id='Processor', ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Name(id='proc', ctx=Load()),
+          attr='run',
+          ctx=Load()))),
+    Expr(
+      value=Call(
+        func=Attribute(
+          value=Name(id='unknown', ctx=Load()),
+          attr='method',
+          ctx=Load())))])
+
 reproducer = MinimalBugReproducer()
 reproducer.visit(tree)
 print(f"\nFinal calls: {reproducer.calls}")
