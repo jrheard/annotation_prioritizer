@@ -75,8 +75,10 @@ COPY --chown=python:python src/ src/
 # Switch to python user for remaining operations
 USER python
 
-# Install project dependencies
-RUN uv sync --dev
+# Install project dependencies and tools
+RUN uv sync --dev && \
+    uv tool install claude-monitor && \
+    uv tool update-shell
 
 # Configure fish shell
 RUN mkdir -p /home/python/.config/fish
