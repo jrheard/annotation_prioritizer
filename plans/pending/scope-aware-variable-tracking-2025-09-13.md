@@ -1112,3 +1112,262 @@ def resolve_variable_type(var_name: str, scope: str) -> str | None:
 The scope-aware variable tracking implementation provides an excellent foundation for import resolution. The key insight is that imports are essentially another form of variable assignment - they bind names to types, just like `calc = Calculator()` does.
 
 By following the phased implementation approach outlined here, future maintainers can add import support incrementally while maintaining the project's core philosophy of conservative, accurate analysis. The existing infrastructure naturally extends to handle imports without requiring architectural changes, making this a low-risk, high-value enhancement path.
+
+## Appendix C: Class Detection Improvements - Beyond Naming Conventions
+
+**Analysis Date**: 2025-09-15
+**Context**: The scope-aware variable tracking implementation uses `name[0].isupper()` heuristic for class detection in multiple places
+
+### The Current Problem
+
+The scope-aware variable tracking plan includes class detection logic that relies on checking if the first letter of a name is uppercase (seen in `_extract_constructor_name` and call resolution logic). This approach has significant limitations:
+
+**Problems with uppercase heuristic:**
+- **False positives**: Constants like `MAX_SIZE`, `HTTP_OK` are incorrectly identified as classes
+- **False negatives**: Lowercase class names (non-PEP 8 compliant) are missed
+- **Import blindness**: Doesn't understand imported classes at all
+- **Context ignorance**: Treats all capitalized names the same regardless of usage
+
+### Better Class Detection Approaches
+
+**1. AST-based Detection (Highest Reliability)**
+```python
+class ClassRegistry:
+    def __init__(self):
+        self.defined_classes = set()
+        self.imported_classes = set()
+
+    def visit_ClassDef(self, node):
+        """Track class definitions for definitive identification."""
+        self.defined_classes.add(node.name)
+
+    def visit_Import(self, node):
+        """Track imported modules that might contain classes."""
+        for alias in node.names:
+            # Track module imports
+
+    def visit_ImportFrom(self, node):
+        """Track specific class imports."""
+        if node.module:
+            for alias in node.names:
+                local_name = alias.asname if alias.asname else alias.name
+                self.imported_classes.add(local_name)
+```
+
+**2. Built-in Type Registry**
+```python
+BUILTIN_TYPES = {
+    # Primitive types
+    'int', 'str', 'float', 'bool', 'bytes', 'bytearray',
+    # Collections
+    'list', 'dict', 'tuple', 'set', 'frozenset',
+    # Common standard library classes
+    'Exception', 'ValueError', 'TypeError', 'AttributeError',
+    'Path', 'datetime', 'timedelta', 'Decimal',
+    # Type hints
+    'Optional', 'Union', 'List', 'Dict', 'Tuple', 'Set'
+}
+
+def is_known_type(name: str) -> bool:
+    return name in BUILTIN_TYPES
+```
+
+**3. Contextual Analysis**
+```python
+def analyze_class_context(node, name):
+    """Use context clues to identify classes."""
+
+    # Inheritance context: class Foo(Bar) - Bar is definitely a class
+    if isinstance(node.parent, ast.ClassDef):
+        for base in node.parent.bases:
+            if isinstance(base, ast.Name) and base.id == name:
+                return "class_in_inheritance"
+
+    # isinstance context: isinstance(obj, SomeType) - SomeType is a type
+    if isinstance(node.parent, ast.Call):
+        if (isinstance(node.parent.func, ast.Name) and
+            node.parent.func.id == "isinstance"):
+            return "type_in_isinstance"
+
+    # Type annotation context
+    if isinstance(node.parent, (ast.arg, ast.AnnAssign)):
+        return "type_in_annotation"
+
+    # Constructor pattern: SomeClass() where used like constructor
+    if isinstance(node.parent, ast.Call) and node.parent.func == node:
+        return "potential_constructor"
+
+    return "unknown_context"
+```
+
+**4. Multi-Pass Analysis with Confidence Scoring**
+```python
+@dataclass(frozen=True)
+class ClassDetectionResult:
+    name: str
+    confidence: float  # 0.0 to 1.0
+    evidence: tuple[str, ...]  # List of evidence types
+
+def detect_classes_multi_pass(ast_tree):
+    """Multi-pass analysis with confidence scoring."""
+
+    # Pass 1: Collect definitive evidence
+    defined_classes = collect_class_definitions(ast_tree)
+    imported_classes = collect_imports(ast_tree)
+
+    # Pass 2: Contextual analysis
+    contextual_evidence = analyze_usage_contexts(ast_tree)
+
+    # Pass 3: Combine evidence with confidence scores
+    results = []
+    for name in all_potential_classes:
+        confidence = calculate_confidence(name, {
+            'defined': name in defined_classes,
+            'imported': name in imported_classes,
+            'builtin': name in BUILTIN_TYPES,
+            'context': contextual_evidence.get(name, []),
+            'naming': name[0].isupper() if name else False
+        })
+
+        results.append(ClassDetectionResult(
+            name=name,
+            confidence=confidence,
+            evidence=get_evidence_list(name)
+        ))
+
+    return results
+
+def calculate_confidence(name, evidence):
+    """Calculate confidence score based on available evidence."""
+    score = 0.0
+
+    if evidence['defined']:
+        score += 0.9  # Very high confidence for defined classes
+    elif evidence['imported']:
+        score += 0.8  # High confidence for imported classes
+    elif evidence['builtin']:
+        score += 0.9  # Very high confidence for built-ins
+
+    # Contextual evidence
+    context_boost = {
+        'class_in_inheritance': 0.8,
+        'type_in_isinstance': 0.7,
+        'type_in_annotation': 0.6,
+        'potential_constructor': 0.3
+    }
+
+    for ctx in evidence['context']:
+        score += context_boost.get(ctx, 0.1)
+
+    # Naming convention as last resort
+    if evidence['naming'] and score < 0.2:
+        score += 0.2  # Low confidence boost for naming
+
+    return min(score, 1.0)  # Cap at 1.0
+```
+
+### Recommended Implementation Strategy
+
+**Phase 1: Foundation (Immediate)**
+1. Add `visit_ClassDef` tracking to build definitive class registry
+2. Add `visit_Import` and `visit_ImportFrom` for import awareness
+3. Create built-in type registry for common types
+4. Replace current `name[0].isupper()` checks with registry lookups
+
+**Phase 2: Context Analysis (Short-term)**
+1. Add contextual analysis for inheritance, isinstance, annotations
+2. Implement confidence scoring system
+3. Add support for qualified names (`module.ClassName`)
+
+**Phase 3: Advanced Patterns (Long-term)**
+1. Handle import aliases (`from calc import Calculator as Calc`)
+2. Support generic types (`List[Calculator]`)
+3. Add cross-module class resolution
+
+### Integration with Scope-Aware Variable Tracking
+
+This class detection improvement **perfectly complements** the scope-aware variable tracking implementation:
+
+**Synergistic Benefits:**
+```python
+# Enhanced variable tracking with better class detection
+def visit_Assign(self, node: ast.Assign):
+    if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+        var_name = node.targets[0].id
+
+        # OLD: class_name = self._extract_constructor_name(node.value)
+        # NEW: Use improved class detection
+        class_detection = self.detect_constructor_class(node.value)
+        if class_detection.confidence > 0.7:  # High confidence threshold
+            scope = self.get_current_scope()
+            self.scoped_variables[f"{scope}.{var_name}"] = class_detection.name
+```
+
+**Enhanced Type Resolution:**
+```python
+def _extract_type_from_annotation(self, annotation: ast.expr) -> str | None:
+    if isinstance(annotation, ast.Name):
+        name = annotation.id
+
+        # Check against class registry instead of just accepting any name
+        if self.is_known_class(name):
+            return name
+
+    # ... rest of annotation handling
+```
+
+### Performance Impact
+
+**Memory**: Minimal increase (O(classes + imports) vs current O(1))
+**Runtime**: Negligible - registry lookups are O(1) average case
+**Accuracy**: Significant improvement in class detection precision
+
+### Backward Compatibility
+
+This enhancement maintains full backward compatibility:
+- All existing detection continues to work
+- New detection is purely additive
+- Confidence scoring allows gradual migration
+- Fallback to naming conventions when other methods fail
+
+### Testing Strategy
+
+**Unit Tests for Each Detection Method:**
+```python
+def test_class_definition_detection():
+    """Test detection of classes defined in the same file."""
+
+def test_import_detection():
+    """Test detection of imported classes."""
+
+def test_builtin_type_detection():
+    """Test detection of built-in Python types."""
+
+def test_contextual_detection():
+    """Test context-based class identification."""
+
+def test_confidence_scoring():
+    """Test that confidence scores are calculated correctly."""
+```
+
+**Integration Tests:**
+```python
+def test_reduced_false_positives():
+    """Verify that constants like MAX_SIZE aren't detected as classes."""
+
+def test_improved_import_handling():
+    """Verify that imported classes are properly detected."""
+```
+
+### Implementation Priority
+
+This class detection improvement should be implemented **during** the scope-aware variable tracking implementation, not after. Since the scope-aware plan already includes `name[0].isupper()` checks in multiple places (`_extract_constructor_name`, call resolution logic), it's more efficient to implement better class detection from the start rather than building on a flawed foundation.
+
+**Recommended Approach**: Integrate Phase 1 class detection improvements directly into the scope-aware implementation:
+- Replace planned `name[0].isupper()` checks with proper class registries
+- Add `visit_ClassDef` and import tracking alongside the scope tracking infrastructure
+- Implement built-in type registry as part of the initial class detection logic
+
+**Estimated Effort**: +1 day to the scope-aware implementation (vs 2-3 days if done separately)
+**Risk Level**: Low - prevents building on flawed foundation
+**Impact**: High - avoids implementing incorrect logic that would need immediate replacement
