@@ -58,6 +58,7 @@ RUN groupadd --gid 1000 python && \
 RUN pip install --no-cache-dir uv && \
     curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
     apt-get install -y nodejs && \
+    npm install -g @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install git-delta
@@ -76,11 +77,6 @@ USER python
 
 # Install project dependencies
 RUN uv sync --dev
-
-# Install Claude Code CLI locally for the python user (allows self-updating)
-RUN npm install -g --prefix=/home/python/.local @anthropic-ai/claude-code@${CLAUDE_CODE_VERSION} && \
-    rm /home/python/.local/bin/claude && \
-    ln -s /home/python/.local/lib/node_modules/@anthropic-ai/claude-code/cli.js /home/python/.local/bin/claude
 
 # Configure fish shell
 RUN mkdir -p /home/python/.config/fish
