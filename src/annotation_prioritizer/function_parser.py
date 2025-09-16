@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import override
 
 from .models import FunctionInfo, ParameterInfo, Scope, ScopeKind
+from .scope_tracker import ScopeState
 
 
 def _extract_parameters(args: ast.arguments) -> tuple[ParameterInfo, ...]:
@@ -174,35 +175,35 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         # Internal: Source file path to include in each FunctionInfo for traceability
         self._file_path = file_path
         # Internal: Tracks current scope context during traversal for building qualified names.
-        # Stack is pushed when entering a scope (class or function) and popped when exiting.
-        # Always starts with module scope as the root.
-        self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
+        # Uses ScopeState which maintains a stack that is pushed when entering a scope
+        # (class or function) and popped when exiting. Always starts with module scope as the root.
+        self._scope = ScopeState()
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Track class context for building qualified method names.
 
-        Maintains the scope_stack to enable proper qualified name construction for
+        Maintains the scope to enable proper qualified name construction for
         methods. For nested classes, this creates names like "Outer.Inner.method".
 
         Args:
             node: AST node representing a class definition.
 
         Side Effects:
-            Pushes class scope to _scope_stack before traversing the class body,
+            Pushes class scope to _scope before traversing the class body,
             then pops it after traversal completes. This ensures methods get
             the correct qualified names.
         """
-        self._scope_stack.append(Scope(kind=ScopeKind.CLASS, name=node.name))
+        self._scope.push(Scope(kind=ScopeKind.CLASS, name=node.name))
         self.generic_visit(node)
-        self._scope_stack.pop()
+        self._scope.pop()
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Extract metadata from a regular function definition.
 
         Processes the function node to extract its signature information and adds
-        it to the functions list. Pushes the function onto the scope stack before
+        it to the functions list. Pushes the function onto the scope before
         traversing nested functions to ensure proper qualified naming.
 
         Args:
@@ -210,15 +211,15 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
 
         Side Effects:
             Adds a FunctionInfo object to self.functions.
-            Pushes function scope to _scope_stack, calls generic_visit to
+            Pushes function scope to _scope, calls generic_visit to
             traverse nested functions, then pops the function scope.
         """
         # First record the function with the current scope
         self._process_function(node)
         # Then push the function scope and traverse nested definitions
-        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope_stack.pop()
+        self._scope.pop()
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
@@ -226,22 +227,22 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
 
         Handles async functions identically to regular functions since the
         annotation priority analysis doesn't distinguish between them. Pushes
-        the function onto the scope stack before traversing nested functions.
+        the function onto the scope before traversing nested functions.
 
         Args:
             node: AST node representing an async function definition.
 
         Side Effects:
             Adds a FunctionInfo object to self.functions.
-            Pushes function scope to _scope_stack, calls generic_visit to
+            Pushes function scope to _scope, calls generic_visit to
             traverse nested functions, then pops the function scope.
         """
         # First record the function with the current scope
         self._process_function(node)
         # Then push the function scope and traverse nested definitions
-        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope_stack.pop()
+        self._scope.pop()
 
     def _process_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         """Extract and store metadata from a function definition node.
@@ -287,7 +288,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
             Qualified name string that uniquely identifies the function with
             its complete scope hierarchy including the module scope.
         """
-        scope_names = [scope.name for scope in self._scope_stack]
+        scope_names = [scope.name for scope in self._scope.stack]
         return ".".join([*scope_names, function_name])
 
 

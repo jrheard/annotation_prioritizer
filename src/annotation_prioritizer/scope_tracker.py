@@ -124,13 +124,10 @@ def generate_name_candidates(scope_stack: tuple[Scope, ...], name: str) -> tuple
     candidates: list[str] = []
 
     # Work from innermost to outermost (backwards through stack)
-    # Skip index 0 since that's always the MODULE scope
-    for i in range(len(scope_stack) - 1, 0, -1):
+    for i in range(len(scope_stack) - 1, -1, -1):
         prefix = ".".join(s.name for s in scope_stack[: i + 1])
         candidates.append(f"{prefix}.{name}")
 
-    # Module level as final fallback
-    candidates.append(f"__module__.{name}")
     return tuple(candidates)
 
 
@@ -162,10 +159,6 @@ def build_qualified_name(
 
 def find_first_match(candidates: tuple[str, ...], registry: AbstractSet[str]) -> str | None:
     """Check candidates against a registry and return first match.
-
-    Simple helper that iterates through candidates and returns the first
-    one found in the registry. Used by resolution methods to check against
-    known classes or functions.
 
     Args:
         candidates: Qualified name candidates to check
