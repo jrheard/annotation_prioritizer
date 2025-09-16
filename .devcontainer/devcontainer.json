@@ -52,7 +52,8 @@
     "mounts": [
         "source=claude-code-bashhistory-${devcontainerId},target=/commandhistory,type=volume",
         "source=claude-code-config-${devcontainerId},target=/home/python/.claude,type=volume",
-        "source=${localEnv:HOME}/.config/fish/functions,target=/home/python/.config/fish/functions,type=bind,consistency=cached"
+        "source=${localEnv:HOME}/.config/fish/functions,target=/home/python/.config/fish/functions,type=bind,consistency=cached",
+        "source=${localEnv:HOME}/.config/gh,target=/home/python/.config/gh,type=bind"
     ],
     "containerEnv": {
         "CLAUDE_CONFIG_DIR": "/home/python/.claude",
