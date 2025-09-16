@@ -105,7 +105,7 @@ class CallCountVisitor(ast.NodeVisitor):
         - Imported function calls: imported_module.function()
         - Chained calls: obj.attr.method()
 
-    The visitor maintains state during traversal (_scope_stack) to track the
+    The visitor maintains state during traversal (_scope) to track the
     current scope context, enabling proper resolution of self.method() calls
     to their qualified names (e.g., "__module__.Calculator.add").
     """

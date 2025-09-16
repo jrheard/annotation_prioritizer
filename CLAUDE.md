@@ -104,4 +104,5 @@ Present options with clear pros/cons rather than assuming the "obvious" choice.
 
 # Sub-agents
 
-Proactively use sub-agents for complex tasks to conserve context in our main conversation thread. Use our custom general-purpose opus-agent agent, NOT the built-in general-purpose agent, when spawning sub-agents.
+- Proactively use sub-agents for complex tasks to conserve context in our main conversation thread. Use our custom general-purpose opus-agent agent, NOT the built-in general-purpose agent, when spawning sub-agents.
+- If you encounter lots of failing tests, spawn a sub-agent to fix them.

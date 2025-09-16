@@ -1,9 +1,7 @@
 """AST-based class discovery and registry for definitive class identification.
 
-This module provides tools for discovering and tracking class definitions in Python
-code without relying on naming heuristics. It builds a comprehensive registry of
-all classes found in the AST, eliminating false positives from constants that
-happen to follow naming conventions.
+This module provides tools for discovering and tracking class definitions in
+Python code. It builds a comprehensive registry of all classes found in the AST.
 
 Key Components:
     - ClassDiscoveryVisitor: AST visitor that finds all ClassDef nodes
@@ -24,6 +22,7 @@ from dataclasses import dataclass
 from typing import override
 
 from annotation_prioritizer.models import Scope, ScopeKind
+from annotation_prioritizer.scope_tracker import ScopeState
 
 
 def _build_builtin_types() -> frozenset[str]:
@@ -78,34 +77,34 @@ class ClassDiscoveryVisitor(ast.NodeVisitor):
         """Initialize the visitor with an empty list of class names."""
         super().__init__()
         self.class_names: list[str] = []
-        self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
+        self._scope = ScopeState()
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Record class definition with full qualified name."""
         # Build qualified name from current scope
-        scope_names = [scope.name for scope in self._scope_stack]
+        scope_names = [scope.name for scope in self._scope.stack]
         qualified_name = ".".join([*scope_names, node.name])
         self.class_names.append(qualified_name)
 
         # Push class scope and continue traversal for nested classes
-        self._scope_stack.append(Scope(kind=ScopeKind.CLASS, name=node.name))
+        self._scope.push(Scope(kind=ScopeKind.CLASS, name=node.name))
         self.generic_visit(node)
-        self._scope_stack.pop()
+        self._scope.pop()
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Track function scope for nested classes inside functions."""
-        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope_stack.pop()
+        self._scope.pop()
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Track async function scope for nested classes."""
-        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope_stack.pop()
+        self._scope.pop()
 
 
 def build_class_registry(tree: ast.AST) -> ClassRegistry:
