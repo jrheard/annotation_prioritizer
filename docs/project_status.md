@@ -1,6 +1,6 @@
 # Project Status: Type Annotation Priority Analyzer
 
-**Last Updated:** September 14, 2025
+**Last Updated:** September 16, 2025
 
 ## Project Overview
 
@@ -63,7 +63,25 @@ def process():
 
 ## In Progress 🚧
 
-### Scope Infrastructure (Partially Complete)
+### Single-File Accuracy Improvements (Implementation Sequence)
+These improvements must be completed in order to achieve very accurate single-file analysis:
+
+1. **Class Detection Improvements** (Step 1 - Foundation)
+   - Replace naive `name[0].isupper()` heuristics with AST-based detection
+   - Build class registry with confidence scoring
+   - Must be completed FIRST
+
+2. **Unresolvable Call Reporting** (Step 2 - Transparency)
+   - Track and report calls that cannot be resolved
+   - Provides transparency about analysis coverage
+   - Prerequisites: Complete class detection improvements first
+
+3. **Scope-Aware Variable Tracking** (Step 3 - Bug Fix)
+   - Fix critical instance method call counting bug
+   - Track variable assignments and resolve method calls
+   - Prerequisites: Complete both class detection and unresolvable call reporting first
+
+### Scope Infrastructure (Completed Foundation)
 - ✅ **Scope Stack Foundation**: Replaced `_class_stack` with typed `_scope_stack` using `Scope` dataclass
 - ✅ **Function Scope Tracking**: Both parsers now track function scopes in addition to classes
 - ✅ **Nested Function Support**: Calls within nested functions can now be resolved
@@ -77,6 +95,21 @@ def process():
    - Track variable assignments (`calc = Calculator()`)
    - Resolve method calls on variables (`calc.add()`)
    - Maintain scope isolation between functions
+
+   **What We Will Track:**
+   - Direct instantiation: `calc = Calculator(); calc.add()`
+   - Simple parameter annotations: `def foo(calc: Calculator): calc.add()`
+   - Annotated variables: `calc: Calculator = get_calculator(); calc.add()`
+   - Module-level variables accessible in functions
+
+   **What We Won't Track:**
+   - Nested function parent scope variables (currently not implemented, marked for future reconsideration)
+   - Unannotated parameters (no type information available)
+   - Complex types (Optional, Union, generics - too complex for static analysis)
+   - Return values without annotation (can't determine type)
+   - Complex expressions (`x if condition else y`, `list[0]`)
+   - Dynamic imports and star imports (too complex for reliable static analysis)
+   - Decorators (too complex for static analysis)
 
 2. **Directory Analysis** (Primary Goal)
    - Process entire Python projects
@@ -93,7 +126,7 @@ def process():
 4. **Import Resolution**
    - Track function imports across modules
    - Handle `from module import function`
-   - Support import aliases
+   - Support import aliases (`from calc import Calculator as Calc`)
    - Enable cross-module call counting
 
 5. **Enhanced Call Attribution**
@@ -105,7 +138,8 @@ def process():
 
 ### Advanced Analysis
 - **Inheritance Resolution**: Method Resolution Order (MRO) support
-- **Class Attribute Tracking**: Instance and class variable types
+- **Class Attribute Tracking**: Instance and class variable types (e.g., `self.calc.add()`)
+- **@dataclass Field Support**: Track typed fields in dataclass instances
 - **Complex Type Annotations**: Optional, Union, generics support
 - **Complexity-Based Weighting**: Cyclomatic complexity in priority scores
 
@@ -127,9 +161,21 @@ These features are explicitly **not planned** based on project goals and constra
 - Focus purely on prioritization, not correctness
 
 ### Integration with Existing Type Checkers
-- Mypy API is unstable and breaks frequently
-- Pyright not designed for programmatic type extraction
-- Adds complexity without sufficient benefit
+
+We explicitly chose not to integrate with existing type checkers for the following reasons:
+
+**Why Not Use Mypy?**
+- **API Instability**: Mypy's API breaks with every release (SQLAlchemy deprecated their plugin for this reason)
+- **Overhead**: Full type checking for simple variable resolution is overkill
+- **Complexity**: We'd use 5% of capabilities while dealing with 100% of complexity
+- **Control**: We can't control what mypy trusts or infers
+
+**Why Not Use Pyright?**
+- **Not Designed for Programmatic Use**: Pyright is explicitly not designed for programmatic type extraction (confirmed by maintainer)
+- **Limited API**: No stable API for extracting type information
+- **Performance**: Would require running full type checking for limited use case
+
+**Our Approach**: Build focused, conservative analysis that only tracks what we're confident about, aligned with the project's philosophy of "conservative, accurate analysis"
 
 ### Runtime Analysis
 - No instrumentation or profiling of running code

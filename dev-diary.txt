@@ -290,5 +290,12 @@ nvm:
 
   The current design is clean and appropriate. The "duplication" is really just standard AST visitor boilerplate that keeps each module focused on its specific responsibility. No changes recommended.
 
+ok i think it's time to revisit the scope-aware doc
 
-TODO note "full resolution not yet implemented" comment in call_counter._extract_call_name
+omg wow: using opus, telling it to ask me questions, and telling it to use sequential thinking = good results!!!
+
+ok i added a new `opus-agent` general-purpose agent
+this seems to work!!
+
+NOTE: i don't think sub-agents get the full conversation history, so i need to have it prompt them with lots of context
+i'll add more about this to the description field of the agent

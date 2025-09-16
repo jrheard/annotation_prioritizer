@@ -1,3 +1,16 @@
+# ⚠️ OBSOLETE DOCUMENT - DO NOT USE ⚠️
+
+**This document is obsolete and has been replaced by three focused documents:**
+- `/workspace/plans/pending/class-detection-improvements-2025-09-16.md`
+- `/workspace/plans/pending/unresolvable-call-reporting-2025-09-16.md`
+- `/workspace/plans/pending/scope-aware-variable-tracking-2025-09-16.md`
+
+**Note:** The scope infrastructure work described in Appendix lines 1149-1285 has been completed and is no longer needed.
+
+**Original planning has moved to the new focused documents. This file is kept for historical reference only.**
+
+---
+
 # Scope-Aware Variable Tracking with Type Annotations - Implementation Plan
 
 **Date**: 2025-09-13
