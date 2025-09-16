@@ -147,14 +147,14 @@ class CallCountVisitor(ast.NodeVisitor):
     @override
     def visit_Call(self, node: ast.Call) -> None:
         """Visit function call to count calls to known functions."""
-        call_name = self._extract_call_name(node)
+        call_name = self._resolve_call_name(node)
         if call_name and call_name in self.call_counts:
             self.call_counts[call_name] += 1
 
         self.generic_visit(node)
 
-    def _extract_call_name(self, node: ast.Call) -> str | None:
-        """Extract the qualified name of the called function.
+    def _resolve_call_name(self, node: ast.Call) -> str | None:
+        """Resolve the qualified name of the called function.
 
         Uses conservative resolution - only returns names for calls that can be
         confidently attributed to specific functions. Ambiguous or dynamic calls
@@ -171,14 +171,14 @@ class CallCountVisitor(ast.NodeVisitor):
 
         # Method calls: obj.method_name()
         if isinstance(func, ast.Attribute):
-            return self._extract_method_call(func)
+            return self._resolve_method_call(func)
 
         # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
         # Cannot be resolved statically - return None
         return None
 
-    def _extract_method_call(self, func: ast.Attribute) -> str | None:
-        """Extract qualified name from a method call (attribute access).
+    def _resolve_method_call(self, func: ast.Attribute) -> str | None:
+        """Resolve qualified name from a method call (attribute access).
 
         Handles self.method(), ClassName.method(), and Outer.Inner.method() calls.
 

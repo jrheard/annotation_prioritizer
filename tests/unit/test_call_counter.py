@@ -680,8 +680,8 @@ def test_extract_call_with_dynamic_call() -> None:
         keywords=[],
     )
 
-    # Test that extract_call_name returns None for dynamic calls
-    result = visitor._extract_call_name(call_node)
+    # Test that resolve_call_name returns None for dynamic calls
+    result = visitor._resolve_call_name(call_node)
     assert result is None
 
 
