@@ -172,3 +172,7 @@ DONE have it rewrite this doc as a notebook???
 TODO what about foo.bar.baz()?? look into that before starting work on the scoped plan
 
 TODO what about super().foo()? not worth worrying about?
+
+TODO split notebook into multiple smaller ones
+
+TODO fix incorrect simple parentheses claim
