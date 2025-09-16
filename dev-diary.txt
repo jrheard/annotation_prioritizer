@@ -181,6 +181,44 @@ DONE fix incorrect simple parentheses claim
 
 9/16
 
-TODO make the guide not mention scope-aware stuff, or the bug, etc
+DONE make the guide not mention scope-aware stuff, or the bug, etc
 
-TODO add docs for the fields of each node type
+DONE add docs for the fields of each node type
+
+ok now im reading the guide :)
+
+TODO review all nodevisitors we have atm now that i actually understand this stuff..
+
+definitely noticing a bug or two in doc 3
+e.g. Calculator.result should actually be Calculator.add.result, but we're currently only using the function stack OR the class stack rather than both
+
+kinda feels like need to properly interleave the function/class stack, or just like not have two separate stacks
+tbh i'm not sure why we would have two separate stacks, seems to just make things worse
+
+TODO write a similar guide for import tracking????
+
+oh gosh
+guide 3 is really interesting
+note the bit about "module scope needs special handling because module-level variables are accessible from all functions"
+
+for that matter, aren't _all_ variables in higher scopes accessible to all functions in inner scopes??
+
+so it's not really that module needs special handling, it's that __module__ is the top-level parent,
+and we always need to check all parents in order
+
+ok so TODO make sure that __module__ (or the filename? like foo.py?) is always at the top of the scope tree
+
+i think im gonna switch to the default model setting, of opus for 50% of usage limits
+sonnet has been having some trouble with this docs stuff
+
+oh wow this is useful https://github.com/Maciek-roboblog/Claude-Code-Usage-Monitor
+
+ok getting there - starting doc 5...
+
+interesting, note that args.defaults and args.kw_defaults are separate
+
+ok so args.defaults is right-aligned with args
+but args.kw_defaults has a one-to-one mapping with args.kwonlyargs
+
+ok i started to review the scope plan doc, noticed that visit_FunctionDef wasn't checking keyword-only args, just args.args
+so i'm beginning to learn :)

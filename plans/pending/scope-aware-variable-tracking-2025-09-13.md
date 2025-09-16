@@ -161,14 +161,25 @@ class CallCountVisitor(ast.NodeVisitor):
 def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
     """Visit function definition to track scope and parameter types."""
     self.function_stack.append(node.name)
+    scope = self.get_current_scope()
 
-    # Track parameter type annotations
-    for arg in node.args.args:
+    # Track all parameter type annotations
+    # Combine all regular parameter types
+    all_args = []
+    all_args.extend(node.args.posonlyargs)  # Positional-only (before /)
+    all_args.extend(node.args.args)         # Regular parameters
+    all_args.extend(node.args.kwonlyargs)   # Keyword-only (after *)
+
+    for arg in all_args:
         if arg.annotation:
             param_type = self._extract_type_from_annotation(arg.annotation)
             if param_type:
-                scope = self.get_current_scope()
                 self.scoped_variables[f"{scope}.{arg.arg}"] = param_type
+
+    # Intentional limitation: We don't track *args and **kwargs annotations
+    # These are rarely annotated in practice, and when they are, tracking them
+    # would require complex logic (e.g., args[0] access patterns).
+    # This could be revisited in the future if real-world usage shows it's needed.
 
     self.generic_visit(node)
     self.function_stack.pop()
@@ -354,18 +365,27 @@ def test_parameter_type_annotations():
 class Calculator:
     def add(self, x, y): return x + y
 
+class Processor:
+    def process(self): pass
+
 def process_with_annotation(calc: Calculator):
     return calc.add(5, 7)  # Should be counted!
 
 def process_without_annotation(calc):
     return calc.add(3, 4)  # Cannot resolve - not counted
+
+def process_keyword_only(*, calc: Calculator):
+    return calc.add(1, 2)  # Should be counted!
+
+def process_positional_only(calc: Calculator, /):
+    return calc.add(8, 9)  # Should be counted!
 """)
 
     functions = parse_function_definitions(str(test_file))
     call_counts = count_function_calls(str(test_file), functions)
     count_dict = {cc.function_qualified_name: cc.call_count for cc in call_counts}
 
-    assert count_dict["Calculator.add"] == 1  # Only the annotated parameter call
+    assert count_dict["Calculator.add"] == 3  # All annotated parameter calls
 
 def test_module_level_variables():
     """Test that module-level variables work correctly."""
@@ -465,6 +485,13 @@ def outer():
 ```python
 def foo(calc):  # No type annotation
     calc.add(1, 2)  # Unresolvable
+```
+
+❌ ***args and **kwargs annotations** (Intentional limitation):
+```python
+def foo(*args: SomeType, **kwargs: AnotherType):
+    # We don't track these even if annotated
+    # Would require complex access pattern analysis (args[0], kwargs['key'])
 ```
 
 ❌ **Complex types**:
@@ -606,7 +633,7 @@ c = Calc()  # Won't track that Calc is Calculator
 
 - **Unknown variables**: Return None (unresolvable) rather than guess
 - **Complex types**: Skip rather than partially handle
-- **Parameters without annotations**: Don't try to infer
+- **Parameters without annotations**: Don't try to infer (including *args/**kwargs)
 - **Parent scope variables**: Intentionally not supported (permanent limitation)
 - **Variable deletion**: `del` statements not tracked (documented limitation)
 
@@ -625,21 +652,27 @@ class Calculator:
 
 calc_global = Calculator()  # Module level
 
-def process_data(calc_param: Calculator):  # Parameter
+def process_data(calc_param: Calculator):  # Regular parameter
     calc_local = Calculator()  # Local variable
 
     calc_global.add(1, 2)   # Resolves via __module__.calc_global
     calc_param.add(3, 4)    # Resolves via process_data.calc_param
     calc_local.add(5, 6)    # Resolves via process_data.calc_local
 
+def advanced_process(pos_only: Calculator, /, *, kw_only: Calculator):
+    pos_only.add(7, 8)      # Resolves via advanced_process.pos_only
+    kw_only.add(9, 10)      # Resolves via advanced_process.kw_only
+
 # Final scoped_variables dict:
 {
     "__module__.calc_global": "Calculator",
     "process_data.calc_param": "Calculator",
-    "process_data.calc_local": "Calculator"
+    "process_data.calc_local": "Calculator",
+    "advanced_process.pos_only": "Calculator",
+    "advanced_process.kw_only": "Calculator"
 }
 
-# All three calls correctly attributed to Calculator.add
+# All five calls correctly attributed to Calculator.add
 ```
 
 ## Conclusion
