@@ -177,7 +177,8 @@ class CallCountVisitor(ast.NodeVisitor):
         # Cannot be resolved statically - return None
         return None
 
-    def _resolve_method_call(self, func: ast.Attribute) -> str | None:
+    # TODO: refactor to remove this noqa
+    def _resolve_method_call(self, func: ast.Attribute) -> str | None:  # noqa: PLR0911
         """Resolve qualified name from a method call (attribute access).
 
         Handles self.method(), ClassName.method(), and Outer.Inner.method() calls.
@@ -200,10 +201,15 @@ class CallCountVisitor(ast.NodeVisitor):
         # Static/class method calls: ClassName.method_name()
         if isinstance(func.value, ast.Name):
             potential_class = func.value.id
+            # Check built-in types directly (they don't have __module__ prefix)
+            if potential_class in self._class_registry.builtin_classes:
+                return f"{potential_class}.{func.attr}"
+
             # Use resolver to check all possible scopes
             resolved_class = self._resolve_class_name(potential_class)
             if resolved_class:
                 return f"{resolved_class}.{func.attr}"
+
             # Not a class - might be a variable (TODO future work)
             return None
 
@@ -212,13 +218,15 @@ class CallCountVisitor(ast.NodeVisitor):
             # Extract the chain of attributes
             chain = extract_attribute_chain(func.value)
             full_class_name = ".".join(chain)
-            resolved_class = self._resolve_compound_class_name(full_class_name)
+            resolved_class = self._resolve_class_name(full_class_name)
             if resolved_class:
                 return f"{resolved_class}.{func.attr}"
 
             # Fall back to module-qualified name for unresolvable complex cases
             # This handles cases like variable.attribute.method() where variable isn't a known class
             return f"__module__.{func.attr}"
+
+        # TODO: add support for MyClass.attribute.method()
 
         return None
 
@@ -238,49 +246,16 @@ class CallCountVisitor(ast.NodeVisitor):
         candidates = generate_name_candidates(self._scope.stack, function_name)
         return find_first_match(candidates, set(self.call_counts.keys()))
 
-    def _resolve_compound_class_name(self, compound_name: str) -> str | None:
-        """Resolve a compound class name like 'Outer.Inner' to its qualified form.
-
-        Handles cases where a nested class is accessed with dot notation.
-        For example, 'Outer.Inner' might resolve to '__module__.Outer.Inner'.
-
-        Args:
-            compound_name: The compound name to resolve (e.g., "Outer.Inner")
-
-        Returns:
-            Qualified class name if found in registry, None otherwise
-        """
-        candidates = generate_name_candidates(self._scope.stack, compound_name)
-        return find_first_match(candidates, self._class_registry.ast_classes)
-
     def _resolve_class_name(self, class_name: str) -> str | None:
         """Resolve a class name to its qualified form based on current scope.
 
-        Checks from most specific (nested class) to least specific (module) scope.
-        This handles cases like:
-        - Inner.method() inside Outer class -> __module__.Outer.Inner
-        - Calculator.add() at module level -> __module__.Calculator
-
-        NOTE: Currently only resolves classes defined in the current file and Python
-        built-in types. Imported classes (from typing, collections, third-party packages)
-        are not recognized and their method calls won't be counted.
+        Handles simple and compound class names (e.g., "Calculator", "Outer.Inner").
 
         Args:
-            class_name: The local name to resolve (e.g., "Calculator", "Inner")
+            class_name: The name to resolve (e.g., "Calculator", "Outer.Inner")
 
         Returns:
             Qualified class name if found in registry, None otherwise
-
-        Examples:
-            "Calculator" -> "__module__.Calculator" (if defined in file)
-            "int" -> "int" (built-in type)
-            "List" -> None (imported from typing, not yet supported)
-            "defaultdict" -> None (imported from collections, not yet supported)
         """
-        # Check built-in types directly (they don't have __module__ prefix)
-        if class_name in self._class_registry.builtin_classes:
-            return class_name
-
-        # Generate candidates and check against registry
         candidates = generate_name_candidates(self._scope.stack, class_name)
         return find_first_match(candidates, self._class_registry.ast_classes)
