@@ -83,4 +83,4 @@ Provide your review in this structure:
 - Consider whether a simpler "good enough" solution would be better
 - If the plan is fundamentally flawed, say so clearly with specific reasons
 
-ultrathink before providing your review
+ultrathink before providing your review. Consider using the sequential thinking tool and/or context7 MCP server.

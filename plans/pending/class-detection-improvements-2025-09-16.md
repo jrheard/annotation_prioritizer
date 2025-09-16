@@ -90,27 +90,20 @@ class ClassRegistry:
 
 ```python
 # In models.py or a new class_registry.py module
-PYTHON_BUILTIN_TYPES: frozenset[str] = frozenset({
-    # Fundamental types
-    "int", "float", "complex", "bool", "str", "bytes", "bytearray", "memoryview",
+import builtins
 
-    # Collections
-    "list", "tuple", "dict", "set", "frozenset", "range",
+def _build_builtin_types() -> frozenset[str]:
+    """Build a comprehensive set of Python built-in types.
 
-    # Base types
-    "object", "type", "super",
+    Uses the builtins module to get all built-in classes dynamically.
+    This ensures we capture all built-in types including all exceptions.
+    """
+    return frozenset(
+        name for name in dir(builtins)
+        if isinstance(getattr(builtins, name), type)
+    )
 
-    # Common exception base classes
-    "Exception", "BaseException", "StopIteration", "GeneratorExit",
-    "KeyboardInterrupt", "SystemExit",
-
-    # Other common built-ins that are classes
-    "property", "staticmethod", "classmethod",
-    "enumerate", "filter", "map", "zip", "reversed",
-
-    # Type-related (for annotations)
-    "type", "None", "NotImplemented", "Ellipsis",
-})
+PYTHON_BUILTIN_TYPES: frozenset[str] = _build_builtin_types()
 ```
 
 ### AST Visitor for Class Discovery
@@ -653,21 +646,31 @@ class Calculator:
    - Build qualified names correctly
 
 3. **Update CallCountVisitor** (1 hour)
-   - Accept ClassRegistry parameter
+   - Accept ClassRegistry parameter (BREAKING CHANGE - intentional)
    - Add `_resolve_class_name()` method
    - Update `_extract_call_name()` to use resolver
    - Remove naive heuristics
+
+   **NOTE**: This is an intentional breaking API change. All existing instantiations of `CallCountVisitor` will need to be updated to pass the `class_registry` parameter. This is acceptable as it forces proper class detection throughout the codebase.
 
 4. **Update count_function_calls()** (30 min)
    - Build registry from AST
    - Pass to visitor
 
 5. **Fix all existing tests** (45 min)
-   - Update test files that instantiate `CallCountVisitor`
-   - Files that need updating:
-     - `tests/unit/test_call_counter.py` - Multiple test functions create CallCountVisitor
+   - Update ALL test files that instantiate `CallCountVisitor` - this is a breaking change
+   - Files that MUST be updated:
+     - `tests/unit/test_call_counter.py` - Multiple test functions create CallCountVisitor directly
      - `tests/integration/test_end_to_end.py` - May need updates if it directly uses call_counter
-   - Add class_registry parameter to all CallCountVisitor instantiations
+   - Every CallCountVisitor instantiation must be updated to:
+     ```python
+     # Build registry first
+     tree = ast.parse(source_code)
+     class_registry = build_class_registry(tree)
+     # Then pass to visitor
+     visitor = CallCountVisitor(known_functions, class_registry)
+     ```
+   - This breaking change is intentional and ensures consistent class detection
 
 6. **Write comprehensive new tests** (1 hour)
    - Unit tests for ClassRegistry

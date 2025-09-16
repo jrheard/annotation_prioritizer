@@ -70,6 +70,7 @@ This project follows functional programming principles:
 
 - Keep project_status.md updated: When adding, removing, or changing features, always update `docs/project_status.md` to reflect the current state. This document serves as the authoritative source of truth for what functionality is implemented, planned, or out of scope.
 - Update implementation plans: When completing tasks from a plan document in `plans/`, update that plan to mark completed tasks and record any implementation changes or discoveries.
+- NEVER edit `dev-diary.txt` - this is a personal log maintained by the user only
 - Always include changes to `dev-diary.txt` in commits (user edits this file during work)
 
 # Commit Messages
