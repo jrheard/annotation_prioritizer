@@ -72,7 +72,7 @@ DONE some kind of doc explaining what the current features / limitations are, et
 
 9/14
 
-TODO read ast guide doc
+DONE read ast guide doc
 
 TODO someday investigate serena
 
@@ -80,7 +80,7 @@ DONE context7?
 
 DONE try sequential thinking
 
-TODO experiment more with suggesting that claude use subagents -- both for parallelism and for context efficiency
+DONE experiment more with suggesting that claude use subagents -- both for parallelism and for context efficiency
 
 TODO investigate tdd guard
 
@@ -187,7 +187,7 @@ DONE add docs for the fields of each node type
 
 ok now im reading the guide :)
 
-TODO review all nodevisitors we have atm now that i actually understand this stuff..
+DONE review all nodevisitors we have atm now that i actually understand this stuff..
 
 definitely noticing a bug or two in doc 3
 e.g. Calculator.result should actually be Calculator.add.result, but we're currently only using the function stack OR the class stack rather than both
@@ -206,7 +206,7 @@ for that matter, aren't _all_ variables in higher scopes accessible to all funct
 so it's not really that module needs special handling, it's that __module__ is the top-level parent,
 and we always need to check all parents in order
 
-ok so TODO make sure that __module__ (or the filename? like foo.py?) is always at the top of the scope tree
+ok so DONE make sure that __module__ (or the filename? like foo.py?) is always at the top of the scope tree
 
 i think im gonna switch to the default model setting, of opus for 50% of usage limits
 sonnet has been having some trouble with this docs stuff

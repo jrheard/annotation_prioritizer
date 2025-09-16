@@ -175,12 +175,20 @@ class CallCountVisitor(ast.NodeVisitor):
             # Static/class method calls: ClassName.method_name()
             if isinstance(func.value, ast.Name):
                 class_name = func.value.id
+                # TODO: is this right? why is `class_name` guaranteed to live directly on `__module__`?
                 return f"__module__.{class_name}.{func.attr}"
 
             # Complex qualified calls: obj.attr.method() or module.submodule.function()
-            # Currently simplified to just final attribute - full resolution not yet implemented
+            # Currently simplified to just final attribute
+            # - ⚠️ **Future Enhancement Needed**: The current implementation has
+            # a limitation with complex qualified calls like
+            # `obj.attr1.attr2.method()`. Currently, only the final attribute
+            # `"method"` is extracted rather than building the full qualified name.
             if isinstance(func.value, ast.Attribute):
                 return f"__module__.{func.attr}"
+
+        # TODO: i think we need a `_resolve_method_call()` fn that works
+        # similarly to `_resolve_function_call()`
 
         # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
         # Cannot be resolved statically - return None
