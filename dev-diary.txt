@@ -167,4 +167,8 @@ having claude fill in these expanded parsed outputs for all of the examples
 
 i think i'll also have it fill in the outputs of the nodevisitor examples
 
-TODO have it rewrite this doc as a notebook???
+DONE have it rewrite this doc as a notebook???
+
+TODO what about foo.bar.baz()?? look into that before starting work on the scoped plan
+
+TODO what about super().foo()? not worth worrying about?
