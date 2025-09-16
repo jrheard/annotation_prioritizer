@@ -224,3 +224,18 @@ ok i started to review the scope plan doc, noticed that visit_FunctionDef wasn't
 so i'm beginning to learn :)
 
 wow section 22 is actually really helpful, in file 5
+
+anyway yeah at this point it's definitely clear to me that we should first do a pass on ClassDefs to figure out what classes exist in which files
+
+rather than this "if the first letter is uppercase it's a class" business
+
+ok i'm gonna get lunch
+let's pick up section 24 when i get back
+
+NOTE: we should _definitely_ actually stay in single-file mode for a while longer
+
+ok lol doc 6 just contained a dupe of section 24
+
+removing it
+
+ok i guess i know ast stuff now!!

@@ -1,6 +1,6 @@
 # AST Standard Library Module Guide
 
-This directory contains a comprehensive 6-part guide to Python's Abstract Syntax Tree (AST) standard library module, designed for developers building static analysis tools and code analysis applications.
+This directory contains a comprehensive 5-part guide to Python's Abstract Syntax Tree (AST) standard library module, designed for developers building static analysis tools and code analysis applications.
 
 ## Learning Path
 
@@ -28,13 +28,8 @@ The notebooks should be completed in order, as each builds on concepts from the 
 
 ### ✅ [Part 5: AST Best Practices](./5-ast-best-practices.ipynb)
 **Prerequisites:** Parts 1-4 completed
-**Content:** Common pitfalls, defensive patterns, production-ready code
-**Key Skills:** Robust AST visitors, error handling, method call resolution
-
-### 🧪 [Part 6: AST Testing Techniques](./6-ast-testing-techniques.ipynb)
-**Prerequisites:** Parts 1-5 completed
-**Content:** Testing strategies, programmatic AST creation, project summary
-**Key Skills:** Writing tests for AST code, debugging complex scenarios
+**Content:** Common pitfalls, defensive patterns, testing techniques, production-ready code
+**Key Skills:** Robust AST visitors, error handling, method call resolution, testing strategies
 
 ## Application Areas
 
@@ -72,6 +67,5 @@ This guide series teaches fundamental AST analysis techniques commonly used in s
 
 If you encounter issues or have questions:
 1. Check the debugging techniques in Part 4
-2. Review best practices in Part 5
-3. Use the testing approaches from Part 6
-4. Refer to the Python AST documentation: https://docs.python.org/3/library/ast.html
+2. Review best practices and testing approaches in Part 5
+3. Refer to the Python AST documentation: https://docs.python.org/3/library/ast.html
