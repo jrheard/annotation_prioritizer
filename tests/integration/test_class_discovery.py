@@ -7,16 +7,16 @@ from tests.helpers.temp_files import temp_python_file
 
 
 def test_false_positive_elimination() -> None:
-    """Test that constants are not treated as classes."""
+    """Test that constants and built-in types are not treated as user-defined classes."""
     code = """
 MAX_SIZE = 100
 DEFAULT_CONFIG = {}
 PI = 3.14
 
 def use_constants():
-    MAX_SIZE.bit_length()  # Should NOT be counted as class method
-    DEFAULT_CONFIG.get("key")  # Should NOT be counted
-    int.from_bytes(b"test", "big")  # Should be counted (int is built-in)
+    MAX_SIZE.bit_length()  # Constant, not a class method - NOT counted
+    DEFAULT_CONFIG.get("key")  # Constant, not a class method - NOT counted
+    int.from_bytes(b"test", "big")  # Built-in class method - NOT counted (not in known_functions)
     return None
 
 class Calculator:
@@ -24,7 +24,7 @@ class Calculator:
         return a + b
 
 def use_class():
-    return Calculator.add(None, 1, 2)  # Should be counted
+    return Calculator.add(None, 1, 2)  # User-defined class method - WILL be counted
 """
 
     with temp_python_file(code) as temp_path:
@@ -33,10 +33,15 @@ def use_class():
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
-        # int.from_bytes is not in our known functions, so won't be counted
-        # Calculator.add should be counted
+        # Only user-defined class methods are counted
         assert call_counts.get("__module__.Calculator.add", 0) == 1
-        # use_constants and use_class should not be called
+
+        # Built-in class methods like int.from_bytes are NOT counted
+        # (they're not in known_functions since they're not defined in this file)
+        assert "int.from_bytes" not in call_counts
+        assert "__builtins__.int.from_bytes" not in call_counts
+
+        # These functions are not called
         assert call_counts.get("__module__.use_constants", 0) == 0
         assert call_counts.get("__module__.use_class", 0) == 0
 
