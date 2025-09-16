@@ -64,6 +64,7 @@ This project follows functional programming principles:
 - No pytest fixtures: Prefer normal helper functions over pytest fixtures for test setup
 - Test structure: Tests should be bare functions, not methods in test classes. Don't use wrapper classes like `TestSomething` - pytest doesn't need them
 - Use `@pytest.mark.parametrize` to test multiple scenarios efficiently instead of writing repetitive test functions
+- Test naming: Unit test filenames should always match the name of the file under test (e.g., `test_foo.py` for `foo.py`)
 - File organization: Keep non-test Python files focused and split them into smaller modules if they exceed ~400-500 lines of non-documentation code (actual logic, not counting docstrings/comments)
 - Always use absolute imports. Never use relative imports.
 
