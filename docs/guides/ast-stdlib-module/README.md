@@ -1,6 +1,6 @@
 # AST Standard Library Module Guide
 
-This directory contains a comprehensive 6-part guide to Python's Abstract Syntax Tree (AST) standard library module, specifically focused on the needs of the annotation prioritizer project.
+This directory contains a comprehensive 6-part guide to Python's Abstract Syntax Tree (AST) standard library module, designed for developers building static analysis tools and code analysis applications.
 
 ## Learning Path
 
@@ -19,7 +19,7 @@ The notebooks should be completed in order, as each builds on concepts from the 
 ### 🎯 [Part 3: AST Visitor Patterns](./3-ast-visitor-patterns.ipynb)
 **Prerequisites:** Parts 1-2 completed
 **Content:** Advanced visitor patterns, context stacks, qualified names, scope resolution
-**Key Skills:** Complex traversal techniques, scope-aware analysis
+**Key Skills:** Complex traversal techniques, variable tracking and scope analysis
 
 ### 🔍 [Part 4: AST Debugging Tools](./4-ast-debugging-tools.ipynb)
 **Prerequisites:** Parts 1-3 completed
@@ -36,11 +36,11 @@ The notebooks should be completed in order, as each builds on concepts from the 
 **Content:** Testing strategies, programmatic AST creation, project summary
 **Key Skills:** Writing tests for AST code, debugging complex scenarios
 
-## Project Context
+## Application Areas
 
-This guide series was created specifically to support the **annotation prioritizer project**, which analyzes Python code to identify high-impact functions needing type annotations. The content focuses on:
+This guide series teaches fundamental AST analysis techniques commonly used in static analysis tools. The content focuses on essential skills for:
 
-- Scope-aware variable tracking
+- Variable tracking and scope analysis
 - Method call resolution
 - Function signature analysis
 - Type annotation extraction
@@ -52,7 +52,7 @@ This guide series was created specifically to support the **annotation prioritiz
 - **NodeVisitor Pattern**: The foundation for AST traversal
 - **Context Stacks**: Essential for tracking nested scopes
 - **Qualified Names**: Building precise element identifiers
-- **Scope Resolution**: Critical for variable tracking
+- **Variable Tracking**: Critical for scope-aware analysis
 
 ### Essential Node Types
 - `FunctionDef`/`AsyncFunctionDef`: Function definitions
