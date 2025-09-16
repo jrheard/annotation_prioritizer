@@ -299,3 +299,16 @@ this seems to work!!
 
 NOTE: i don't think sub-agents get the full conversation history, so i need to have it prompt them with lots of context
 i'll add more about this to the description field of the agent
+
+TODO use /review-plan on each of these new docs
+
+gosh
+these new docs are not perfect :/
+
+the prompts we used to generate them were too brief
+
+i'm tempted to rewind to that conversation and do it again
+
+gonna stash my changes for now
+
+ok this is much better :)

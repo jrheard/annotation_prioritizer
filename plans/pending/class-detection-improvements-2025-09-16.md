@@ -1,711 +1,525 @@
-# Class Detection Improvements - Implementation Plan
+# Class Detection Improvements Implementation Plan
 
-**Date**: 2025-09-16
-**Implementation Order**: This is step 1 of 3 in the single-file accuracy improvement sequence. This MUST be completed BEFORE unresolvable-call-reporting and scope-aware-variable-tracking.
-**Timeline**: These improvements are for immediate implementation to achieve very accurate single-file analysis. Directory-wide analysis will begin in a few weeks.
-**Goal**: Replace naive `name[0].isupper()` heuristics with accurate AST-based class detection and type registry system
+**Created:** 2025-09-16
+**Status:** Pending Implementation
+**Priority:** CRITICAL - Must be completed FIRST before other improvements
+**Estimated Effort:** 3-4 hours
 
-## Problem Context
+## Executive Summary
 
-### Current Issues with Class Detection
+Replace the current naive class detection heuristic (`name[0].isupper()`) with definitive AST-based class identification. This foundational improvement is required before implementing variable tracking or unresolvable call reporting. The new system will use a simple registry approach to definitively identify classes from AST `ClassDef` nodes and Python built-in types.
 
-The project currently uses a simple `name[0].isupper()` heuristic to detect classes in several locations:
+## Problem Statement
+
+### Current Broken Behavior
+
+The call counter currently uses this naive check in `_extract_call_name()`:
 
 ```python
-# Current problematic pattern found throughout codebase:
-if name and name[0].isupper():
-    # Assume it's a class - but this is wrong!
+# Line 177 in call_counter.py
+if isinstance(func.value, ast.Name):
+    class_name = func.value.id
+    # TODO: is this right? why is `class_name` guaranteed to live directly on `__module__`?
+    return f"__module__.{class_name}.{func.attr}"
 ```
 
-**Problems with this approach:**
+This assumes ANY identifier before a dot might be a class, leading to:
 
-1. **False Positives**: Constants like `MAX_SIZE`, `API_URL` are detected as classes
-2. **False Negatives**: Non-PEP8 class names like `myClass`, `xmlParser` are missed
-3. **Built-in Types**: Standard types like `str`, `int`, `list` are missed
-4. **Import Aliases**: `from typing import List as MyList` creates detection failures
-5. **String Annotations**: Forward references like `"Calculator"` aren't handled
-
-### Examples of Current Failures
-
+**False Positives:**
 ```python
-# False positives (incorrectly detected as classes):
-MAX_RETRIES = 3  # MAX_RETRIES[0].isupper() == True
-API_ENDPOINT = "https://..."  # API_ENDPOINT[0].isupper() == True
-
-# False negatives (missed classes):
-class xmlParser:  # xmlParser[0].isupper() == False
-    pass
-
-class myCustomClass:  # myCustomClass[0].isupper() == False
-    pass
-
-# Built-in types missed:
-def process_data(items: list) -> str:  # list, str not detected
-    pass
-
-# String annotations missed:
-def create_calc() -> "Calculator":  # "Calculator" not detected
-    pass
+MAX_SIZE = 100
+result = MAX_SIZE.bit_length()  # MAX_SIZE wrongly treated as class
+DEFAULT_CONFIG = {"key": "value"}
+value = DEFAULT_CONFIG.get("key")  # DEFAULT_CONFIG wrongly treated as class
 ```
 
-## Solution Overview
+**False Negatives:**
+```python
+class xmlParser:  # Non-PEP8 class name
+    def parse(self, data): ...
 
-Implement a comprehensive class detection system that:
+parser = xmlParser()
+parser.parse(data)  # xmlParser not recognized as class
+```
 
-1. **AST-based tracking**: Use `visit_ClassDef` to track actual class definitions
-2. **Built-in type registry**: Maintain registry of Python built-in types
-3. **Confidence scoring**: Provide confidence levels for class detection
-4. **Forward reference support**: Handle string annotations and two-pass resolution
-5. **Import tracking**: Track class imports (future enhancement)
-6. **Note**: @property decorators are excluded for now but noted for potential future reconsideration
+**Critical Bug Impact:**
+```python
+class Calculator:
+    def add(self, a, b): ...
 
-## Implementation Steps
+def process():
+    calc = Calculator()  # Can't track - don't know Calculator is a class
+    return calc.add(5, 7)  # Call NOT counted - shows 0 calls!
+```
 
-### Step 1: Create Class Registry Infrastructure
+## Solution Design
 
-Create new module `src/annotation_prioritizer/class_registry.py`:
+### Core Concept: ClassRegistry
+
+A simple, immutable registry that definitively identifies classes:
 
 ```python
-"""Class detection and registry for accurate type resolution."""
-
-from dataclasses import dataclass
-from enum import StrEnum
-from typing import frozenset
-
-
-class ClassConfidence(StrEnum):
-    """Confidence levels for class detection."""
-
-    DEFINITE = "definite"      # AST-confirmed class definition
-    BUILTIN = "builtin"        # Python built-in type
-    LIKELY = "likely"          # Import or string annotation
-    UNCERTAIN = "uncertain"    # Heuristic-based guess
-
-
-@dataclass(frozen=True)
-class ClassInfo:
-    """Information about a detected class."""
-
-    name: str                  # Class name (e.g., "Calculator")
-    qualified_name: str        # Full name (e.g., "__module__.Calculator")
-    confidence: ClassConfidence # How certain we are this is a class
-    line_number: int | None    # Where defined (None for built-ins)
-    is_builtin: bool          # Whether this is a Python built-in type
-
-
 @dataclass(frozen=True)
 class ClassRegistry:
-    """Registry of all known classes in analysis scope."""
+    """Immutable registry of known classes in the analyzed code.
 
-    classes: frozenset[ClassInfo]  # All detected classes
+    Provides definitive class identification without heuristics or guessing.
+    Classes are identified from two sources:
+    1. AST ClassDef nodes found during parsing
+    2. Python built-in types (int, str, list, etc.)
+    """
+    ast_classes: frozenset[str]  # Classes found via ClassDef nodes
+    builtin_classes: frozenset[str]  # Python built-in type names
 
-    def get_class_by_name(self, name: str) -> ClassInfo | None:
-        """Get class info by simple name."""
-        for cls in self.classes:
-            if cls.name == name:
-                return cls
-        return None
+    def is_class(self, name: str) -> bool:
+        """Check if a name is definitively known to be a class.
 
-    def get_class_by_qualified_name(self, qualified_name: str) -> ClassInfo | None:
-        """Get class info by qualified name."""
-        for cls in self.classes:
-            if cls.qualified_name == qualified_name:
-                return cls
-        return None
+        Returns True only for names we're certain are classes.
+        Conservative approach: False for unknowns rather than guessing.
+        """
+        return name in self.ast_classes or name in self.builtin_classes
 
-    def is_class_name(self, name: str) -> bool:
-        """Check if name is a known class."""
-        return self.get_class_by_name(name) is not None
-
-    def get_confidence(self, name: str) -> ClassConfidence | None:
-        """Get confidence level for a class name."""
-        cls = self.get_class_by_name(name)
-        return cls.confidence if cls else None
-
-
-def create_builtin_registry() -> frozenset[ClassInfo]:
-    """Create registry of Python built-in types."""
-    builtin_types = {
-        # Basic types
-        "int", "float", "str", "bool", "bytes", "bytearray",
-        # Collections
-        "list", "tuple", "dict", "set", "frozenset",
-        # Other built-ins
-        "object", "type", "None", "slice", "range",
-        "memoryview", "property", "staticmethod", "classmethod",
-        # Exception types (commonly used in annotations)
-        "Exception", "ValueError", "TypeError", "AttributeError",
-        "KeyError", "IndexError", "RuntimeError", "NotImplementedError",
-    }
-
-    return frozenset(
-        ClassInfo(
-            name=name,
-            qualified_name=f"builtins.{name}",
-            confidence=ClassConfidence.BUILTIN,
-            line_number=None,
-            is_builtin=True,
+    def merge(self, other: "ClassRegistry") -> "ClassRegistry":
+        """Merge with another registry (for multi-file analysis future)."""
+        return ClassRegistry(
+            ast_classes=self.ast_classes | other.ast_classes,
+            builtin_classes=self.builtin_classes  # Built-ins never change
         )
-        for name in builtin_types
-    )
 ```
 
-### Step 2: Implement AST-based Class Visitor
-
-Add class detection to existing AST visitors. Update `function_parser.py`:
+### Built-in Types Registry
 
 ```python
-# Add to FunctionDefinitionVisitor class:
+# In models.py or a new class_registry.py module
+PYTHON_BUILTIN_TYPES: frozenset[str] = frozenset({
+    # Fundamental types
+    "int", "float", "complex", "bool", "str", "bytes", "bytearray", "memoryview",
 
-def __init__(self, file_path: str) -> None:
-    """Initialize the visitor with source file context."""
-    super().__init__()
-    self.functions: list[FunctionInfo] = []
-    self._file_path = file_path
-    self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
-    # New: Track class definitions
-    self._discovered_classes: list[ClassInfo] = []
+    # Collections
+    "list", "tuple", "dict", "set", "frozenset", "range",
 
-@override
-def visit_ClassDef(self, node: ast.ClassDef) -> None:
-    """Track class definitions and scope context."""
-    # Record the class definition
-    qualified_name = self._build_qualified_name(node.name)
-    class_info = ClassInfo(
-        name=node.name,
-        qualified_name=qualified_name,
-        confidence=ClassConfidence.DEFINITE,
-        line_number=node.lineno,
-        is_builtin=False,
-    )
-    self._discovered_classes.append(class_info)
+    # Base types
+    "object", "type", "super",
 
-    # Continue with existing scope tracking
-    self._scope_stack.append(Scope(kind=ScopeKind.CLASS, name=node.name))
-    self.generic_visit(node)
-    self._scope_stack.pop()
+    # Common exception base classes
+    "Exception", "BaseException", "StopIteration", "GeneratorExit",
+    "KeyboardInterrupt", "SystemExit",
 
-# Add public method to access discovered classes
-def get_discovered_classes(self) -> tuple[ClassInfo, ...]:
-    """Get all classes discovered during AST traversal."""
-    return tuple(self._discovered_classes)
+    # Other common built-ins that are classes
+    "property", "staticmethod", "classmethod",
+    "enumerate", "filter", "map", "zip", "reversed",
+
+    # Type-related (for annotations)
+    "type", "None", "NotImplemented", "Ellipsis",
+})
 ```
 
-### Step 3: Create Two-Pass Analysis System
-
-Implement forward reference resolution in new module `src/annotation_prioritizer/type_resolver.py`:
+### AST Visitor for Class Discovery
 
 ```python
-"""Two-pass type resolution for handling forward references."""
+class ClassDiscoveryVisitor(ast.NodeVisitor):
+    """Discovers all class definitions in an AST.
 
-import ast
-from typing import override
-from .models import FunctionInfo
-from .class_registry import ClassRegistry, ClassInfo, ClassConfidence
-
-
-class StringAnnotationExtractor(ast.NodeVisitor):
-    """Extract type names from string annotations."""
+    Builds a registry of class names with their scope context.
+    Handles nested classes correctly using the scope stack.
+    """
 
     def __init__(self) -> None:
         super().__init__()
-        self.extracted_types: set[str] = set()
+        self.class_names: list[str] = []
+        self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
 
     @override
-    def visit_Constant(self, node: ast.Constant) -> None:
-        """Extract type names from string constants in annotations."""
-        if isinstance(node.value, str):
-            # Simple extraction - just look for bare identifiers
-            # More sophisticated parsing would handle Union["A", "B"] etc.
-            type_name = node.value.strip().strip('"').strip("'")
-            if type_name.isidentifier():
-                self.extracted_types.add(type_name)
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        """Record class definition with full qualified name."""
+        # Build qualified name from current scope
+        scope_names = [scope.name for scope in self._scope_stack]
+        qualified_name = ".".join([*scope_names, node.name])
+        self.class_names.append(qualified_name)
+
+        # Push class scope and continue traversal for nested classes
+        self._scope_stack.append(Scope(kind=ScopeKind.CLASS, name=node.name))
         self.generic_visit(node)
+        self._scope_stack.pop()
 
+    @override
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Track function scope for nested classes inside functions."""
+        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self.generic_visit(node)
+        self._scope_stack.pop()
 
-def extract_string_annotation_types(functions: tuple[FunctionInfo, ...]) -> frozenset[str]:
-    """Extract all type names from string annotations in functions."""
-    # This is a simplified implementation
-    # Real implementation would parse the original AST and extract
-    # string annotation contents, then parse those as type expressions
-
-    # For now, return empty set - this will be enhanced in implementation
-    return frozenset()
-
-
-def build_complete_class_registry(
-    ast_classes: tuple[ClassInfo, ...],
-    string_annotation_types: frozenset[str],
-) -> ClassRegistry:
-    """Build complete class registry from multiple sources."""
-
-    all_classes = set(ast_classes)
-
-    # Add built-in types
-    all_classes.update(create_builtin_registry())
-
-    # Add string annotation types with lower confidence
-    for type_name in string_annotation_types:
-        # Only add if not already known with higher confidence
-        if not any(cls.name == type_name for cls in all_classes):
-            all_classes.add(ClassInfo(
-                name=type_name,
-                qualified_name=f"__module__.{type_name}",  # Assume module scope
-                confidence=ClassConfidence.LIKELY,
-                line_number=None,
-                is_builtin=False,
-            ))
-
-    return ClassRegistry(classes=frozenset(all_classes))
+    @override
+    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+        """Track async function scope for nested classes."""
+        self._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self.generic_visit(node)
+        self._scope_stack.pop()
 ```
 
-### Step 4: Integrate Registry with Call Counter
-
-Update `call_counter.py` to use class registry instead of heuristics:
+### Registry Builder Function
 
 ```python
-# Add to CallCountVisitor.__init__():
-def __init__(self, known_functions: tuple[FunctionInfo, ...], class_registry: ClassRegistry) -> None:
-    """Initialize visitor with functions to track and class registry."""
-    super().__init__()
-    self.call_counts: dict[str, int] = {func.qualified_name: 0 for func in known_functions}
-    self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
-    # New: Use class registry for accurate class detection
-    self._class_registry = class_registry
+def build_class_registry(tree: ast.AST) -> ClassRegistry:
+    """Build a complete class registry from an AST.
 
-# Update _extract_call_name method:
-def _extract_call_name(self, node: ast.Call) -> str | None:
-    """Extract the qualified name of the called function."""
-    func = node.func
+    Pure function that discovers all class definitions in the AST
+    and combines them with Python built-in types.
 
-    # Direct calls to functions: function_name()
-    if isinstance(func, ast.Name):
-        return self._resolve_function_call(func.id)
+    Args:
+        tree: Parsed AST of Python source code
 
-    # Method calls: obj.method_name()
-    if isinstance(func, ast.Attribute):
-        # Self method calls: self.method_name()
-        if isinstance(func.value, ast.Name) and func.value.id == "self":
-            scope_names = [scope.name for scope in self._scope_stack if scope.kind != ScopeKind.FUNCTION]
-            return ".".join([*scope_names, func.attr])
+    Returns:
+        Immutable ClassRegistry with all discovered classes
+    """
+    visitor = ClassDiscoveryVisitor()
+    visitor.visit(tree)
 
-        # Static/class method calls: ClassName.method_name()
-        if isinstance(func.value, ast.Name):
-            class_name = func.value.id
-            # NEW: Use registry instead of heuristic
-            if self._class_registry.is_class_name(class_name):
-                return f"__module__.{class_name}.{func.attr}"
+    return ClassRegistry(
+        ast_classes=frozenset(visitor.class_names),
+        builtin_classes=PYTHON_BUILTIN_TYPES
+    )
+```
 
-        # Complex qualified calls
-        if isinstance(func.value, ast.Attribute):
-            return f"__module__.{func.attr}"
+## Integration Points
 
+### 1. Update call_counter.py
+
+The `CallCountVisitor` needs to accept and use a `ClassRegistry`:
+
+```python
+class CallCountVisitor(ast.NodeVisitor):
+    def __init__(self, known_functions: tuple[FunctionInfo, ...], class_registry: ClassRegistry) -> None:
+        super().__init__()
+        self.call_counts: dict[str, int] = {func.qualified_name: 0 for func in known_functions}
+        self.class_registry = class_registry  # NEW
+        self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
+
+    def _extract_call_name(self, node: ast.Call) -> str | None:
+        """Extract the qualified name of the called function."""
+        func = node.func
+
+        # ... existing code for direct calls ...
+
+        # Method calls: obj.method_name()
+        if isinstance(func, ast.Attribute):
+            # ... existing self.method() handling ...
+
+            # Static/class method calls: ClassName.method_name()
+            if isinstance(func.value, ast.Name):
+                potential_class = func.value.id
+
+                # NEW: Only treat as class method if definitively a class
+                if self.class_registry.is_class(f"__module__.{potential_class}"):
+                    return f"__module__.{potential_class}.{func.attr}"
+
+                # Otherwise, it might be a variable - return None for now
+                # (Will be handled by variable tracking in Step 3)
+                return None
+```
+
+Update the main entry point:
+
+```python
+def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ...]) -> tuple[CallCount, ...]:
+    """Count calls to known functions within the same file using AST parsing."""
+    file_path_obj = Path(file_path)
+    if not file_path_obj.exists():
+        return ()
+
+    try:
+        source_code = file_path_obj.read_text(encoding="utf-8")
+        tree = ast.parse(source_code, filename=file_path)
+    except (OSError, SyntaxError):
+        return ()
+
+    # NEW: Build class registry first
+    class_registry = build_class_registry(tree)
+
+    # Pass registry to visitor
+    visitor = CallCountVisitor(known_functions, class_registry)
+    visitor.visit(tree)
+
+    return tuple(
+        CallCount(function_qualified_name=name, call_count=count)
+        for name, count in visitor.call_counts.items()
+    )
+```
+
+### 2. Support String Annotations
+
+For handling forward references and string annotations:
+
+```python
+def extract_class_from_annotation(annotation: ast.AST) -> str | None:
+    """Extract class name from a type annotation.
+
+    Handles both direct Name nodes and Constant string annotations.
+    Returns the class name if found, None otherwise.
+
+    Examples:
+        Calculator -> "Calculator"
+        "Calculator" -> "Calculator"
+        Optional[Calculator] -> None (too complex)
+    """
+    if isinstance(annotation, ast.Name):
+        return annotation.id
+    elif isinstance(annotation, ast.Constant) and isinstance(annotation.value, str):
+        # String annotation like "Calculator"
+        # Simple extraction - just the string value
+        # Don't try to parse complex types
+        if "[" not in annotation.value and "|" not in annotation.value:
+            return annotation.value
     return None
 ```
 
-### Step 5: Update Main Analysis Pipeline
+### 3. Two-Pass Analysis Support
 
-Update `analyzer.py` to incorporate class registry:
-
-```python
-# Add import
-from .type_resolver import build_complete_class_registry, extract_string_annotation_types
-
-def analyze_file(file_path: str) -> tuple[FunctionPriority, ...]:
-    """Analyze a file and return prioritized functions."""
-    # Parse functions (now also extracts classes)
-    visitor = FunctionDefinitionVisitor(file_path)
-    tree = ast.parse(Path(file_path).read_text(encoding="utf-8"))
-    visitor.visit(tree)
-
-    functions = visitor.get_functions()
-    ast_classes = visitor.get_discovered_classes()
-
-    # Extract string annotation types
-    string_types = extract_string_annotation_types(functions)
-
-    # Build complete class registry
-    class_registry = build_complete_class_registry(ast_classes, string_types)
-
-    # Count calls using class registry
-    call_counts = count_function_calls(file_path, functions, class_registry)
-
-    # Continue with existing analysis...
-```
-
-### Step 6: Add Comprehensive Test Coverage
-
-Create `tests/unit/test_class_registry.py`:
+The system already does two passes for forward references. Leverage this:
 
 ```python
-"""Tests for class detection and registry system."""
-
-import pytest
-from annotation_prioritizer.class_registry import (
-    ClassRegistry, ClassInfo, ClassConfidence, create_builtin_registry
-)
-
-
-def test_builtin_registry_contains_common_types():
-    """Test that built-in registry includes expected types."""
-    registry = create_builtin_registry()
-    builtin_names = {cls.name for cls in registry}
-
-    # Check essential built-in types are present
-    expected_types = {"int", "str", "list", "dict", "Exception"}
-    assert expected_types.issubset(builtin_names)
-
-    # Check all built-ins have correct properties
-    for cls in registry:
-        assert cls.confidence == ClassConfidence.BUILTIN
-        assert cls.is_builtin is True
-        assert cls.line_number is None
-        assert cls.qualified_name.startswith("builtins.")
-
-
-def test_class_registry_lookup_by_name():
-    """Test class registry name-based lookup."""
-    classes = frozenset([
-        ClassInfo("Calculator", "__module__.Calculator", ClassConfidence.DEFINITE, 10, False),
-        ClassInfo("Parser", "__module__.Parser", ClassConfidence.DEFINITE, 20, False),
-    ])
-    registry = ClassRegistry(classes)
-
-    # Successful lookup
-    calc = registry.get_class_by_name("Calculator")
-    assert calc is not None
-    assert calc.name == "Calculator"
-    assert calc.line_number == 10
-
-    # Failed lookup
-    assert registry.get_class_by_name("NonExistent") is None
-
-
-@pytest.mark.parametrize("test_input,expected", [
-    ("Calculator", True),   # Known class
-    ("Parser", True),       # Known class
-    ("UnknownClass", False), # Unknown class
-])
-def test_is_class_name_detection(test_input: str, expected: bool):
-    """Test class name detection with various inputs."""
-    classes = frozenset([
-        ClassInfo("Calculator", "__module__.Calculator", ClassConfidence.DEFINITE, 10, False),
-        ClassInfo("Parser", "__module__.Parser", ClassConfidence.DEFINITE, 20, False),
-    ])
-    registry = ClassRegistry(classes)
-
-    assert registry.is_class_name(test_input) == expected
-
-
-def test_confidence_level_retrieval():
-    """Test retrieving confidence levels for class names."""
-    classes = frozenset([
-        ClassInfo("Calculator", "__module__.Calculator", ClassConfidence.DEFINITE, 10, False),
-        ClassInfo("MaybeClass", "__module__.MaybeClass", ClassConfidence.LIKELY, None, False),
-    ])
-    registry = ClassRegistry(classes)
-
-    assert registry.get_confidence("Calculator") == ClassConfidence.DEFINITE
-    assert registry.get_confidence("MaybeClass") == ClassConfidence.LIKELY
-    assert registry.get_confidence("NonExistent") is None
-```
-
-Create `tests/unit/test_class_detection.py`:
-
-```python
-"""Tests for AST-based class detection."""
-
-import ast
-import pytest
-from annotation_prioritizer.function_parser import FunctionDefinitionVisitor
-from annotation_prioritizer.class_registry import ClassInfo, ClassConfidence
-
-
-def test_class_definition_detection():
-    """Test detection of class definitions via AST."""
-    source = '''
-class Calculator:
-    def add(self, a, b):
-        return a + b
-
-class Parser:
-    pass
-
-def function():
-    pass
-'''
-
-    tree = ast.parse(source)
-    visitor = FunctionDefinitionVisitor("test.py")
-    visitor.visit(tree)
-
-    classes = visitor.get_discovered_classes()
-    assert len(classes) == 2
-
-    # Check Calculator class
-    calc_class = next(cls for cls in classes if cls.name == "Calculator")
-    assert calc_class.qualified_name == "__module__.Calculator"
-    assert calc_class.confidence == ClassConfidence.DEFINITE
-    assert calc_class.line_number == 2  # Line where class is defined
-    assert calc_class.is_builtin is False
-
-
-def test_nested_class_detection():
-    """Test detection of nested classes."""
-    source = '''
-class Outer:
-    class Inner:
-        def method(self):
-            pass
-
-    def outer_method(self):
-        pass
-'''
-
-    tree = ast.parse(source)
-    visitor = FunctionDefinitionVisitor("test.py")
-    visitor.visit(tree)
-
-    classes = visitor.get_discovered_classes()
-    class_names = {cls.qualified_name for cls in classes}
-
-    assert "__module__.Outer" in class_names
-    assert "__module__.Outer.Inner" in class_names
-
-
-@pytest.mark.parametrize("source,expected_classes", [
-    # Empty file
-    ("", []),
-    # Only functions
-    ("def func(): pass", []),
-    # Only classes
-    ("class A: pass\nclass B: pass", ["__module__.A", "__module__.B"]),
-    # Mixed content
-    ("class A: pass\ndef func(): pass\nclass B: pass", ["__module__.A", "__module__.B"]),
-])
-def test_class_detection_edge_cases(source: str, expected_classes: list[str]):
-    """Test class detection with various source code patterns."""
-    tree = ast.parse(source)
-    visitor = FunctionDefinitionVisitor("test.py")
-    visitor.visit(tree)
-
-    classes = visitor.get_discovered_classes()
-    actual_names = [cls.qualified_name for cls in classes]
-
-    assert sorted(actual_names) == sorted(expected_classes)
-```
-
-Create `tests/integration/test_class_detection_integration.py`:
-
-```python
-"""Integration tests for class detection improvements."""
-
-import tempfile
-from pathlib import Path
-from annotation_prioritizer.analyzer import analyze_file
-
-
-def test_class_detection_fixes_false_positives():
-    """Test that constants are not detected as classes."""
-    source = '''
-MAX_RETRIES = 3
-API_ENDPOINT = "https://example.com"
-
-class Calculator:
-    def add(self, a, b):
-        return a + b
-
-def process():
-    calc = Calculator()
-    return calc.add(1, 2)
-'''
-
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        try:
-            priorities = analyze_file(f.name)
-
-            # Calculator.add should be detected and have calls counted
-            calc_add = next((p for p in priorities if "Calculator.add" in p.function_info.qualified_name), None)
-            assert calc_add is not None
-            assert calc_add.call_count == 1  # Should count calc.add(1, 2)
-
-        finally:
-            Path(f.name).unlink()
-
-
-def test_class_detection_handles_non_pep8_names():
-    """Test that non-PEP8 class names are detected correctly."""
-    source = '''
-class xmlParser:  # Non-PEP8 name
-    def parse(self, data):
-        return data
-
-class myCustomClass:  # Another non-PEP8 name
-    def process(self):
-        pass
-
-def use_classes():
-    parser = xmlParser()
-    custom = myCustomClass()
-    parser.parse("data")
-    custom.process()
-'''
-
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        try:
-            priorities = analyze_file(f.name)
-
-            # Both methods should be detected and have calls counted
-            parser_parse = next((p for p in priorities if "xmlParser.parse" in p.function_info.qualified_name), None)
-            custom_process = next((p for p in priorities if "myCustomClass.process" in p.function_info.qualified_name), None)
-
-            assert parser_parse is not None
-            assert parser_parse.call_count == 1
-
-            assert custom_process is not None
-            assert custom_process.call_count == 1
-
-        finally:
-            Path(f.name).unlink()
-
-
-def test_builtin_type_recognition():
-    """Test that built-in types are recognized correctly."""
-    source = '''
-def process_data(items: list) -> str:
-    return str(len(items))
-
-def call_builtin_methods():
-    data = [1, 2, 3]
-    result = str.join(",", ["a", "b"])  # str.join static method call
-    return result
-'''
-
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.py', delete=False) as f:
-        f.write(source)
-        f.flush()
-
-        try:
-            priorities = analyze_file(f.name)
-
-            # Should not crash and should handle built-in types gracefully
-            # This is more of a regression test to ensure no errors occur
-            assert len(priorities) >= 1  # At least process_data should be found
-
-        finally:
-            Path(f.name).unlink()
-```
-
-### Step 7: Performance Considerations
-
-Since class detection adds overhead, ensure efficient implementation:
-
-```python
-# In ClassRegistry, use frozenset for O(1) lookups
-@dataclass(frozen=True)
-class ClassRegistry:
-    classes: frozenset[ClassInfo]
-    # Cache for fast lookups
-    _name_lookup: dict[str, ClassInfo] = field(init=False)
-    _qualified_name_lookup: dict[str, ClassInfo] = field(init=False)
-
-    def __post_init__(self):
-        # Build lookup caches
-        name_lookup = {}
-        qualified_lookup = {}
-        for cls in self.classes:
-            name_lookup[cls.name] = cls
-            qualified_lookup[cls.qualified_name] = cls
-
-        object.__setattr__(self, '_name_lookup', name_lookup)
-        object.__setattr__(self, '_qualified_name_lookup', qualified_lookup)
-
-    def get_class_by_name(self, name: str) -> ClassInfo | None:
-        """O(1) lookup by simple name."""
-        return self._name_lookup.get(name)
-```
-
-## Future Work
-
-### Phase 2: Import Resolution
-Once basic class detection is working, enhance with import tracking:
-
-```python
-# Track imports in AST visitor
-@override
-def visit_Import(self, node: ast.Import) -> None:
-    """Track imported modules and classes."""
-    for alias in node.names:
-        # Track: import module, import module as alias
-        pass
-
-@override
-def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-    """Track from-imports of classes."""
-    for alias in node.names:
-        # Track: from module import Class, from module import Class as Alias
-        pass
-```
-
-### Phase 3: String Annotation Parsing
-Enhance string annotation handling:
-
-```python
-def parse_string_annotation(annotation: str) -> set[str]:
-    """Parse string annotation to extract type names."""
-    # Handle complex cases:
-    # "Union[Calculator, Parser]" -> {"Calculator", "Parser"}
-    # "List[Calculator]" -> {"List", "Calculator"}
-    # "Optional[Calculator]" -> {"Optional", "Calculator"}
-    pass
-```
-
-### Phase 4: Property Decorator Support
-Add support for `@property` decorated methods:
-
-```python
-@override
-def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-    """Process function, checking for property decorators."""
-    has_property = any(
-        isinstance(dec, ast.Name) and dec.id == "property"
-        for dec in node.decorator_list
+# In analyzer.py or wherever the main analysis happens
+def analyze_file(file_path: str) -> ...:
+    """Main analysis with two-pass support."""
+
+    # First pass: Parse and build registries
+    tree = ast.parse(source_code)
+    class_registry = build_class_registry(tree)
+    function_infos = parse_function_definitions(file_path)
+
+    # Second pass: Count calls with full context
+    call_counts = count_function_calls_with_registry(
+        file_path, function_infos, class_registry
     )
 
-    if has_property:
-        # Properties are accessed like attributes, not called like methods
-        # This affects call counting logic
-        pass
+    # ... rest of analysis ...
 ```
+
+## Testing Strategy
+
+### Unit Tests
+
+1. **Test ClassRegistry**
+```python
+def test_class_registry_identifies_ast_classes():
+    registry = ClassRegistry(
+        ast_classes=frozenset(["__module__.Calculator", "__module__.Parser"]),
+        builtin_classes=frozenset(["int", "str"])
+    )
+    assert registry.is_class("__module__.Calculator") is True
+    assert registry.is_class("int") is True
+    assert registry.is_class("MAX_SIZE") is False
+    assert registry.is_class("unknown") is False
+
+def test_class_registry_merge():
+    registry1 = ClassRegistry(
+        ast_classes=frozenset(["__module__.ClassA"]),
+        builtin_classes=PYTHON_BUILTIN_TYPES
+    )
+    registry2 = ClassRegistry(
+        ast_classes=frozenset(["__module__.ClassB"]),
+        builtin_classes=PYTHON_BUILTIN_TYPES
+    )
+    merged = registry1.merge(registry2)
+    assert merged.is_class("__module__.ClassA") is True
+    assert merged.is_class("__module__.ClassB") is True
+```
+
+2. **Test Class Discovery**
+```python
+@pytest.mark.parametrize("source_code,expected_classes", [
+    # Simple class
+    ("""
+class Calculator:
+    pass
+""", ["__module__.Calculator"]),
+
+    # Nested class
+    ("""
+class Outer:
+    class Inner:
+        pass
+""", ["__module__.Outer", "__module__.Outer.Inner"]),
+
+    # Non-PEP8 names
+    ("""
+class xmlParser:
+    pass
+class dataProcessor:
+    pass
+""", ["__module__.xmlParser", "__module__.dataProcessor"]),
+
+    # Class in function (edge case)
+    ("""
+def factory():
+    class LocalClass:
+        pass
+    return LocalClass
+""", ["__module__.factory.LocalClass"]),
+])
+def test_class_discovery_visitor(source_code, expected_classes):
+    tree = ast.parse(source_code)
+    registry = build_class_registry(tree)
+    for class_name in expected_classes:
+        assert class_name in registry.ast_classes
+```
+
+3. **Test False Positive Elimination**
+```python
+def test_constants_not_treated_as_classes():
+    source = """
+MAX_SIZE = 100
+DEFAULT_CONFIG = {}
+PI = 3.14
+
+def use_constants():
+    MAX_SIZE.bit_length()  # Should NOT be counted as class method
+    DEFAULT_CONFIG.get("key")  # Should NOT be counted
+    int.from_bytes(b"test", "big")  # Should be counted (int is built-in)
+"""
+    tree = ast.parse(source)
+    registry = build_class_registry(tree)
+
+    assert registry.is_class("MAX_SIZE") is False
+    assert registry.is_class("DEFAULT_CONFIG") is False
+    assert registry.is_class("PI") is False
+    assert registry.is_class("int") is True  # Built-in
+```
+
+### Integration Tests
+
+1. **Test End-to-End with New Registry**
+```python
+def test_class_method_calls_with_registry():
+    test_file = write_temp_file("""
+class Calculator:
+    def add(self, a, b):
+        return a + b
+
+class Processor:
+    def process(self, data):
+        return data
+
+def main():
+    Calculator.add(None, 1, 2)  # Should count
+    Processor.process(None, "data")  # Should count
+    UnknownClass.method()  # Should NOT count
+    CONSTANT.method()  # Should NOT count
+""")
+
+    functions = parse_function_definitions(test_file)
+    counts = count_function_calls(test_file, functions)
+
+    calc_add = next(c for c in counts if "Calculator.add" in c.function_qualified_name)
+    proc_process = next(c for c in counts if "Processor.process" in c.function_qualified_name)
+
+    assert calc_add.call_count == 1
+    assert proc_process.call_count == 1
+```
+
+2. **Test Forward References**
+```python
+def test_forward_reference_handling():
+    test_file = write_temp_file("""
+def process(calc: "Calculator"):  # Forward reference
+    return calc.add(1, 2)  # Won't work until variable tracking
+
+class Calculator:
+    def add(self, a, b):
+        return a + b
+""")
+
+    tree = ast.parse(read_file(test_file))
+    registry = build_class_registry(tree)
+
+    # Calculator should be in registry even though used before defined
+    assert registry.is_class("__module__.Calculator") is True
+```
+
+## Implementation Steps
+
+1. **Add ClassRegistry to models.py** (30 min)
+   - Define `ClassRegistry` dataclass
+   - Add `PYTHON_BUILTIN_TYPES` constant
+   - Add helper functions
+
+2. **Create ClassDiscoveryVisitor** (45 min)
+   - Implement in call_counter.py or new module
+   - Handle nested classes and scopes
+   - Build qualified names correctly
+
+3. **Update CallCountVisitor** (1 hour)
+   - Accept ClassRegistry parameter
+   - Update `_extract_call_name()` to use registry
+   - Remove naive heuristics
+
+4. **Update count_function_calls()** (30 min)
+   - Build registry from AST
+   - Pass to visitor
+
+5. **Write comprehensive tests** (1 hour)
+   - Unit tests for ClassRegistry
+   - Unit tests for ClassDiscoveryVisitor
+   - Integration tests for call counting
+   - Edge case coverage
+
+6. **Update documentation** (15 min)
+   - Update docstrings
+   - Update project_status.md
 
 ## Success Criteria
 
-1. **Accuracy**: No more false positives from constants like `MAX_SIZE`
-2. **Completeness**: Non-PEP8 class names like `xmlParser` are detected
-3. **Built-in Support**: Standard types like `str`, `list` are recognized
-4. **Performance**: No significant slowdown in analysis time
-5. **Test Coverage**: 100% coverage maintained for all new code
-6. **Integration**: Works seamlessly with existing scope infrastructure
+1. **No False Positives**: Constants like `MAX_SIZE` are never treated as classes
+2. **No False Negatives**: Non-PEP8 class names like `xmlParser` are correctly identified
+3. **Built-in Support**: Python built-in types are recognized
+4. **Nested Classes**: Correctly handle `Outer.Inner` patterns
+5. **100% Test Coverage**: All new code has tests
+6. **No Breaking Changes**: Existing tests still pass
 
-## Dependencies
+## Future Considerations
 
-- **Scope Infrastructure**: ✅ Already implemented (typed `Scope`/`ScopeKind`)
-- **AST Visitor Pattern**: ✅ Already established in function parser and call counter
-- **Frozen Dataclass Pattern**: ✅ Already used throughout project
-- **Pure Function Design**: ✅ Follows project's functional programming style
+### What This Enables
 
-## Implementation Notes
+1. **Variable Tracking** (Step 3): With accurate class detection, we can track `calc = Calculator()` assignments
+2. **Better Error Reporting**: Can distinguish "not a class" from "unknown class"
+3. **Import Resolution**: Foundation for tracking imported classes
 
-1. **Start Small**: Begin with basic AST-based detection before adding complexity
-2. **Maintain Backward Compatibility**: Ensure existing function parser interface unchanged
-3. **Conservative Approach**: When uncertain about class detection, prefer lower confidence over false positives
-4. **Test-Driven**: Write tests for each component before implementation
-5. **Document Edge Cases**: Clear documentation of what is and isn't supported
+### What We're NOT Doing Yet
 
-This plan provides a solid foundation for accurate class detection while maintaining the project's design principles and test coverage requirements.
+1. **@property Support**: Properties look like attributes but are methods. Consider adding later.
+2. **@dataclass Fields**: Typed fields in dataclasses could be tracked. Future enhancement.
+3. **Type Alias Support**: `TypeAlias = List[str]` - too complex for now
+4. **Generic Classes**: `class Container[T]` - beyond current scope
+
+## Risk Mitigation
+
+1. **Performance**: Building registry adds minimal overhead (one extra AST traversal)
+2. **Compatibility**: Changes are backward compatible - just more accurate
+3. **Complexity**: Simple set membership check - no complex logic
+
+## Code Location
+
+- `src/annotation_prioritizer/models.py`: Add ClassRegistry and PYTHON_BUILTIN_TYPES
+- `src/annotation_prioritizer/call_counter.py`: Update CallCountVisitor and add ClassDiscoveryVisitor
+- `tests/unit/test_class_registry.py`: New test file for registry tests
+- `tests/integration/test_class_detection.py`: Integration tests for full flow
+
+## Dependencies on Other Work
+
+- **Depends On**: Completed scope infrastructure (✅ DONE)
+- **Blocks**: Unresolvable call reporting (can't report what we can't identify)
+- **Blocks**: Variable tracking (need to know what's a class to track instantiations)
+
+## Notes for Implementation
+
+1. Start with the simplest approach - just a set of names
+2. Don't over-engineer for future multi-file support yet
+3. Keep the registry immutable for functional style
+4. Use existing Scope infrastructure - don't reinvent
+5. Conservative approach: When in doubt, return False for `is_class()`
+
+---
+
+**Next Steps After This:**
+1. Implement unresolvable call reporting (requires knowing what's a class)
+2. Then implement variable tracking (requires both class detection and unresolvable reporting)
