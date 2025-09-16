@@ -320,3 +320,7 @@ TODO think about when to implement import support. should we do this before or a
 TODO is there any way to simplify / condense _resolve_class_name and _resolve_compound_class_name?
 
 TODO make sure test filenames match the prod filenames; add this to claude.md
+
+ok man i am way down into a rabbit hole
+
+LESSON LEARNED: SERIOUSLY ONLY LET IT DO ONE COMMIT AT A TIME

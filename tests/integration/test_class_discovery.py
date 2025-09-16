@@ -1,4 +1,4 @@
-"""Integration tests for class detection improvements."""
+"""Integration tests for class_discovery.py's functionality."""
 
 from annotation_prioritizer.analyzer import analyze_file
 from annotation_prioritizer.call_counter import count_function_calls
@@ -79,9 +79,13 @@ class Outer:
         def process(self):
             return "processing"
 
-    def use_inner(self):
-        # Should resolve to __module__.Outer.Inner.process
+    def use_inner_qualified(self):
+        # Fully qualified reference
         return Outer.Inner.process(None)
+
+    def use_inner_unqualified(self):
+        # Unqualified reference - should still resolve to __module__.Outer.Inner.process
+        return Inner.process(None)
 
 def use_at_module():
     # This will be counted
@@ -94,8 +98,8 @@ def use_at_module():
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
-        # Both calls to Outer.Inner.process should be counted
-        assert call_counts["__module__.Outer.Inner.process"] == 2
+        # All three calls to Outer.Inner.process should be counted
+        assert call_counts["__module__.Outer.Inner.process"] == 3
 
 
 def test_builtin_type_method_calls() -> None:
@@ -222,13 +226,21 @@ class Outer:
         def inner_method(self):
             return "inner"
 
-    def use_inner_same_scope(self):
-        # Inside Outer, Inner should resolve correctly
+    def use_inner_qualified(self):
+        # Fully qualified reference inside Outer
         return Outer.Inner.inner_method(None)
+
+    def use_inner_unqualified(self):
+        # Unqualified reference - should resolve from Outer scope
+        return Inner.inner_method(None)
 
     class AnotherInner:
         def another_method(self):
-            # From AnotherInner, should still resolve Inner correctly
+            # From AnotherInner, using unqualified Inner
+            return Inner.inner_method(None)
+
+        def another_method_qualified(self):
+            # From AnotherInner, using qualified reference
             return Outer.Inner.inner_method(None)
 
 def module_level_use():
@@ -241,8 +253,8 @@ def module_level_use():
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
-        # All three calls to Outer.Inner.inner_method should be counted
-        assert call_counts["__module__.Outer.Inner.inner_method"] == 3
+        # All five calls to Outer.Inner.inner_method should be counted
+        assert call_counts["__module__.Outer.Inner.inner_method"] == 5
 
 
 def test_camelcase_vs_constants() -> None:

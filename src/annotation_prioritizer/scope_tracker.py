@@ -26,6 +26,8 @@ class ScopeState:
     current position in the AST. Always starts with a module scope that cannot
     be popped.
 
+    TODO: when we support multiple files, should we replace __module__ with foo/bar/baz.py?
+
     Usage:
         state = ScopeState()
         state.push(Scope(kind=ScopeKind.CLASS, name="MyClass"))
