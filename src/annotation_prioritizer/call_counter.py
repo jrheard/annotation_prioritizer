@@ -30,7 +30,8 @@ import ast
 from pathlib import Path
 from typing import override
 
-from .models import CallCount, FunctionInfo, Scope, ScopeKind
+from annotation_prioritizer.class_discovery import ClassRegistry, build_class_registry
+from annotation_prioritizer.models import CallCount, FunctionInfo, Scope, ScopeKind
 
 
 def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ...]) -> tuple[CallCount, ...]:
@@ -60,7 +61,8 @@ def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ..
     except (OSError, SyntaxError):
         return ()
 
-    visitor = CallCountVisitor(known_functions)
+    class_registry = build_class_registry(tree)
+    visitor = CallCountVisitor(known_functions, class_registry)
     visitor.visit(tree)
 
     return tuple(
@@ -81,7 +83,7 @@ class CallCountVisitor(ast.NodeVisitor):
         After calling visit() on an AST tree, access the 'call_counts' dictionary
         to retrieve the updated call counts for each function:
 
-        >>> visitor = CallCountVisitor(known_functions)
+        >>> visitor = CallCountVisitor(known_functions, class_registry)
         >>> visitor.visit(tree)
         >>> call_counts = visitor.call_counts
 
@@ -101,15 +103,17 @@ class CallCountVisitor(ast.NodeVisitor):
     to their qualified names (e.g., "__module__.Calculator.add").
     """
 
-    def __init__(self, known_functions: tuple[FunctionInfo, ...]) -> None:
-        """Initialize visitor with functions to track.
+    def __init__(self, known_functions: tuple[FunctionInfo, ...], class_registry: ClassRegistry) -> None:
+        """Initialize visitor with functions to track and class registry.
 
         Args:
-            known_functions: Functions to count calls for, matched by qualified_name
+            known_functions: Functions to count calls for
+            class_registry: Registry of known classes for definitive identification
         """
         super().__init__()
         # Create internal call count tracking from known functions
         self.call_counts: dict[str, int] = {func.qualified_name: 0 for func in known_functions}
+        self._class_registry = class_registry
         # Internal: Tracks current scope context during traversal for building qualified names.
         # Stack is pushed when entering a scope (class or function) and popped when exiting.
         # Always starts with module scope as the root.
@@ -158,41 +162,80 @@ class CallCountVisitor(ast.NodeVisitor):
         func = node.func
 
         # Direct calls to functions: function_name()
-        # Try to resolve to nested functions first, then fall back to module level
         if isinstance(func, ast.Name):
             return self._resolve_function_call(func.id)
 
         # Method calls: obj.method_name()
         if isinstance(func, ast.Attribute):
-            # Self method calls: self.method_name() - use current scope context
-            # TODO: Should we also special-case `cls` in addition to `self`?
-            if isinstance(func.value, ast.Name) and func.value.id == "self":
-                # Build qualified name from current scope stack, excluding function scopes
-                # since self.method() calls should resolve to the class method, not nested function
-                scope_names = [scope.name for scope in self._scope_stack if scope.kind != ScopeKind.FUNCTION]
-                return ".".join([*scope_names, func.attr])
-
-            # Static/class method calls: ClassName.method_name()
-            if isinstance(func.value, ast.Name):
-                class_name = func.value.id
-                # TODO: is this right? why is `class_name` guaranteed to live directly on `__module__`?
-                return f"__module__.{class_name}.{func.attr}"
-
-            # Complex qualified calls: obj.attr.method() or module.submodule.function()
-            # Currently simplified to just final attribute
-            # - ⚠️ **Future Enhancement Needed**: The current implementation has
-            # a limitation with complex qualified calls like
-            # `obj.attr1.attr2.method()`. Currently, only the final attribute
-            # `"method"` is extracted rather than building the full qualified name.
-            if isinstance(func.value, ast.Attribute):
-                return f"__module__.{func.attr}"
-
-        # TODO: i think we need a `_resolve_method_call()` fn that works
-        # similarly to `_resolve_function_call()`
+            return self._extract_method_call(func)
 
         # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
         # Cannot be resolved statically - return None
         return None
+
+    def _extract_method_call(self, func: ast.Attribute) -> str | None:
+        """Extract qualified name from a method call (attribute access).
+
+        Handles self.method(), ClassName.method(), and Outer.Inner.method() calls.
+
+        Args:
+            func: The ast.Attribute node representing the method call
+
+        Returns:
+            Qualified method name if resolvable, None otherwise
+        """
+        # Self method calls: self.method_name() - use current scope context
+        # TODO: Should we also special-case `cls` in addition to `self`?
+        if isinstance(func.value, ast.Name) and func.value.id == "self":
+            # Build qualified name from current scope stack, excluding function scopes
+            # since self.method() calls should resolve to the class method, not nested function
+            scope_names = [scope.name for scope in self._scope_stack if scope.kind != ScopeKind.FUNCTION]
+            return ".".join([*scope_names, func.attr])
+
+        # Static/class method calls: ClassName.method_name()
+        if isinstance(func.value, ast.Name):
+            potential_class = func.value.id
+            # Use resolver to check all possible scopes
+            resolved_class = self._resolve_class_name(potential_class)
+            if resolved_class:
+                return f"{resolved_class}.{func.attr}"
+            # Not a class - might be a variable (TODO future work)
+            return None
+
+        # Nested class method calls: Outer.Inner.method_name()
+        if isinstance(func.value, ast.Attribute):
+            return self._extract_nested_method_call(func)
+
+        return None
+
+    def _extract_nested_method_call(self, func: ast.Attribute) -> str | None:
+        """Extract qualified name from nested class method calls.
+
+        Handles cases like Outer.Inner.method_name() where the receiver is
+        itself an attribute access (nested classes).
+
+        Args:
+            func: The ast.Attribute node where func.value is also ast.Attribute
+
+        Returns:
+            Qualified method name if resolvable, fallback module-qualified name otherwise
+        """
+        # Extract the full qualified name like "Outer.Inner"
+        qualified_parts: list[str] = []
+        current: ast.AST = func.value
+        while isinstance(current, ast.Attribute):
+            qualified_parts.insert(0, current.attr)
+            current = current.value
+        if isinstance(current, ast.Name):
+            qualified_parts.insert(0, current.id)
+            # Try to resolve the full qualified class name
+            full_class_name = ".".join(qualified_parts)
+            resolved_class = self._resolve_compound_class_name(full_class_name)
+            if resolved_class:
+                return f"{resolved_class}.{func.attr}"
+
+        # Fall back to existing behavior for complex cases
+        return f"__module__.{func.attr}"
 
     def _resolve_function_call(self, function_name: str) -> str | None:
         """Resolve a direct function call to its qualified name.
@@ -224,6 +267,94 @@ class CallCountVisitor(ast.NodeVisitor):
         # Return the first candidate that exists in our known functions
         for candidate in candidates:
             if candidate in self.call_counts:
+                return candidate
+
+        return None
+
+    def _resolve_compound_class_name(self, compound_name: str) -> str | None:
+        """Resolve a compound class name like 'Outer.Inner' to its qualified form.
+
+        Handles cases where a nested class is accessed with dot notation.
+        For example, 'Outer.Inner' might resolve to '__module__.Outer.Inner'.
+
+        Args:
+            compound_name: The compound name to resolve (e.g., "Outer.Inner")
+
+        Returns:
+            Qualified class name if found in registry, None otherwise
+        """
+        # First, try it as-is with module prefix
+        full_qualified = f"__module__.{compound_name}"
+        if full_qualified in self._class_registry.ast_classes:
+            return full_qualified
+
+        # Try from current scope context
+        # If we're inside a class, the compound name might be relative to that class
+        for i in range(len(self._scope_stack)):
+            if self._scope_stack[i].kind == ScopeKind.CLASS:
+                # Build scope prefix
+                scope_names = [s.name for s in self._scope_stack[: i + 1]]
+                candidate = ".".join([*scope_names, compound_name])
+                if candidate in self._class_registry.ast_classes:
+                    return candidate
+
+        return None
+
+    def _resolve_class_name(self, class_name: str) -> str | None:
+        """Resolve a class name to its qualified form based on current scope.
+
+        Checks from most specific (nested class) to least specific (module) scope.
+        This handles cases like:
+        - Inner.method() inside Outer class -> __module__.Outer.Inner
+        - Calculator.add() at module level -> __module__.Calculator
+
+        NOTE: Currently only resolves classes defined in the current file and Python
+        built-in types. Imported classes (from typing, collections, third-party packages)
+        are not recognized and their method calls won't be counted.
+
+        Args:
+            class_name: The local name to resolve (e.g., "Calculator", "Inner")
+
+        Returns:
+            Qualified class name if found in registry, None otherwise
+
+        Examples:
+            "Calculator" -> "__module__.Calculator" (if defined in file)
+            "int" -> "int" (built-in type)
+            "List" -> None (imported from typing, not yet supported)
+            "defaultdict" -> None (imported from collections, not yet supported)
+        """
+        candidates: list[str] = []
+
+        # Build candidates from current scope outward
+        # If we're in Outer.method(), seeing "Inner" should check:
+        # 1. __module__.Outer.Inner (sibling class)
+        # 2. __module__.Inner (module-level class)
+
+        # First, check if we're in a function that might have local classes
+        for i in range(len(self._scope_stack) - 1, -1, -1):
+            if self._scope_stack[i].kind == ScopeKind.FUNCTION:
+                # Try as a class defined in this function
+                scope_names = [s.name for s in self._scope_stack[: i + 1]]
+                candidates.append(".".join([*scope_names, class_name]))
+
+        # Then check class scopes for sibling classes
+        for i in range(len(self._scope_stack)):
+            if self._scope_stack[i].kind == ScopeKind.CLASS:
+                # Try as sibling class in this class's scope
+                scope_names = [s.name for s in self._scope_stack[: i + 1]]
+                candidates.append(".".join([*scope_names, class_name]))
+
+        # Always try module level as fallback
+        candidates.append(f"__module__.{class_name}")
+
+        # Check built-in types directly (they don't have __module__ prefix)
+        if class_name in self._class_registry.builtin_classes:
+            return class_name
+
+        # Return first match found in AST classes registry
+        for candidate in candidates:
+            if candidate in self._class_registry.ast_classes:
                 return candidate
 
         return None

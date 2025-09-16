@@ -45,7 +45,6 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
 
 ### Critical Bug: Instance Method Calls Not Counted
 ```python
-# This pattern is currently broken:
 class Calculator:
     def add(self, a, b):  # Shows 0 calls instead of 1
         return a + b
@@ -56,10 +55,12 @@ def process():
 ```
 
 ### Other Limitations
-- **Complex Qualified Calls**: `obj.attr1.attr2.method()` pattern incomplete
 - **Single File Only**: No directory or project-wide analysis (temporary limitation)
 - **No Import Support**: Imported classes and functions not tracked
 - **No Unresolvable Call Reporting**: Missing calls aren't tracked or reported
+
+### Fixed Issues
+- ✅ **False Positives with Constants**: Previously treated constants like `MAX_SIZE` as classes (FIXED via ClassRegistry)
 
 ### Import and Multi-File Support Status
 
@@ -84,22 +85,41 @@ def process():
    - Aggregate metrics at project level
    - This is the ultimate goal for maximum value
 
+## Completed Improvements ✅
+
+### Class Detection Foundation (Partially Completed 2025-09-16)
+**What was implemented:** The foundational ClassRegistry system from commits 1-3 of the class detection plan.
+
+**Completed:**
+- ✅ **ClassRegistry data structure**: Immutable registry with `is_class()` method
+- ✅ **AST-based class discovery**: ClassDiscoveryVisitor finds all ClassDef nodes
+- ✅ **Built-in type recognition**: All Python built-in types via builtins module
+- ✅ **False positive elimination**: Constants like `MAX_SIZE` no longer treated as classes
+- ✅ **Non-PEP8 class support**: Classes like `xmlParser` correctly identified
+- ✅ **Nested class resolution**: `Outer.Inner.method()` calls are properly counted
+- ✅ **Integration into CallCountVisitor**: Now uses ClassRegistry (breaking API change)
+
+**NOT Completed:**
+- ❌ **Instance method call bug**: `calc = Calculator(); calc.add()` still shows 0 calls
+- ❌ **Variable tracking**: No tracking of variable assignments or types
+- ❌ **Unresolvable call reporting**: No transparency about what can't be resolved
+
 ## In Progress 🚧
 
 ### Single-File Accuracy Improvements (Implementation Sequence)
 These improvements must be completed in order to achieve very accurate single-file analysis:
 
-1. **Class Detection Improvements** (Step 1 - Foundation)
-   - Replace naive `name[0].isupper()` heuristics with AST-based detection
-   - Build class registry with confidence scoring
-   - Must be completed FIRST
+1. **Complete Class Detection Improvements** (Step 1 - Foundation) [PARTIALLY COMPLETE]
+   - ✅ Commits 1-3 from plan implemented (ClassRegistry foundation)
+   - ❌ Commits 4-5 NOT implemented (variable tracking for instance methods)
+   - ❌ Instance method call bug NOT fixed (requires variable tracking)
 
-2. **Unresolvable Call Reporting** (Step 2 - Transparency)
+2. **Unresolvable Call Reporting** (Step 2 - Transparency) [NOT STARTED]
    - Track and report calls that cannot be resolved
    - Provides transparency about analysis coverage
    - Prerequisites: Complete class detection improvements first
 
-3. **Scope-Aware Variable Tracking** (Step 3 - Bug Fix)
+3. **Scope-Aware Variable Tracking** (Step 3 - Bug Fix) [NOT STARTED]
    - Fix critical instance method call counting bug
    - Track variable assignments and resolve method calls
    - Prerequisites: Complete both class detection and unresolvable call reporting first

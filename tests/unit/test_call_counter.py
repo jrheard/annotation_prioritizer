@@ -1,9 +1,11 @@
+# pyright: reportPrivateUsage=false
 """Tests for call counting functionality."""
 
 import ast
 
 from annotation_prioritizer.call_counter import CallCountVisitor, count_function_calls
-from annotation_prioritizer.models import FunctionInfo, ParameterInfo
+from annotation_prioritizer.class_discovery import build_class_registry
+from annotation_prioritizer.models import FunctionInfo, ParameterInfo, Scope, ScopeKind
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -365,7 +367,10 @@ def some_function():
                 file_path=temp_path,
             ),
         )
-        visitor = CallCountVisitor(known_functions)
+        # Build a simple class registry for testing
+        tree = ast.parse("")
+        class_registry = build_class_registry(tree)
+        visitor = CallCountVisitor(known_functions, class_registry)
 
         # Create a mock Call node that represents self.method() outside class
         func_node = ast.Attribute(value=ast.Name(id="self", ctx=ast.Load()), attr="method", ctx=ast.Load())
@@ -389,7 +394,10 @@ def test_complex_qualified_calls() -> None:
             file_path="dummy.py",
         ),
     )
-    visitor = CallCountVisitor(known_functions)
+    # Build a simple class registry for testing
+    tree = ast.parse("")
+    class_registry = build_class_registry(tree)
+    visitor = CallCountVisitor(known_functions, class_registry)
 
     # Create a mock Call node that represents outer.inner.method()
     # This creates: outer.inner.method() where func.value is ast.Attribute
@@ -647,6 +655,70 @@ def module_helper():
 
         # module_helper() called once from nested_function
         assert call_counts["__module__.module_helper"] == 1
+
+
+def test_extract_call_with_dynamic_call() -> None:
+    """Test that dynamic calls return None."""
+    # Build a simple class registry for testing
+    tree = ast.parse("")
+    class_registry = build_class_registry(tree)
+
+    visitor = CallCountVisitor((), class_registry)
+
+    # Create a dynamic call node: getattr(obj, 'method')()
+    getattr_call = ast.Call(
+        func=ast.Name(id="getattr", ctx=ast.Load()),
+        args=[
+            ast.Name(id="obj", ctx=ast.Load()),
+            ast.Constant(value="method"),
+        ],
+        keywords=[],
+    )
+    call_node = ast.Call(
+        func=getattr_call,
+        args=[],
+        keywords=[],
+    )
+
+    # Test that extract_call_name returns None for dynamic calls
+    result = visitor._extract_call_name(call_node)
+    assert result is None
+
+
+def test_resolve_compound_class_not_in_registry() -> None:
+    """Test compound class resolution when class not in registry."""
+    source = """
+class Outer:
+    class Inner:
+        class Nested:
+            pass
+"""
+    tree = ast.parse(source)
+    class_registry = build_class_registry(tree)
+
+    visitor = CallCountVisitor((), class_registry)
+
+    # Try to resolve a compound name that doesn't exist
+    result = visitor._resolve_compound_class_name("NonExistent.Inner")
+    assert result is None
+
+    # Try within a class scope - test the successful case
+    visitor._scope_stack.append(Scope(kind=ScopeKind.CLASS, name="Outer"))
+    # This should match since __module__.Outer.Inner.Nested exists
+    result = visitor._resolve_compound_class_name("Inner.Nested")
+    assert result == "__module__.Outer.Inner.Nested"
+    visitor._scope_stack.pop()
+
+    # Try within a class scope (simulate being inside a different class)
+    visitor._scope_stack.append(Scope(kind=ScopeKind.CLASS, name="SomeClass"))
+    result = visitor._resolve_compound_class_name("Another.Nested")
+    assert result is None
+    visitor._scope_stack.pop()
+
+    # Also test when scope is a function (not a class)
+    visitor._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name="some_func"))
+    result = visitor._resolve_compound_class_name("Foo.Bar")
+    assert result is None
 
 
 def test_async_function_calls() -> None:
