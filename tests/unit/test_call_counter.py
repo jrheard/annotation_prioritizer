@@ -703,20 +703,20 @@ class Outer:
     assert result is None
 
     # Try within a class scope - test the successful case
-    visitor._scope_stack.append(Scope(kind=ScopeKind.CLASS, name="Outer"))
+    visitor._scope.push(Scope(kind=ScopeKind.CLASS, name="Outer"))
     # This should match since __module__.Outer.Inner.Nested exists
     result = visitor._resolve_compound_class_name("Inner.Nested")
     assert result == "__module__.Outer.Inner.Nested"
-    visitor._scope_stack.pop()
+    visitor._scope.pop()
 
     # Try within a class scope (simulate being inside a different class)
-    visitor._scope_stack.append(Scope(kind=ScopeKind.CLASS, name="SomeClass"))
+    visitor._scope.push(Scope(kind=ScopeKind.CLASS, name="SomeClass"))
     result = visitor._resolve_compound_class_name("Another.Nested")
     assert result is None
-    visitor._scope_stack.pop()
+    visitor._scope.pop()
 
     # Also test when scope is a function (not a class)
-    visitor._scope_stack.append(Scope(kind=ScopeKind.FUNCTION, name="some_func"))
+    visitor._scope.push(Scope(kind=ScopeKind.FUNCTION, name="some_func"))
     result = visitor._resolve_compound_class_name("Foo.Bar")
     assert result is None
 
