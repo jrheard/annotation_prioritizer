@@ -222,3 +222,5 @@ but args.kw_defaults has a one-to-one mapping with args.kwonlyargs
 
 ok i started to review the scope plan doc, noticed that visit_FunctionDef wasn't checking keyword-only args, just args.args
 so i'm beginning to learn :)
+
+wow section 22 is actually really helpful, in file 5
