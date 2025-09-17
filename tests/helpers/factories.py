@@ -19,7 +19,7 @@ def make_parameter(
     variadic: bool = False,
     keyword: bool = False,
 ) -> ParameterInfo:
-    """Create ParameterInfo with short syntax.
+    """Create ParameterInfo with sensible defaults.
 
     Args:
         name: Parameter name (default: "param")
@@ -92,7 +92,7 @@ def make_priority(  # noqa: PLR0913
     total_score: float | None = None,
     priority_score: float | None = None,
 ) -> FunctionPriority:
-    """Create FunctionPriority with explicit values.
+    """Create FunctionPriority with sensible defaults.
 
     Args:
         name: Function name (not a qualified name)
@@ -111,6 +111,14 @@ def make_priority(  # noqa: PLR0913
     """
     # Ensure name is not already qualified
     assert "." not in name, f"Function name should not be qualified, got: {name}"
+
+    # Ensure consistency between return_score and has_return_annotation
+    assert (return_score == 0.0 and not has_return_annotation) or (
+        return_score == 1.0 and has_return_annotation
+    ), (
+        f"Inconsistent return annotation state: return_score={return_score}, "
+        f"has_return_annotation={has_return_annotation}"
+    )
     qualified_name = f"__module__.{name}"
     if parameters is None:
         parameters = ()
