@@ -29,16 +29,16 @@ def test_parse_args_with_min_calls() -> None:
 
 def test_main_file_not_exists() -> None:
     """Test main() with non-existent file."""
-    with capture_console_output() as (test_console, output):
-        with (
-            patch("annotation_prioritizer.cli.Console", return_value=test_console),
-            patch("sys.argv", ["annotation-prioritizer", "nonexistent.py"]),
-            pytest.raises(SystemExit) as exc_info,
-        ):
-            main()
+    with (
+        capture_console_output() as (test_console, output),
+        patch("annotation_prioritizer.cli.Console", return_value=test_console),
+        patch("sys.argv", ["annotation-prioritizer", "nonexistent.py"]),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        main()
 
-        assert exc_info.value.code == 1
-        assert_console_contains(output, "does not exist")
+    assert exc_info.value.code == 1
+    assert_console_contains(output, "does not exist")
 
 
 def test_main_not_python_file() -> None:
@@ -46,16 +46,14 @@ def test_main_not_python_file() -> None:
     with (
         tempfile.NamedTemporaryFile(suffix=".txt") as tmp,
         capture_console_output() as (test_console, output),
+        patch("annotation_prioritizer.cli.Console", return_value=test_console),
+        patch("sys.argv", ["annotation-prioritizer", tmp.name]),
+        pytest.raises(SystemExit) as exc_info,
     ):
-        with (
-            patch("annotation_prioritizer.cli.Console", return_value=test_console),
-            patch("sys.argv", ["annotation-prioritizer", tmp.name]),
-            pytest.raises(SystemExit) as exc_info,
-        ):
-            main()
+        main()
 
-        assert exc_info.value.code == 1
-        assert_console_contains(output, "not a Python file")
+    assert exc_info.value.code == 1
+    assert_console_contains(output, "not a Python file")
 
 
 def test_main_successful_analysis() -> None:
@@ -149,28 +147,29 @@ def test_main_analysis_error() -> None:
         tmp.write("def test_func(): pass\n")
         tmp.flush()
 
-        with capture_console_output() as (test_console, output):
-            with (
-                patch("annotation_prioritizer.cli.Console", return_value=test_console),
-                patch("annotation_prioritizer.cli.analyze_file", side_effect=ValueError("Test error")),
-                patch("sys.argv", ["annotation-prioritizer", tmp.name]),
-                pytest.raises(SystemExit) as exc_info,
-            ):
-                main()
-
-            assert exc_info.value.code == 1
-            assert_console_contains(output, "Error analyzing file", "Test error")
-
-
-def test_main_directory_input() -> None:
-    """Test main() with directory instead of file."""
-    with tempfile.TemporaryDirectory() as tmp_dir, capture_console_output() as (test_console, output):
         with (
+            capture_console_output() as (test_console, output),
             patch("annotation_prioritizer.cli.Console", return_value=test_console),
-            patch("sys.argv", ["annotation-prioritizer", tmp_dir]),
+            patch("annotation_prioritizer.cli.analyze_file", side_effect=ValueError("Test error")),
+            patch("sys.argv", ["annotation-prioritizer", tmp.name]),
             pytest.raises(SystemExit) as exc_info,
         ):
             main()
 
         assert exc_info.value.code == 1
-        assert_console_contains(output, "is not a file")
+        assert_console_contains(output, "Error analyzing file", "Test error")
+
+
+def test_main_directory_input() -> None:
+    """Test main() with directory instead of file."""
+    with (
+        tempfile.TemporaryDirectory() as tmp_dir,
+        capture_console_output() as (test_console, output),
+        patch("annotation_prioritizer.cli.Console", return_value=test_console),
+        patch("sys.argv", ["annotation-prioritizer", tmp_dir]),
+        pytest.raises(SystemExit) as exc_info,
+    ):
+        main()
+
+    assert exc_info.value.code == 1
+    assert_console_contains(output, "is not a file")
