@@ -455,10 +455,17 @@ assert qualified_names == expected
 ## Testing Strategy
 
 Each commit should:
-1. Pass type checking with `pyright`
+1. Pass type checking with `pyright` (see note below)
 2. Pass all existing tests with `pytest`
 3. Maintain 100% test coverage
 4. Pass linting with `ruff check` and `ruff format`
+
+**IMPORTANT NOTE on pyright:**
+- After Commit 1, pyright will fail with ~72 type errors when checking the entire codebase
+- These errors are expected and indicate places where strings need to be converted to QualifiedName
+- **Use `--no-verify` flag when committing Commits 2-3** if the only type errors are from the QualifiedName migration
+- **Pyright will pass again after Commit 4** when all tests are updated
+- The pre-commit hook is configured to check the entire codebase (not just staged files) to ensure complete migration
 
 ## Key Considerations
 
