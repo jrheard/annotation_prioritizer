@@ -7,8 +7,8 @@ from unittest.mock import patch
 import pytest
 
 from annotation_prioritizer.cli import main, parse_args
-from annotation_prioritizer.models import AnnotationScore, FunctionInfo, FunctionPriority
 from tests.helpers.console import assert_console_contains, capture_console_output
+from tests.helpers.factories import make_priority
 
 
 def test_parse_args_basic() -> None:
@@ -63,23 +63,13 @@ def test_main_successful_analysis() -> None:
         tmp.flush()
 
         # Create mock data
-        mock_priority = FunctionPriority(
-            function_info=FunctionInfo(
-                name="test_func",
-                qualified_name="__module__.test_func",
-                parameters=(),
-                has_return_annotation=False,
-                line_number=1,
-                file_path=tmp.name,
-            ),
-            annotation_score=AnnotationScore(
-                function_qualified_name="__module__.test_func",
-                parameter_score=1.0,
-                return_score=0.0,
-                total_score=0.25,
-            ),
+        mock_priority = make_priority(
+            "test_func",
+            param_score=1.0,
+            return_score=0.0,
             call_count=3,
-            priority_score=2.25,
+            line_number=1,
+            file_path=tmp.name,
         )
 
         with (
@@ -105,23 +95,13 @@ def test_main_with_min_calls_filter() -> None:
         tmp.flush()
 
         # Create mock data with low call count
-        mock_priority = FunctionPriority(
-            function_info=FunctionInfo(
-                name="test_func",
-                qualified_name="__module__.test_func",
-                parameters=(),
-                has_return_annotation=False,
-                line_number=1,
-                file_path=tmp.name,
-            ),
-            annotation_score=AnnotationScore(
-                function_qualified_name="__module__.test_func",
-                parameter_score=1.0,
-                return_score=0.0,
-                total_score=0.25,
-            ),
+        mock_priority = make_priority(
+            "test_func",
+            param_score=1.0,
+            return_score=0.0,
             call_count=1,  # Low call count
-            priority_score=0.75,
+            line_number=1,
+            file_path=tmp.name,
         )
 
         with (
@@ -155,10 +135,9 @@ def test_main_analysis_error() -> None:
             pytest.raises(SystemExit) as exc_info,
         ):
             main()
-
+            
     assert exc_info.value.code == 1
     assert_console_contains(output, "Error analyzing file", "Test error")
-
 
 def test_main_directory_input() -> None:
     """Test main() with directory instead of file."""
