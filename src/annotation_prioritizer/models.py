@@ -9,6 +9,24 @@ Data Flow Through Models:
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import NewType
+
+# Define the new type for qualified names like "__module__.ClassName.method"
+QualifiedName = NewType("QualifiedName", str)
+
+
+def make_qualified_name(name: str) -> QualifiedName:
+    """Create a QualifiedName from a string.
+
+    This is the only way to create a QualifiedName, ensuring type safety.
+
+    Args:
+        name: A qualified name string like "__module__.ClassName.method"
+
+    Returns:
+        A QualifiedName instance
+    """
+    return QualifiedName(name)
 
 
 class ScopeKind(StrEnum):
@@ -65,7 +83,9 @@ class FunctionInfo:
     """
 
     name: str  # Local function name (e.g., 'add')
-    qualified_name: str  # Full name with complete scope hierarchy (e.g., '__module__.Calculator.add')
+    qualified_name: (
+        QualifiedName  # Full name with complete scope hierarchy (e.g., '__module__.Calculator.add')
+    )
     parameters: tuple[ParameterInfo, ...]  # All parameters in definition order
     has_return_annotation: bool  # Whether return type is annotated
     line_number: int  # Line where function is defined (1-indexed)
@@ -82,7 +102,7 @@ class CallCount:
     """
 
     function_qualified_name: (
-        str  # Must match FunctionInfo.qualified_name exactly (e.g., "__module__.Calculator.add")
+        QualifiedName  # Must match FunctionInfo.qualified_name exactly (e.g., "__module__.Calculator.add")
     )
     call_count: int  # Number of resolved calls (can be 0)
 
@@ -100,7 +120,9 @@ class AnnotationScore:
         - 'self' and 'cls' parameters are excluded from scoring
     """
 
-    function_qualified_name: str  # Identifies the scored function (e.g., "__module__.Calculator.add")
+    function_qualified_name: (
+        QualifiedName  # Identifies the scored function (e.g., "__module__.Calculator.add")
+    )
     parameter_score: float  # Ratio of annotated parameters (0.0 to 1.0)
     return_score: float  # 1.0 if return annotated, 0.0 otherwise
     total_score: float  # Weighted combination (0.0 = no annotations, 1.0 = fully annotated)
