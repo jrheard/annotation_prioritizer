@@ -108,7 +108,9 @@ Remove all tests related to builtin classes:
 - Enables a cleaner QualifiedName implementation with a single type everywhere
 - Eliminates confusion about how to represent builtins with qualified names
 
-### Commit 1: Introduce QualifiedName type and update all data models
+### Commit 1: Introduce QualifiedName type and update all data models ✅
+
+**Status:** COMPLETED
 
 **Files to modify:**
 - `src/annotation_prioritizer/models.py`
