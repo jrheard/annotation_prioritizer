@@ -14,7 +14,7 @@ consistently build qualified names like "__module__.ClassName.method_name".
 """
 
 import ast
-from collections.abc import Set as AbstractSet
+from collections.abc import Iterable
 
 from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
@@ -173,7 +173,7 @@ def build_qualified_name(
 
 
 def find_first_match(
-    candidates: tuple[QualifiedName, ...], registry: AbstractSet[QualifiedName]
+    candidates: tuple[QualifiedName, ...], registry: Iterable[QualifiedName]
 ) -> QualifiedName | None:
     """Check candidates against a registry and return first match.
 

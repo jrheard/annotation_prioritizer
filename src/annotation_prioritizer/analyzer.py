@@ -2,7 +2,7 @@
 
 from .call_counter import count_function_calls
 from .function_parser import parse_function_definitions
-from .models import AnnotationScore, FunctionPriority
+from .models import AnnotationScore, FunctionPriority, QualifiedName
 from .scoring import calculate_annotation_score
 
 
@@ -28,7 +28,9 @@ def analyze_file(file_path: str) -> tuple[FunctionPriority, ...]:
 
     # 2. Count function calls
     call_counts = count_function_calls(file_path, function_infos)
-    call_count_map = {cc.function_qualified_name: cc.call_count for cc in call_counts}
+    call_count_map: dict[QualifiedName, int] = {
+        cc.function_qualified_name: cc.call_count for cc in call_counts
+    }
 
     # 3. Calculate annotation scores and combine into priority rankings
     priorities: list[FunctionPriority] = []

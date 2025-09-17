@@ -267,7 +267,9 @@ def build_class_registry(tree: ast.AST) -> ClassRegistry:
 
 **Why this grouping:** All functions that create qualified names are updated together, ensuring consistent production of the new type.
 
-### Commit 3: Update all qualified name consumers
+### Commit 3: Update all qualified name consumers ✅
+
+**Status:** COMPLETED (commit 6ac45e2)
 
 **Files to modify:**
 - `src/annotation_prioritizer/call_counter.py`
