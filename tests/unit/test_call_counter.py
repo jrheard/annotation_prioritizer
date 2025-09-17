@@ -6,6 +6,7 @@ import ast
 from annotation_prioritizer.call_counter import CallCountVisitor, count_function_calls
 from annotation_prioritizer.class_discovery import build_class_registry
 from annotation_prioritizer.models import FunctionInfo, ParameterInfo, Scope, ScopeKind
+from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -703,20 +704,20 @@ class Outer:
     assert result is None
 
     # Try within a class scope - test the successful case
-    visitor._scope.push(Scope(kind=ScopeKind.CLASS, name="Outer"))
+    visitor._scope_stack = add_scope(visitor._scope_stack, Scope(kind=ScopeKind.CLASS, name="Outer"))
     # This should match since __module__.Outer.Inner.Nested exists
     result = visitor._resolve_class_name("Inner.Nested")
     assert result == "__module__.Outer.Inner.Nested"
-    visitor._scope.pop()
+    visitor._scope_stack = drop_last_scope(visitor._scope_stack)
 
     # Try within a class scope (simulate being inside a different class)
-    visitor._scope.push(Scope(kind=ScopeKind.CLASS, name="SomeClass"))
+    visitor._scope_stack = add_scope(visitor._scope_stack, Scope(kind=ScopeKind.CLASS, name="SomeClass"))
     result = visitor._resolve_class_name("Another.Nested")
     assert result is None
-    visitor._scope.pop()
+    visitor._scope_stack = drop_last_scope(visitor._scope_stack)
 
     # Also test when scope is a function (not a class)
-    visitor._scope.push(Scope(kind=ScopeKind.FUNCTION, name="some_func"))
+    visitor._scope_stack = add_scope(visitor._scope_stack, Scope(kind=ScopeKind.FUNCTION, name="some_func"))
     result = visitor._resolve_class_name("Foo.Bar")
     assert result is None
 

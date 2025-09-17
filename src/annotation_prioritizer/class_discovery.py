@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import override
 
 from annotation_prioritizer.models import Scope, ScopeKind
-from annotation_prioritizer.scope_tracker import ScopeState
+from annotation_prioritizer.scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
 
 
 def _build_builtin_types() -> frozenset[str]:
@@ -77,34 +77,34 @@ class ClassDiscoveryVisitor(ast.NodeVisitor):
         """Initialize the visitor with an empty list of class names."""
         super().__init__()
         self.class_names: list[str] = []
-        self._scope = ScopeState()
+        self._scope_stack: ScopeStack = create_initial_stack()
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Record class definition with full qualified name."""
         # Build qualified name from current scope
-        scope_names = [scope.name for scope in self._scope.stack]
+        scope_names = [scope.name for scope in self._scope_stack]
         qualified_name = ".".join([*scope_names, node.name])
         self.class_names.append(qualified_name)
 
         # Push class scope and continue traversal for nested classes
-        self._scope.push(Scope(kind=ScopeKind.CLASS, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.CLASS, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Track function scope for nested classes inside functions."""
-        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Track async function scope for nested classes."""
-        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
 
 def build_class_registry(tree: ast.AST) -> ClassRegistry:

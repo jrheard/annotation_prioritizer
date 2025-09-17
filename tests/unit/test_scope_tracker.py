@@ -1,7 +1,7 @@
 """Unit tests for the scope_tracker module.
 
-Tests cover the ScopeState class and pure helper functions for scope tracking
-and name resolution during AST traversal.
+Tests cover the pure functions for scope stack management and name resolution
+during AST traversal.
 """
 
 import ast
@@ -10,169 +10,177 @@ import pytest
 
 from annotation_prioritizer.models import Scope, ScopeKind
 from annotation_prioritizer.scope_tracker import (
-    ScopeState,
+    add_scope,
     build_qualified_name,
+    create_initial_stack,
+    drop_last_scope,
     extract_attribute_chain,
     find_first_match,
     generate_name_candidates,
+    get_containing_class,
+    get_current_scope,
+    in_class,
+    in_function,
 )
 
 
-def test_scope_state_initialization() -> None:
-    """Test that ScopeState initializes with module scope."""
-    state = ScopeState()
-    assert len(state.stack) == 1
-    assert state.current_scope == Scope(kind=ScopeKind.MODULE, name="__module__")
+def test_create_initial_stack() -> None:
+    """Test that create_initial_stack creates a stack with module scope."""
+    stack = create_initial_stack()
+    assert len(stack) == 1
+    assert stack[0] == Scope(kind=ScopeKind.MODULE, name="__module__")
 
 
-def test_scope_state_push_pop() -> None:
-    """Test pushing and popping scopes from the stack."""
-    state = ScopeState()
+def test_add_drop_scope() -> None:
+    """Test adding and dropping scopes from the stack."""
+    stack = create_initial_stack()
 
     # Push a class scope
     class_scope = Scope(kind=ScopeKind.CLASS, name="MyClass")
-    state.push(class_scope)
-    assert len(state.stack) == 2
-    assert state.current_scope == class_scope
+    stack = add_scope(stack, class_scope)
+    assert len(stack) == 2
+    assert get_current_scope(stack) == class_scope
 
     # Push a function scope
     func_scope = Scope(kind=ScopeKind.FUNCTION, name="my_method")
-    state.push(func_scope)
-    assert len(state.stack) == 3
-    assert state.current_scope == func_scope
+    stack = add_scope(stack, func_scope)
+    assert len(stack) == 3
+    assert get_current_scope(stack) == func_scope
 
     # Pop function scope
-    state.pop()
-    assert len(state.stack) == 2
-    assert state.current_scope == class_scope
+    stack = drop_last_scope(stack)
+    assert len(stack) == 2
+    assert get_current_scope(stack) == class_scope
 
     # Pop class scope
-    state.pop()
-    assert len(state.stack) == 1
-    assert state.current_scope == Scope(kind=ScopeKind.MODULE, name="__module__")
+    stack = drop_last_scope(stack)
+    assert len(stack) == 1
+    assert get_current_scope(stack) == Scope(kind=ScopeKind.MODULE, name="__module__")
 
 
-def test_scope_state_cannot_pop_module() -> None:
-    """Test that module scope cannot be popped."""
-    state = ScopeState()
+def test_cannot_drop_module_scope() -> None:
+    """Test that module scope cannot be dropped."""
+    stack = create_initial_stack()
     with pytest.raises(AssertionError, match="Cannot pop module scope"):
-        state.pop()
+        drop_last_scope(stack)
 
 
-def test_scope_state_stack_immutable() -> None:
-    """Test that the stack property returns an immutable tuple."""
-    state = ScopeState()
-    stack = state.stack
+def test_stack_is_immutable() -> None:
+    """Test that the stack is immutable (tuple)."""
+    stack = create_initial_stack()
     assert isinstance(stack, tuple)
-    # Verify we can't modify the returned tuple
-    assert stack == (Scope(kind=ScopeKind.MODULE, name="__module__"),)
+    # Operations return new stacks
+    new_stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="Test"))
+    assert stack != new_stack
+    assert len(stack) == 1
+    assert len(new_stack) == 2
 
 
-def test_scope_state_get_containing_class_no_class() -> None:
+def test_get_containing_class_no_class() -> None:
     """Test get_containing_class when not inside any class."""
-    state = ScopeState()
+    stack = create_initial_stack()
     # Just module scope
-    assert state.get_containing_class() is None
+    assert get_containing_class(stack) is None
 
     # Module + function scope
-    state.push(Scope(kind=ScopeKind.FUNCTION, name="standalone_func"))
-    assert state.get_containing_class() is None
+    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="standalone_func"))
+    assert get_containing_class(stack) is None
 
 
-def test_scope_state_get_containing_class_single_class() -> None:
+def test_get_containing_class_single_class() -> None:
     """Test get_containing_class with a single class in the stack."""
-    state = ScopeState()
-    state.push(Scope(kind=ScopeKind.CLASS, name="MyClass"))
-    assert state.get_containing_class() == "__module__.MyClass"
+    stack = create_initial_stack()
+    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="MyClass"))
+    assert get_containing_class(stack) == "__module__.MyClass"
 
     # Add a function inside the class
-    state.push(Scope(kind=ScopeKind.FUNCTION, name="method"))
-    assert state.get_containing_class() == "__module__.MyClass"
+    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="method"))
+    assert get_containing_class(stack) == "__module__.MyClass"
 
 
-def test_scope_state_get_containing_class_nested_classes() -> None:
+def test_get_containing_class_nested_classes() -> None:
     """Test get_containing_class with nested classes."""
-    state = ScopeState()
-    state.push(Scope(kind=ScopeKind.CLASS, name="Outer"))
-    assert state.get_containing_class() == "__module__.Outer"
+    stack = create_initial_stack()
+    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="Outer"))
+    assert get_containing_class(stack) == "__module__.Outer"
 
-    state.push(Scope(kind=ScopeKind.CLASS, name="Inner"))
-    assert state.get_containing_class() == "__module__.Outer.Inner"
+    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="Inner"))
+    assert get_containing_class(stack) == "__module__.Outer.Inner"
 
     # Add a method in the inner class
-    state.push(Scope(kind=ScopeKind.FUNCTION, name="inner_method"))
-    assert state.get_containing_class() == "__module__.Outer.Inner"
+    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="inner_method"))
+    assert get_containing_class(stack) == "__module__.Outer.Inner"
 
 
-def test_scope_state_get_containing_class_function_then_class() -> None:
+def test_get_containing_class_function_then_class() -> None:
     """Test get_containing_class when class is defined inside a function."""
-    state = ScopeState()
-    state.push(Scope(kind=ScopeKind.FUNCTION, name="factory"))
-    state.push(Scope(kind=ScopeKind.CLASS, name="LocalClass"))
-    assert state.get_containing_class() == "__module__.factory.LocalClass"
+    stack = create_initial_stack()
+    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="factory"))
+    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="LocalClass"))
+    assert get_containing_class(stack) == "__module__.factory.LocalClass"
 
 
-def test_scope_state_in_class() -> None:
-    """Test in_class method for checking if inside a class."""
-    state = ScopeState()
+def test_in_class() -> None:
+    """Test in_class function for checking if inside a class."""
+    stack = create_initial_stack()
     # Initially not in class
-    assert state.in_class() is False
+    assert in_class(stack) is False
 
     # Add a class
-    state.push(Scope(kind=ScopeKind.CLASS, name="MyClass"))
-    assert state.in_class() is True
+    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="MyClass"))
+    assert in_class(stack) is True
 
     # Add a function inside the class
-    state.push(Scope(kind=ScopeKind.FUNCTION, name="method"))
-    assert state.in_class() is True
+    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="method"))
+    assert in_class(stack) is True
 
     # Pop the function, still in class
-    state.pop()
-    assert state.in_class() is True
+    stack = drop_last_scope(stack)
+    assert in_class(stack) is True
 
     # Pop the class, no longer in class
-    state.pop()
-    assert state.in_class() is False
+    stack = drop_last_scope(stack)
+    assert in_class(stack) is False
 
 
-def test_scope_state_in_function() -> None:
-    """Test in_function method for checking if inside a function."""
-    state = ScopeState()
+def test_in_function() -> None:
+    """Test in_function function for checking if inside a function."""
+    stack = create_initial_stack()
     # Initially not in function
-    assert state.in_function() is False
+    assert in_function(stack) is False
 
     # Add a function
-    state.push(Scope(kind=ScopeKind.FUNCTION, name="my_func"))
-    assert state.in_function() is True
+    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="my_func"))
+    assert in_function(stack) is True
 
     # Add a class inside the function
-    state.push(Scope(kind=ScopeKind.CLASS, name="LocalClass"))
-    assert state.in_function() is True
+    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="LocalClass"))
+    assert in_function(stack) is True
 
     # Pop the class, still in function
-    state.pop()
-    assert state.in_function() is True
+    stack = drop_last_scope(stack)
+    assert in_function(stack) is True
 
     # Pop the function, no longer in function
-    state.pop()
-    assert state.in_function() is False
+    stack = drop_last_scope(stack)
+    assert in_function(stack) is False
 
 
-def test_scope_state_complex_nesting() -> None:
+def test_complex_nesting() -> None:
     """Test complex nesting scenarios with all scope types."""
-    state = ScopeState()
+    stack = create_initial_stack()
 
     # Build: module -> class -> function -> class -> function
-    state.push(Scope(kind=ScopeKind.CLASS, name="OuterClass"))
-    state.push(Scope(kind=ScopeKind.FUNCTION, name="outer_method"))
-    state.push(Scope(kind=ScopeKind.CLASS, name="LocalClass"))
-    state.push(Scope(kind=ScopeKind.FUNCTION, name="local_method"))
+    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="OuterClass"))
+    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="outer_method"))
+    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="LocalClass"))
+    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="local_method"))
 
     # Check state
-    assert state.in_class() is True
-    assert state.in_function() is True
-    assert state.get_containing_class() == "__module__.OuterClass.outer_method.LocalClass"
-    assert len(state.stack) == 5
+    assert in_class(stack) is True
+    assert in_function(stack) is True
+    assert get_containing_class(stack) == "__module__.OuterClass.outer_method.LocalClass"
+    assert len(stack) == 5
 
 
 @pytest.mark.parametrize(
@@ -354,6 +362,16 @@ def test_extract_attribute_chain_from_call() -> None:
 
     result = extract_attribute_chain(call_node.func)
     assert result == ("obj", "method")
+
+
+def test_extract_attribute_chain_edge_case_with_expression() -> None:
+    """Test that extract_attribute_chain raises assertion for unsupported expressions."""
+    tree = ast.parse("(a + b).method", mode="eval")
+    assert isinstance(tree.body, ast.Attribute)  # Type narrowing for pyright
+    attr_node = tree.body  # This is the Attribute node with BinOp as value
+
+    with pytest.raises(AssertionError, match=r"Expected ast\.Name at base of attribute chain"):
+        extract_attribute_chain(attr_node)
 
 
 @pytest.mark.parametrize(
