@@ -30,6 +30,7 @@ repos:
     hooks:
       - id: pyright
         args: [--project, pyrightconfig.precommit.json]
+        pass_filenames: false
 
   - repo: local
     hooks:
