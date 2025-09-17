@@ -1,6 +1,7 @@
 """End-to-end integration tests for the type annotation prioritizer."""
 
 from annotation_prioritizer.analyzer import analyze_file
+from annotation_prioritizer.models import make_qualified_name
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -145,19 +146,19 @@ def use_calculator():
         # Find the method with highest priority (most calls, least annotated)
         priorities_by_name = {p.function_info.qualified_name: p for p in priorities}
 
-        subtract = priorities_by_name["__module__.Calculator.subtract"]
+        subtract = priorities_by_name[make_qualified_name("__module__.Calculator.subtract")]
         # self is ignored, x and y are unannotated, return is unannotated
         # parameter_score = 0/2, return_score = 0.0, total = 0.75 * 0 + 0.25 * 0 = 0.0
         assert subtract.annotation_score.total_score == 0.0
         assert subtract.call_count == 1
 
-        multiply = priorities_by_name["__module__.Calculator.multiply"]
+        multiply = priorities_by_name[make_qualified_name("__module__.Calculator.multiply")]
         # self is ignored, x is annotated, y is unannotated, return is annotated
         # parameter_score = 1/2, return_score = 1.0, total = 0.75 * 0.5 + 0.25 * 1.0 = 0.625
         assert multiply.annotation_score.total_score == 0.625
         assert multiply.call_count == 1
 
-        add = priorities_by_name["__module__.Calculator.add"]
+        add = priorities_by_name[make_qualified_name("__module__.Calculator.add")]
         # self is ignored, x and y are annotated, return is annotated
         # parameter_score = 2/2, return_score = 1.0, total = 0.75 * 1.0 + 0.25 * 1.0 = 1.0
         assert add.annotation_score.total_score == 1.0

@@ -2,7 +2,7 @@
 
 import pytest
 
-from annotation_prioritizer.models import ParameterInfo
+from annotation_prioritizer.models import ParameterInfo, make_qualified_name
 from annotation_prioritizer.scoring import (
     PARAMETERS_WEIGHT,
     RETURN_TYPE_WEIGHT,
@@ -223,7 +223,7 @@ def test_complex_parameter_mix() -> None:
     """Test scoring with a complex mix of parameter types."""
     function_info = make_function_info(
         "complex_func",
-        qualified_name="__module__.ClassName.complex_func",
+        qualified_name=make_qualified_name("__module__.ClassName.complex_func"),
         parameters=(
             make_parameter("self"),
             make_parameter("a", annotated=True),

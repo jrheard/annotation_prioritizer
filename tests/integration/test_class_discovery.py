@@ -3,6 +3,7 @@
 from annotation_prioritizer.analyzer import analyze_file
 from annotation_prioritizer.call_counter import count_function_calls
 from annotation_prioritizer.function_parser import parse_function_definitions
+from annotation_prioritizer.models import make_qualified_name
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -34,7 +35,7 @@ def use_class():
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
         # Only user-defined class methods are counted
-        assert call_counts.get("__module__.Calculator.add", 0) == 1
+        assert call_counts.get(make_qualified_name("__module__.Calculator.add"), 0) == 1
 
         # Built-in class methods like int.from_bytes are NOT counted
         # (they're not in known_functions since they're not defined in this file)
@@ -42,8 +43,8 @@ def use_class():
         assert "__builtins__.int.from_bytes" not in call_counts
 
         # These functions are not called
-        assert call_counts.get("__module__.use_constants", 0) == 0
-        assert call_counts.get("__module__.use_class", 0) == 0
+        assert call_counts.get(make_qualified_name("__module__.use_constants"), 0) == 0
+        assert call_counts.get(make_qualified_name("__module__.use_class"), 0) == 0
 
 
 def test_non_pep8_class_names() -> None:
@@ -71,9 +72,9 @@ def use_classes():
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
-        assert call_counts["__module__.xmlParser.parse"] == 1
-        assert call_counts["__module__.dataProcessor.process"] == 1
-        assert call_counts["__module__.dataProcessor.validate"] == 1  # Called by process
+        assert call_counts[make_qualified_name("__module__.xmlParser.parse")] == 1
+        assert call_counts[make_qualified_name("__module__.dataProcessor.process")] == 1
+        assert call_counts[make_qualified_name("__module__.dataProcessor.validate")] == 1  # Called by process
 
 
 def test_nested_class_method_calls() -> None:
@@ -104,7 +105,7 @@ def use_at_module():
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
         # All three calls to Outer.Inner.process should be counted
-        assert call_counts["__module__.Outer.Inner.process"] == 3
+        assert call_counts[make_qualified_name("__module__.Outer.Inner.process")] == 3
 
 
 def test_builtin_type_method_calls() -> None:
@@ -129,7 +130,7 @@ def use_builtins():
         # none of these will appear in the counts
         # But they won't cause false positives either
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
-        assert call_counts.get("__module__.use_builtins", 0) == 0
+        assert call_counts.get(make_qualified_name("__module__.use_builtins"), 0) == 0
 
 
 def test_imported_classes_not_counted() -> None:
@@ -160,9 +161,9 @@ def use_local():
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
         # Only LocalClass.local_method should be counted
-        assert call_counts["__module__.LocalClass.local_method"] == 1
-        assert call_counts.get("__module__.use_imports", 0) == 0
-        assert call_counts.get("__module__.use_local", 0) == 0
+        assert call_counts[make_qualified_name("__module__.LocalClass.local_method")] == 1
+        assert call_counts.get(make_qualified_name("__module__.use_imports"), 0) == 0
+        assert call_counts.get(make_qualified_name("__module__.use_local"), 0) == 0
 
 
 def test_instance_method_calls_not_tracked() -> None:
@@ -194,8 +195,8 @@ def main():
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
         # Only direct class method calls should be counted
-        assert call_counts["__module__.Calculator.add"] == 1
-        assert call_counts["__module__.Calculator.multiply"] == 1
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 1
+        assert call_counts[make_qualified_name("__module__.Calculator.multiply")] == 1
 
 
 def test_forward_reference_class() -> None:
@@ -220,7 +221,7 @@ def use_calculator():
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
         # Both Calculator.add calls should be counted
-        assert call_counts["__module__.Calculator.add"] == 2
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 2
 
 
 def test_complex_scope_resolution() -> None:
@@ -259,7 +260,7 @@ def module_level_use():
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
         # All five calls to Outer.Inner.inner_method should be counted
-        assert call_counts["__module__.Outer.Inner.inner_method"] == 5
+        assert call_counts[make_qualified_name("__module__.Outer.Inner.inner_method")] == 5
 
 
 def test_camelcase_vs_constants() -> None:
@@ -290,7 +291,7 @@ def use_stuff():
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
         # Only MyClass.method should be counted
-        assert call_counts["__module__.MyClass.method"] == 1
+        assert call_counts[make_qualified_name("__module__.MyClass.method")] == 1
 
 
 def test_class_in_function_scope() -> None:
@@ -322,8 +323,8 @@ def another_factory():
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
         # Each LocalClass.local_method in its respective function scope
-        assert call_counts["__module__.factory.LocalClass.local_method"] == 1
-        assert call_counts["__module__.another_factory.LocalClass.local_method"] == 1
+        assert call_counts[make_qualified_name("__module__.factory.LocalClass.local_method")] == 1
+        assert call_counts[make_qualified_name("__module__.another_factory.LocalClass.local_method")] == 1
 
 
 def test_end_to_end_with_class_detection() -> None:
@@ -378,7 +379,9 @@ def main():
         # Check call counts
         call_counts = {fp.function_info.qualified_name: fp.call_count for fp in results}
 
-        assert call_counts["__module__.NetworkClient.connect"] == 1
-        assert call_counts["__module__.NetworkClient.validate"] == 1  # Called by send_data
-        assert call_counts["__module__.NetworkClient._transmit"] == 1  # Called by send_data
-        assert call_counts["__module__.ErrorHandler.handle_error"] == 1
+        assert call_counts[make_qualified_name("__module__.NetworkClient.connect")] == 1
+        # Called by send_data
+        assert call_counts[make_qualified_name("__module__.NetworkClient.validate")] == 1
+        # Called by send_data
+        assert call_counts[make_qualified_name("__module__.NetworkClient._transmit")] == 1
+        assert call_counts[make_qualified_name("__module__.ErrorHandler.handle_error")] == 1

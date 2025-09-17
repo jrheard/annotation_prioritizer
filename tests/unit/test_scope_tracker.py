@@ -8,7 +8,7 @@ import ast
 
 import pytest
 
-from annotation_prioritizer.models import Scope, ScopeKind
+from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import (
     add_scope,
     build_qualified_name,
@@ -270,19 +270,29 @@ def test_build_qualified_name_exclude_classes() -> None:
 def test_find_first_match_found() -> None:
     """Test find_first_match when a match is found."""
     candidates = (
-        "__module__.Outer.Inner.method",
-        "__module__.Outer.method",
-        "__module__.method",
+        make_qualified_name("__module__.Outer.Inner.method"),
+        make_qualified_name("__module__.Outer.method"),
+        make_qualified_name("__module__.method"),
     )
-    registry = frozenset({"__module__.Outer.method", "__module__.other_func"})
+    registry = frozenset(
+        {
+            make_qualified_name("__module__.Outer.method"),
+            make_qualified_name("__module__.other_func"),
+        }
+    )
     result = find_first_match(candidates, registry)
-    assert result == "__module__.Outer.method"
+    assert result == make_qualified_name("__module__.Outer.method")
 
 
 def test_find_first_match_not_found() -> None:
     """Test find_first_match when no match is found."""
-    candidates = ("__module__.unknown", "__module__.missing")
-    registry = frozenset({"__module__.existing", "__module__.other"})
+    candidates = (make_qualified_name("__module__.unknown"), make_qualified_name("__module__.missing"))
+    registry = frozenset(
+        {
+            make_qualified_name("__module__.existing"),
+            make_qualified_name("__module__.other"),
+        }
+    )
     result = find_first_match(candidates, registry)
     assert result is None
 
@@ -290,15 +300,15 @@ def test_find_first_match_not_found() -> None:
 def test_find_first_match_empty_candidates() -> None:
     """Test find_first_match with empty candidates."""
     candidates = ()
-    registry = frozenset({"__module__.func"})
+    registry = frozenset({make_qualified_name("__module__.func")})
     result = find_first_match(candidates, registry)
     assert result is None
 
 
 def test_find_first_match_empty_registry() -> None:
     """Test find_first_match with empty registry."""
-    candidates = ("__module__.func",)
-    registry: frozenset[str] = frozenset()
+    candidates = (make_qualified_name("__module__.func"),)
+    registry: frozenset[QualifiedName] = frozenset()
     result = find_first_match(candidates, registry)
     assert result is None
 

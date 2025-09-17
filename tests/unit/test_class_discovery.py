@@ -9,6 +9,7 @@ from annotation_prioritizer.class_discovery import (
     ClassRegistry,
     build_class_registry,
 )
+from annotation_prioritizer.models import make_qualified_name
 
 
 @pytest.mark.parametrize(
@@ -138,10 +139,10 @@ class AnotherClass:
     assert "__module__.AnotherClass.Nested" in registry.classes
 
     # Test is_class method
-    assert registry.is_class("__module__.MyClass") is True
-    assert registry.is_class("__module__.AnotherClass") is True
-    assert registry.is_class("__module__.AnotherClass.Nested") is True
-    assert registry.is_class("NotAClass") is False
+    assert registry.is_class(make_qualified_name("__module__.MyClass")) is True
+    assert registry.is_class(make_qualified_name("__module__.AnotherClass")) is True
+    assert registry.is_class(make_qualified_name("__module__.AnotherClass.Nested")) is True
+    assert registry.is_class(make_qualified_name("NotAClass")) is False
 
 
 def test_class_discovery_preserves_order() -> None:
@@ -186,29 +187,34 @@ class MultiBase(Base1, Base2):
 def test_class_registry_identifies_user_classes() -> None:
     """Test that ClassRegistry correctly identifies user-defined classes."""
     registry = ClassRegistry(
-        classes=frozenset(["__module__.Calculator", "__module__.Parser"]),
+        classes=frozenset(
+            [
+                make_qualified_name("__module__.Calculator"),
+                make_qualified_name("__module__.Parser"),
+            ]
+        ),
     )
-    assert registry.is_class("__module__.Calculator") is True
-    assert registry.is_class("__module__.Parser") is True
-    assert registry.is_class("MAX_SIZE") is False
-    assert registry.is_class("unknown") is False
-    assert registry.is_class("int") is False  # Builtins not tracked
+    assert registry.is_class(make_qualified_name("__module__.Calculator")) is True
+    assert registry.is_class(make_qualified_name("__module__.Parser")) is True
+    assert registry.is_class(make_qualified_name("MAX_SIZE")) is False
+    assert registry.is_class(make_qualified_name("unknown")) is False
+    assert registry.is_class(make_qualified_name("int")) is False  # Builtins not tracked
 
 
 def test_class_registry_merge() -> None:
     """Test merging two ClassRegistry instances."""
-    registry1 = ClassRegistry(classes=frozenset(["__module__.ClassA"]))
-    registry2 = ClassRegistry(classes=frozenset(["__module__.ClassB"]))
+    registry1 = ClassRegistry(classes=frozenset([make_qualified_name("__module__.ClassA")]))
+    registry2 = ClassRegistry(classes=frozenset([make_qualified_name("__module__.ClassB")]))
     merged = registry1.merge(registry2)
-    assert merged.is_class("__module__.ClassA") is True
-    assert merged.is_class("__module__.ClassB") is True
+    assert merged.is_class(make_qualified_name("__module__.ClassA")) is True
+    assert merged.is_class(make_qualified_name("__module__.ClassB")) is True
 
 
 def test_class_registry_empty() -> None:
     """Test ClassRegistry with empty sets."""
     registry = ClassRegistry(classes=frozenset())
-    assert registry.is_class("anything") is False
-    assert registry.is_class("") is False
+    assert registry.is_class(make_qualified_name("anything")) is False
+    assert registry.is_class(make_qualified_name("")) is False
 
 
 def test_user_defined_class_shadows_builtin() -> None:
@@ -229,9 +235,9 @@ class list:
     registry = build_class_registry(tree)
 
     # User-defined classes are tracked
-    assert registry.is_class("__module__.int") is True
-    assert registry.is_class("__module__.list") is True
+    assert registry.is_class(make_qualified_name("__module__.int")) is True
+    assert registry.is_class(make_qualified_name("__module__.list")) is True
 
     # But builtin 'int' and 'list' are NOT tracked
-    assert registry.is_class("int") is False
-    assert registry.is_class("list") is False
+    assert registry.is_class(make_qualified_name("int")) is False
+    assert registry.is_class(make_qualified_name("list")) is False
