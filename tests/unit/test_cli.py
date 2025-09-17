@@ -85,15 +85,12 @@ def test_main_successful_analysis() -> None:
         )
 
         with (
-            patch("annotation_prioritizer.cli.Console") as mock_console,
-            patch("annotation_prioritizer.cli.analyze_file") as mock_analyze,
+            capture_console_output() as (test_console, _),
+            patch("annotation_prioritizer.cli.Console", return_value=test_console),
+            patch("annotation_prioritizer.cli.analyze_file", return_value=(mock_priority,)) as mock_analyze,
             patch("annotation_prioritizer.cli.display_results") as mock_display,
             patch("sys.argv", ["annotation-prioritizer", tmp.name]),
-            capture_console_output() as (test_console, _),
         ):
-            mock_console.return_value = test_console
-            mock_analyze.return_value = (mock_priority,)
-
             main()
 
             mock_analyze.assert_called_once_with(tmp.name)
@@ -127,15 +124,12 @@ def test_main_with_min_calls_filter() -> None:
         )
 
         with (
-            patch("annotation_prioritizer.cli.Console") as mock_console,
-            patch("annotation_prioritizer.cli.analyze_file") as mock_analyze,
+            capture_console_output() as (test_console, _),
+            patch("annotation_prioritizer.cli.Console", return_value=test_console),
+            patch("annotation_prioritizer.cli.analyze_file", return_value=(mock_priority,)) as mock_analyze,
             patch("annotation_prioritizer.cli.display_results") as mock_display,
             patch("sys.argv", ["annotation-prioritizer", tmp.name, "--min-calls", "5"]),
-            capture_console_output() as (test_console, _),
         ):
-            mock_console.return_value = test_console
-            mock_analyze.return_value = (mock_priority,)
-
             main()
 
             mock_analyze.assert_called_once_with(tmp.name)
