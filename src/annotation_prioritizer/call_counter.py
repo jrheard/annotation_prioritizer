@@ -27,11 +27,19 @@ Limitations:
 """
 
 import ast
+from collections.abc import Iterable
 from pathlib import Path
 from typing import override
 
 from annotation_prioritizer.class_discovery import ClassRegistry, build_class_registry
-from annotation_prioritizer.models import CallCount, FunctionInfo, Scope, ScopeKind
+from annotation_prioritizer.models import (
+    CallCount,
+    FunctionInfo,
+    QualifiedName,
+    Scope,
+    ScopeKind,
+    make_qualified_name,
+)
 from annotation_prioritizer.scope_tracker import (
     add_scope,
     build_qualified_name,
@@ -121,7 +129,7 @@ class CallCountVisitor(ast.NodeVisitor):
         """
         super().__init__()
         # Create internal call count tracking from known functions
-        self.call_counts: dict[str, int] = {func.qualified_name: 0 for func in known_functions}
+        self.call_counts: dict[QualifiedName, int] = {func.qualified_name: 0 for func in known_functions}
         self._class_registry = class_registry
         self._scope_stack = create_initial_stack()
 
@@ -155,7 +163,7 @@ class CallCountVisitor(ast.NodeVisitor):
 
         self.generic_visit(node)
 
-    def _resolve_call_name(self, node: ast.Call) -> str | None:
+    def _resolve_call_name(self, node: ast.Call) -> QualifiedName | None:
         """Resolve the qualified name of the called function.
 
         Uses conservative resolution - only returns names for calls that can be
@@ -210,7 +218,7 @@ class CallCountVisitor(ast.NodeVisitor):
         # Other node types (Call, Subscript, etc.) can't be class references
         return None
 
-    def _resolve_method_call(self, func: ast.Attribute) -> str | None:
+    def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
         """Resolve qualified name from a method call (attribute access).
 
         Handles self.method(), ClassName.method(), and Outer.Inner.method() calls.
@@ -243,7 +251,7 @@ class CallCountVisitor(ast.NodeVisitor):
         # Try to resolve the class name to its qualified form
         resolved_class = self._resolve_class_name(class_name)
         if resolved_class:
-            return f"{resolved_class}.{func.attr}"
+            return make_qualified_name(f"{resolved_class}.{func.attr}")
 
         # Class name couldn't be resolved in any scope or registry
         # TODO: Instance method calls (calc = Calculator(); calc.add()) require
@@ -251,7 +259,7 @@ class CallCountVisitor(ast.NodeVisitor):
         # This is planned as a separate feature (commits 4-5 in the original plan).
         return None
 
-    def _resolve_function_call(self, function_name: str) -> str | None:
+    def _resolve_function_call(self, function_name: str) -> QualifiedName | None:
         """Resolve a direct function call to its qualified name.
 
         Tries to resolve the function call by checking different scope levels,
@@ -264,9 +272,9 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified function name if found in known functions, None otherwise
         """
-        return self._resolve_name_in_scope(function_name, set(self.call_counts.keys()))
+        return self._resolve_name_in_scope(function_name, self.call_counts.keys())
 
-    def _resolve_class_name(self, class_name: str) -> str | None:
+    def _resolve_class_name(self, class_name: str) -> QualifiedName | None:
         """Resolve a class name to its qualified form based on current scope.
 
         Only resolves user-defined classes found in the AST.
@@ -279,7 +287,7 @@ class CallCountVisitor(ast.NodeVisitor):
         """
         return self._resolve_name_in_scope(class_name, self._class_registry.classes)
 
-    def _resolve_name_in_scope(self, name: str, registry: set[str] | frozenset[str]) -> str | None:
+    def _resolve_name_in_scope(self, name: str, registry: Iterable[QualifiedName]) -> QualifiedName | None:
         """Resolve a name to its qualified form by checking scope levels.
 
         Generates candidates from innermost to outermost scope and returns the first match.
