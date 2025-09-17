@@ -16,6 +16,7 @@ consistently build qualified names like "__module__.ClassName.method_name".
 import ast
 from collections.abc import Set as AbstractSet
 
+from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import Scope, ScopeKind
 
 type ScopeStack = tuple[Scope, ...]
@@ -181,10 +182,7 @@ def find_first_match(candidates: tuple[str, ...], registry: AbstractSet[str]) ->
     Returns:
         First matching candidate or None if no matches
     """
-    for candidate in candidates:
-        if candidate in registry:
-            return candidate
-    return None
+    return first(candidates, lambda c: c in registry)
 
 
 def extract_attribute_chain(node: ast.Attribute) -> tuple[str, ...]:

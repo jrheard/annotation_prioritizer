@@ -5,6 +5,7 @@ import ast
 
 from annotation_prioritizer.call_counter import CallCountVisitor, count_function_calls
 from annotation_prioritizer.class_discovery import build_class_registry
+from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import FunctionInfo, ParameterInfo, Scope, ScopeKind
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
 from tests.helpers.temp_files import temp_python_file
@@ -349,42 +350,37 @@ def test_self_without_class():
 
 def test_self_call_outside_class_context() -> None:
     """Test self.method() calls that occur outside class context."""
-    code = """
-# This is invalid Python but tests our edge case handling
-def some_function():
-    # Imagine this somehow has self.unknown_method() - should not crash
+    # Parse code that contains self.method() outside of a class
+    # This tests the edge case where self appears at module level
+    edge_case_code = """
+# Module-level function that has a self.method() call
+# This would be invalid in real Python but tests our handling
+def method():
     pass
+
+# Simulate a call that looks like self.method() outside class context
+# We'll extract this call node from the parsed AST
+self.method()
 """
 
-    with temp_python_file(code) as temp_path:
-        # Create a visitor and manually test the edge case
-        known_functions = (
-            FunctionInfo(
-                name="method",
-                qualified_name="__module__.method",
-                parameters=(),
-                has_return_annotation=False,
-                line_number=1,
-                file_path=temp_path,
-            ),
+    # Parse the code to get real AST nodes
+    tree = ast.parse(edge_case_code)
+
+    # Find the self.method() call node in the AST
+    def is_self_method_call(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "self"
+            and node.func.attr == "method"
         )
-        # Build a simple class registry for testing
-        tree = ast.parse("")
-        class_registry = build_class_registry(tree)
-        visitor = CallCountVisitor(known_functions, class_registry)
 
-        # Create a mock Call node that represents self.method() outside class
-        func_node = ast.Attribute(value=ast.Name(id="self", ctx=ast.Load()), attr="method", ctx=ast.Load())
-        call_node = ast.Call(func=func_node, args=[], keywords=[])
+    call_node = first(ast.walk(tree), is_self_method_call)
+    assert call_node is not None, "Could not find self.method() call in parsed AST"
+    assert isinstance(call_node, ast.Call)
 
-        # Test by actually visiting the call - this should increment the count
-        visitor.visit_Call(call_node)
-        assert visitor.call_counts["__module__.method"] == 1  # This covers line 70
-
-
-def test_complex_qualified_calls() -> None:
-    """Test complex qualified calls - unresolved compound names should not be counted."""
-    # Create a visitor and manually test the complex qualified call case
+    # Create a visitor with the known function
     known_functions = (
         FunctionInfo(
             name="method",
@@ -395,18 +391,62 @@ def test_complex_qualified_calls() -> None:
             file_path="dummy.py",
         ),
     )
-    # Build a simple class registry for testing
-    tree = ast.parse("")
-    class_registry = build_class_registry(tree)
+
+    class_registry = build_class_registry(ast.parse(""))
     visitor = CallCountVisitor(known_functions, class_registry)
 
-    # Create a mock Call node that represents outer.inner.method()
-    # This creates: outer.inner.method() where func.value is ast.Attribute
-    inner_attr = ast.Attribute(value=ast.Name(id="outer", ctx=ast.Load()), attr="inner", ctx=ast.Load())
-    func_node = ast.Attribute(value=inner_attr, attr="method", ctx=ast.Load())
-    call_node = ast.Call(func=func_node, args=[], keywords=[])
+    # Test by visiting the call - this should increment the count
+    visitor.visit_Call(call_node)
+    assert visitor.call_counts["__module__.method"] == 1  # This covers line 70
 
-    # Test by actually visiting the call - unresolved references should not be counted
+
+def test_complex_qualified_calls() -> None:
+    """Test complex qualified calls - unresolved compound names should not be counted."""
+    # Parse code containing complex qualified calls like outer.inner.method()
+    complex_call_code = """
+def method():
+    pass
+
+# Complex qualified call that can't be resolved
+# This tests handling of compound attribute access
+outer.inner.method()
+"""
+
+    # Parse the code to get real AST nodes
+    tree = ast.parse(complex_call_code)
+
+    # Find the outer.inner.method() call node in the AST
+    def is_outer_inner_method_call(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "method"
+            and isinstance(node.func.value, ast.Attribute)
+            and node.func.value.attr == "inner"
+            and isinstance(node.func.value.value, ast.Name)
+            and node.func.value.value.id == "outer"
+        )
+
+    call_node = first(ast.walk(tree), is_outer_inner_method_call)
+    assert call_node is not None, "Could not find outer.inner.method() call in parsed AST"
+    assert isinstance(call_node, ast.Call)
+
+    # Create a visitor with the known function
+    known_functions = (
+        FunctionInfo(
+            name="method",
+            qualified_name="__module__.method",
+            parameters=(),
+            has_return_annotation=False,
+            line_number=1,
+            file_path="dummy.py",
+        ),
+    )
+
+    class_registry = build_class_registry(ast.parse(""))
+    visitor = CallCountVisitor(known_functions, class_registry)
+
+    # Test by visiting the call - unresolved references should not be counted
     visitor.visit_Call(call_node)
     assert visitor.call_counts["__module__.method"] == 0  # Unresolved compound name not counted
 
@@ -660,26 +700,32 @@ def module_helper():
 
 def test_extract_call_with_dynamic_call() -> None:
     """Test that dynamic calls return None."""
-    # Build a simple class registry for testing
-    tree = ast.parse("")
-    class_registry = build_class_registry(tree)
+    # Parse code containing a dynamic call: getattr(obj, 'method')()
+    dynamic_call_code = """
+# Dynamic function call that can't be resolved statically
+obj = object()
+getattr(obj, 'method')()
+"""
 
+    # Parse the code to get real AST nodes
+    tree = ast.parse(dynamic_call_code)
+
+    # Find the getattr(obj, 'method')() call node in the AST
+    def is_getattr_dynamic_call(node: ast.AST) -> bool:
+        return (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Call)
+            and isinstance(node.func.func, ast.Name)
+            and node.func.func.id == "getattr"
+        )
+
+    call_node = first(ast.walk(tree), is_getattr_dynamic_call)
+    assert call_node is not None, "Could not find getattr() dynamic call in parsed AST"
+    assert isinstance(call_node, ast.Call)
+
+    # Create a visitor with an empty class registry
+    class_registry = build_class_registry(ast.parse(""))
     visitor = CallCountVisitor((), class_registry)
-
-    # Create a dynamic call node: getattr(obj, 'method')()
-    getattr_call = ast.Call(
-        func=ast.Name(id="getattr", ctx=ast.Load()),
-        args=[
-            ast.Name(id="obj", ctx=ast.Load()),
-            ast.Constant(value="method"),
-        ],
-        keywords=[],
-    )
-    call_node = ast.Call(
-        func=getattr_call,
-        args=[],
-        keywords=[],
-    )
 
     # Test that resolve_call_name returns None for dynamic calls
     result = visitor._resolve_call_name(call_node)
