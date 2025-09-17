@@ -2,7 +2,7 @@
 
 import pytest
 
-from annotation_prioritizer.models import FunctionInfo, ParameterInfo
+from annotation_prioritizer.models import ParameterInfo
 from annotation_prioritizer.scoring import (
     PARAMETERS_WEIGHT,
     RETURN_TYPE_WEIGHT,
@@ -10,14 +10,15 @@ from annotation_prioritizer.scoring import (
     calculate_parameter_score,
     calculate_return_score,
 )
+from tests.helpers.factories import make_function_info, make_parameter
 
 
 @pytest.mark.parametrize(
     "parameters",
     [
         (),  # No parameters
-        (ParameterInfo("self", False, False, False),),  # Only self
-        (ParameterInfo("cls", False, False, False),),  # Only cls
+        (make_parameter("self"),),  # Only self
+        (make_parameter("cls"),),  # Only cls
     ],
 )
 def test_implicit_parameters_get_perfect_score(parameters: tuple[ParameterInfo, ...]) -> None:
@@ -29,9 +30,9 @@ def test_implicit_parameters_get_perfect_score(parameters: tuple[ParameterInfo, 
 def test_all_parameters_annotated() -> None:
     """Functions with all parameters annotated should get perfect score."""
     parameters = (
-        ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
-        ParameterInfo("b", has_annotation=True, is_variadic=False, is_keyword=False),
-        ParameterInfo("c", has_annotation=True, is_variadic=False, is_keyword=False),
+        make_parameter("a", annotated=True),
+        make_parameter("b", annotated=True),
+        make_parameter("c", annotated=True),
     )
     score = calculate_parameter_score(parameters)
     assert score == 1.0
@@ -40,8 +41,8 @@ def test_all_parameters_annotated() -> None:
 def test_no_parameters_annotated() -> None:
     """Functions with no parameters annotated should get zero score."""
     parameters = (
-        ParameterInfo("a", has_annotation=False, is_variadic=False, is_keyword=False),
-        ParameterInfo("b", has_annotation=False, is_variadic=False, is_keyword=False),
+        make_parameter("a"),
+        make_parameter("b"),
     )
     score = calculate_parameter_score(parameters)
     assert score == 0.0
@@ -50,9 +51,9 @@ def test_no_parameters_annotated() -> None:
 def test_partial_parameters_annotated() -> None:
     """Functions with some parameters annotated should get proportional score."""
     parameters = (
-        ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
-        ParameterInfo("b", has_annotation=False, is_variadic=False, is_keyword=False),
-        ParameterInfo("c", has_annotation=True, is_variadic=False, is_keyword=False),
+        make_parameter("a", annotated=True),
+        make_parameter("b"),
+        make_parameter("c", annotated=True),
     )
     score = calculate_parameter_score(parameters)
     assert score == 2.0 / 3.0
@@ -60,14 +61,14 @@ def test_partial_parameters_annotated() -> None:
 
 def test_single_parameter_annotated() -> None:
     """Single annotated parameter should get perfect score."""
-    parameters = (ParameterInfo("param", has_annotation=True, is_variadic=False, is_keyword=False),)
+    parameters = (make_parameter("param", annotated=True),)
     score = calculate_parameter_score(parameters)
     assert score == 1.0
 
 
 def test_single_parameter_not_annotated() -> None:
     """Single unannotated parameter should get zero score."""
-    parameters = (ParameterInfo("param", has_annotation=False, is_variadic=False, is_keyword=False),)
+    parameters = (make_parameter("param"),)
     score = calculate_parameter_score(parameters)
     assert score == 0.0
 
@@ -75,9 +76,9 @@ def test_single_parameter_not_annotated() -> None:
 def test_variadic_parameters() -> None:
     """Variadic parameters (*args, **kwargs) should be treated normally."""
     parameters = (
-        ParameterInfo("regular", has_annotation=True, is_variadic=False, is_keyword=False),
-        ParameterInfo("args", has_annotation=False, is_variadic=True, is_keyword=False),
-        ParameterInfo("kwargs", has_annotation=True, is_variadic=False, is_keyword=True),
+        make_parameter("regular", annotated=True),
+        make_parameter("args", variadic=True),
+        make_parameter("kwargs", annotated=True, keyword=True),
     )
     score = calculate_parameter_score(parameters)
     assert score == 2.0 / 3.0
@@ -97,12 +98,11 @@ def test_unannotated_return_gets_zero_score() -> None:
 
 def test_fully_annotated_function() -> None:
     """Fully annotated function should get perfect total score."""
-    function_info = FunctionInfo(
-        name="test_func",
-        qualified_name="__module__.test_func",
+    function_info = make_function_info(
+        "test_func",
         parameters=(
-            ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
-            ParameterInfo("b", has_annotation=True, is_variadic=False, is_keyword=False),
+            make_parameter("a", annotated=True),
+            make_parameter("b", annotated=True),
         ),
         has_return_annotation=True,
         line_number=10,
@@ -119,12 +119,11 @@ def test_fully_annotated_function() -> None:
 
 def test_no_annotations_function() -> None:
     """Function with no annotations should get zero total score."""
-    function_info = FunctionInfo(
-        name="test_func",
-        qualified_name="__module__.test_func",
+    function_info = make_function_info(
+        "test_func",
         parameters=(
-            ParameterInfo("a", has_annotation=False, is_variadic=False, is_keyword=False),
-            ParameterInfo("b", has_annotation=False, is_variadic=False, is_keyword=False),
+            make_parameter("a"),
+            make_parameter("b"),
         ),
         has_return_annotation=False,
         line_number=10,
@@ -140,10 +139,8 @@ def test_no_annotations_function() -> None:
 
 def test_no_parameters_with_return_annotation() -> None:
     """Function with no parameters but return annotation should get partial score."""
-    function_info = FunctionInfo(
-        name="test_func",
-        qualified_name="__module__.test_func",
-        parameters=(),
+    function_info = make_function_info(
+        "test_func",
         has_return_annotation=True,
         line_number=10,
         file_path="/test/file.py",
@@ -158,10 +155,8 @@ def test_no_parameters_with_return_annotation() -> None:
 
 def test_no_parameters_without_return_annotation() -> None:
     """Function with no parameters and no return annotation should get partial score."""
-    function_info = FunctionInfo(
-        name="test_func",
-        qualified_name="__module__.test_func",
-        parameters=(),
+    function_info = make_function_info(
+        "test_func",
         has_return_annotation=False,
         line_number=10,
         file_path="/test/file.py",
@@ -177,12 +172,11 @@ def test_no_parameters_without_return_annotation() -> None:
 
 def test_partial_parameters_with_return_annotation() -> None:
     """Function with partial parameter annotations and return annotation."""
-    function_info = FunctionInfo(
-        name="test_func",
-        qualified_name="__module__.test_func",
+    function_info = make_function_info(
+        "test_func",
         parameters=(
-            ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
-            ParameterInfo("b", has_annotation=False, is_variadic=False, is_keyword=False),
+            make_parameter("a", annotated=True),
+            make_parameter("b"),
         ),
         has_return_annotation=True,
         line_number=10,
@@ -200,12 +194,11 @@ def test_partial_parameters_with_return_annotation() -> None:
 
 def test_partial_parameters_without_return_annotation() -> None:
     """Function with partial parameter annotations and no return annotation."""
-    function_info = FunctionInfo(
-        name="test_func",
-        qualified_name="__module__.test_func",
+    function_info = make_function_info(
+        "test_func",
         parameters=(
-            ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
-            ParameterInfo("b", has_annotation=False, is_variadic=False, is_keyword=False),
+            make_parameter("a", annotated=True),
+            make_parameter("b"),
         ),
         has_return_annotation=False,
         line_number=10,
@@ -228,14 +221,14 @@ def test_weighted_scoring_constants() -> None:
 
 def test_complex_parameter_mix() -> None:
     """Test scoring with a complex mix of parameter types."""
-    function_info = FunctionInfo(
-        name="complex_func",
+    function_info = make_function_info(
+        "complex_func",
         qualified_name="__module__.ClassName.complex_func",
         parameters=(
-            ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),
-            ParameterInfo("a", has_annotation=True, is_variadic=False, is_keyword=False),
-            ParameterInfo("args", has_annotation=False, is_variadic=True, is_keyword=False),
-            ParameterInfo("kwargs", has_annotation=True, is_variadic=False, is_keyword=True),
+            make_parameter("self"),
+            make_parameter("a", annotated=True),
+            make_parameter("args", variadic=True),
+            make_parameter("kwargs", annotated=True, keyword=True),
         ),
         has_return_annotation=False,
         line_number=25,
@@ -255,9 +248,9 @@ def test_complex_parameter_mix() -> None:
 def test_method_with_self_and_annotated_params() -> None:
     """Method with self + annotated params should get perfect parameter score."""
     parameters = (
-        ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),
-        ParameterInfo("x", has_annotation=True, is_variadic=False, is_keyword=False),
-        ParameterInfo("y", has_annotation=True, is_variadic=False, is_keyword=False),
+        make_parameter("self"),
+        make_parameter("x", annotated=True),
+        make_parameter("y", annotated=True),
     )
     score = calculate_parameter_score(parameters)
     assert score == 1.0
@@ -266,9 +259,9 @@ def test_method_with_self_and_annotated_params() -> None:
 def test_method_with_self_and_mixed_annotations() -> None:
     """Method with self + mixed annotations should score based only on real params."""
     parameters = (
-        ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),
-        ParameterInfo("x", has_annotation=True, is_variadic=False, is_keyword=False),
-        ParameterInfo("y", has_annotation=False, is_variadic=False, is_keyword=False),
+        make_parameter("self"),
+        make_parameter("x", annotated=True),
+        make_parameter("y"),
     )
     score = calculate_parameter_score(parameters)
     # Only x and y count, 1 out of 2 annotated = 0.5
@@ -278,9 +271,9 @@ def test_method_with_self_and_mixed_annotations() -> None:
 def test_classmethod_with_cls_and_mixed_annotations() -> None:
     """Class method with cls + mixed annotations should score based only on real params."""
     parameters = (
-        ParameterInfo("cls", has_annotation=False, is_variadic=False, is_keyword=False),
-        ParameterInfo("value", has_annotation=True, is_variadic=False, is_keyword=False),
-        ParameterInfo("config", has_annotation=False, is_variadic=False, is_keyword=False),
+        make_parameter("cls"),
+        make_parameter("value", annotated=True),
+        make_parameter("config"),
     )
     score = calculate_parameter_score(parameters)
     # Only value and config count, 1 out of 2 annotated = 0.5
@@ -290,9 +283,9 @@ def test_classmethod_with_cls_and_mixed_annotations() -> None:
 def test_both_self_and_cls_ignored() -> None:
     """Unusual case where both self and cls are present should ignore both."""
     parameters = (
-        ParameterInfo("self", has_annotation=False, is_variadic=False, is_keyword=False),
-        ParameterInfo("cls", has_annotation=False, is_variadic=False, is_keyword=False),
-        ParameterInfo("x", has_annotation=True, is_variadic=False, is_keyword=False),
+        make_parameter("self"),
+        make_parameter("cls"),
+        make_parameter("x", annotated=True),
     )
     score = calculate_parameter_score(parameters)
     # Only x counts, 1 out of 1 annotated = 1.0
