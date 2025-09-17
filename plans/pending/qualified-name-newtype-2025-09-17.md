@@ -18,13 +18,15 @@ The codebase extensively uses qualified names (e.g., `"__module__.Calculator.add
 
 ## Implementation Steps
 
-### Commit 0: Remove builtin tracking from ClassRegistry
+### Commit 0: Remove builtin tracking from ClassRegistry ✅
+
+**Status:** COMPLETED (commit ec7e9e8)
 
 **Files to modify:**
-- `src/annotation_prioritizer/class_discovery.py`
-- `src/annotation_prioritizer/call_counter.py`
-- `tests/unit/test_class_discovery.py`
-- `tests/unit/test_call_counter.py`
+- `src/annotation_prioritizer/class_discovery.py` ✅
+- `src/annotation_prioritizer/call_counter.py` ✅
+- `tests/unit/test_class_discovery.py` ✅
+- `tests/unit/test_call_counter.py` ✅
 
 **Changes to class_discovery.py:**
 

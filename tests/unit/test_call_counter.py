@@ -801,29 +801,29 @@ async def top_level_async():
 
 
 def test_builtin_shadowing() -> None:
-    """Test that local classes shadow builtin types in name resolution."""
+    """Test that user-defined classes with builtin names are resolved correctly."""
     code = """
-class list:  # Shadows builtin list
+class list:  # User-defined class with builtin name
     @staticmethod
     def append(item):
         pass
 
 def test():
-    list.append("x")  # Should resolve to local list, not builtin
+    list.append("x")  # Should resolve to user-defined list class
 """
 
     with temp_python_file(code) as temp_path:
         known_functions = (
             make_function_info(
                 "append",
-                qualified_name="__module__.list.append",  # Local class method
+                qualified_name="__module__.list.append",  # User-defined class method
                 parameters=(make_parameter("item"),),
                 line_number=4,
                 file_path=temp_path,
             ),
             make_function_info(
                 "append",
-                qualified_name="list.append",  # Builtin list.append
+                qualified_name="list.append",  # Never resolved (no builtin tracking)
                 parameters=(
                     make_parameter("self"),
                     make_parameter("item"),
@@ -836,7 +836,8 @@ def test():
         result = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        # Local class method should be called, not builtin
+        # User-defined class method should be called
+        # The "list.append" entry (without __module__) is never resolved since we don't track builtins
         assert call_counts["__module__.list.append"] == 1
         assert call_counts["list.append"] == 0
 

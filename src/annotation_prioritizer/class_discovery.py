@@ -5,19 +5,17 @@ Python code. It builds a comprehensive registry of all classes found in the AST.
 
 Key Components:
     - ClassDiscoveryVisitor: AST visitor that finds all ClassDef nodes
-    - ClassRegistry: Immutable registry tracking AST classes and built-in types
+    - ClassRegistry: Immutable registry tracking user-defined classes
     - build_class_registry: Factory function to create a registry from an AST
 
 The class detection system supports:
     - Module-level classes
     - Nested classes (classes inside other classes)
     - Classes defined inside functions
-    - Python built-in types (int, str, list, etc.)
     - Non-PEP8 class names (e.g., xmlParser, dataProcessor)
 """
 
 import ast
-import builtins
 from dataclasses import dataclass
 from typing import override
 
@@ -25,45 +23,23 @@ from annotation_prioritizer.models import Scope, ScopeKind
 from annotation_prioritizer.scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
 
 
-def _build_builtin_types() -> frozenset[str]:
-    """Build a comprehensive set of Python built-in types.
-
-    Uses the builtins module to get all built-in classes dynamically.
-    This ensures we capture all built-in types including all exceptions.
-    """
-    return frozenset(name for name in dir(builtins) if isinstance(getattr(builtins, name), type))
-
-
-PYTHON_BUILTIN_TYPES: frozenset[str] = _build_builtin_types()
-
-
 @dataclass(frozen=True)
 class ClassRegistry:
-    """Immutable registry of known classes in the analyzed code.
+    """Registry of user-defined classes found in the analyzed code.
 
-    Provides definitive class identification without heuristics or guessing.
-    Classes are identified from two sources:
-    1. AST ClassDef nodes found during parsing
-    2. Python built-in types (int, str, list, etc.)
+    Only tracks classes defined in the AST (via ClassDef nodes).
+    Does not track Python builtins since we never analyze their methods.
     """
 
-    ast_classes: frozenset[str]  # Classes found via ClassDef nodes
-    builtin_classes: frozenset[str]  # Python built-in type names
+    classes: frozenset[str]  # Qualified names like "__module__.Calculator"
 
     def is_class(self, name: str) -> bool:
-        """Check if a name is definitively known to be a class.
-
-        Returns True only for names we're certain are classes.
-        Conservative approach: False for unknowns rather than guessing.
-        """
-        return name in self.ast_classes or name in self.builtin_classes
+        """Check if a name is a known user-defined class."""
+        return name in self.classes
 
     def merge(self, other: "ClassRegistry") -> "ClassRegistry":
-        """Merge with another registry (for multi-file analysis future)."""
-        return ClassRegistry(
-            ast_classes=self.ast_classes | other.ast_classes,
-            builtin_classes=self.builtin_classes,  # Built-ins never change
-        )
+        """Merge with another registry (for future multi-file analysis)."""
+        return ClassRegistry(classes=self.classes | other.classes)
 
 
 class ClassDiscoveryVisitor(ast.NodeVisitor):
@@ -108,10 +84,7 @@ class ClassDiscoveryVisitor(ast.NodeVisitor):
 
 
 def build_class_registry(tree: ast.AST) -> ClassRegistry:
-    """Build a complete class registry from an AST.
-
-    Pure function that discovers all class definitions in the AST
-    and combines them with Python built-in types.
+    """Build a registry of all user-defined classes from an AST.
 
     Args:
         tree: Parsed AST of Python source code
@@ -122,7 +95,4 @@ def build_class_registry(tree: ast.AST) -> ClassRegistry:
     visitor = ClassDiscoveryVisitor()
     visitor.visit(tree)
 
-    return ClassRegistry(
-        ast_classes=frozenset(visitor.class_names),
-        builtin_classes=PYTHON_BUILTIN_TYPES,
-    )
+    return ClassRegistry(classes=frozenset(visitor.class_names))
