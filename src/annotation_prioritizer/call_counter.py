@@ -260,31 +260,11 @@ class CallCountVisitor(ast.NodeVisitor):
         return None
 
     def _resolve_function_call(self, function_name: str) -> QualifiedName | None:
-        """Resolve a direct function call to its qualified name.
-
-        Tries to resolve the function call by checking different scope levels,
-        starting from more specific (nested) scopes and falling back to module level.
-        Only returns names for functions that exist in the known functions list.
-
-        Args:
-            function_name: The local name of the function being called
-
-        Returns:
-            Qualified function name if found in known functions, None otherwise
-        """
+        """Resolve a function call to its qualified name."""
         return self._resolve_name_in_scope(function_name, self.call_counts.keys())
 
     def _resolve_class_name(self, class_name: str) -> QualifiedName | None:
-        """Resolve a class name to its qualified form based on current scope.
-
-        Only resolves user-defined classes found in the AST.
-
-        Args:
-            class_name: The name to resolve (e.g., "Calculator", "Outer.Inner")
-
-        Returns:
-            Qualified class name if found in registry, None otherwise
-        """
+        """Resolve a class name to its qualified name."""
         return self._resolve_name_in_scope(class_name, self._class_registry.classes)
 
     def _resolve_name_in_scope(self, name: str, registry: Iterable[QualifiedName]) -> QualifiedName | None:
