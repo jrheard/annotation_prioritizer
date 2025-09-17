@@ -111,6 +111,14 @@ def make_priority(  # noqa: PLR0913
     """
     # Ensure name is not already qualified
     assert "." not in name, f"Function name should not be qualified, got: {name}"
+
+    # Ensure consistency between return_score and has_return_annotation
+    assert (return_score == 0.0 and not has_return_annotation) or (
+        return_score == 1.0 and has_return_annotation
+    ), (
+        f"Inconsistent return annotation state: return_score={return_score}, "
+        f"has_return_annotation={has_return_annotation}"
+    )
     qualified_name = f"__module__.{name}"
     if parameters is None:
         parameters = ()
