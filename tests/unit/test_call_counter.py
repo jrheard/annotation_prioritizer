@@ -822,3 +822,48 @@ async def top_level_async():
         # - once from top_level_async
         # Total: 2 calls
         assert call_counts["__module__.regular_helper"] == 2
+
+
+def test_builtin_shadowing() -> None:
+    """Test that local classes shadow builtin types in name resolution."""
+    code = """
+class list:  # Shadows builtin list
+    @staticmethod
+    def append(item):
+        pass
+
+def test():
+    list.append("x")  # Should resolve to local list, not builtin
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="append",
+                qualified_name="__module__.list.append",  # Local class method
+                parameters=(
+                    ParameterInfo(name="item", has_annotation=False, is_variadic=False, is_keyword=False),
+                ),
+                has_return_annotation=False,
+                line_number=4,
+                file_path=temp_path,
+            ),
+            FunctionInfo(
+                name="append",
+                qualified_name="list.append",  # Builtin list.append
+                parameters=(
+                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
+                    ParameterInfo(name="item", has_annotation=False, is_variadic=False, is_keyword=False),
+                ),
+                has_return_annotation=False,
+                line_number=1,
+                file_path=temp_path,
+            ),
+        )
+
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # Local class method should be called, not builtin
+        assert call_counts["__module__.list.append"] == 1
+        assert call_counts["list.append"] == 0

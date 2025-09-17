@@ -179,8 +179,7 @@ class CallCountVisitor(ast.NodeVisitor):
         # Cannot be resolved statically - return None
         return None
 
-    # TODO: refactor to remove this noqa
-    def _resolve_method_call(self, func: ast.Attribute) -> str | None:  # noqa: PLR0911
+    def _resolve_method_call(self, func: ast.Attribute) -> str | None:
         """Resolve qualified name from a method call (attribute access).
 
         Handles self.method(), ClassName.method(), and Outer.Inner.method() calls.
@@ -203,11 +202,6 @@ class CallCountVisitor(ast.NodeVisitor):
         # Static/class method calls: ClassName.method_name()
         if isinstance(func.value, ast.Name):
             potential_class = func.value.id
-            # Check built-in types directly (they don't have __module__ prefix)
-            if potential_class in self._class_registry.builtin_classes:
-                return f"{potential_class}.{func.attr}"
-
-            # Use resolver to check all possible scopes
             resolved_class = self._resolve_class_name(potential_class)
             if resolved_class:
                 return f"{resolved_class}.{func.attr}"
@@ -255,6 +249,8 @@ class CallCountVisitor(ast.NodeVisitor):
         """Resolve a class name to its qualified form based on current scope.
 
         Handles simple and compound class names (e.g., "Calculator", "Outer.Inner").
+        Follows Python's name resolution order: local/nested scopes first, then
+        module-level, and finally builtin types.
 
         Args:
             class_name: The name to resolve (e.g., "Calculator", "Outer.Inner")
@@ -263,4 +259,14 @@ class CallCountVisitor(ast.NodeVisitor):
             Qualified class name if found in registry, None otherwise
         """
         candidates = generate_name_candidates(self._scope_stack, class_name)
-        return find_first_match(candidates, self._class_registry.ast_classes)
+
+        # Check AST classes first (respects Python's scope resolution order)
+        match = find_first_match(candidates, self._class_registry.ast_classes)
+        if match:
+            return match
+
+        # Check builtin types last (they don't have __module__ prefix)
+        if class_name in self._class_registry.builtin_classes:
+            return class_name
+
+        return None
