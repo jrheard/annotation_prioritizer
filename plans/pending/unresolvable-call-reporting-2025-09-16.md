@@ -18,7 +18,7 @@ The call counter currently returns `None` for unresolvable calls and silently ig
 
 ```python
 # Current behavior in call_counter.py
-def _extract_call_name(self, node: ast.Call) -> str | None:
+def _resolve_call_name(self, node: ast.Call) -> QualifiedName | None:
     # ... attempts to resolve ...
     # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
     # Cannot be resolved statically - return None
@@ -37,21 +37,38 @@ This undermines trust and makes it impossible to assess coverage completeness.
 
 ### Concrete Examples
 
-From `/workspace/demo_files/complex_cases.py`:
-
 ```python
 # These work and are counted:
-processor.process_data(data)  # Direct method call
 DataProcessor.utility_function("hello")  # Static method call
+self.method_name()  # Self method call within class
 
-# These are silently ignored:
+# These are silently ignored (no tracking/reporting):
+# INSTANCE_METHOD - Instance method calls via variables:
+processor = DataProcessor(config)
+processor.process_data(data)  # Shows 0 calls - silently ignored!
+
+# DYNAMIC - Dynamic calls using getattr:
 method = getattr(processor, 'process_data')
 result = method(data)  # Dynamic call - unresolvable
 
-# Future issues with decorators:
-@some_decorator
-def decorated_func(): pass
-decorated_func()  # Might not resolve correctly
+# DYNAMIC - Dictionary/subscript dispatch:
+handlers = {'process': processor.process_data}
+handlers['process'](data)  # Subscript call - unresolvable
+
+# COMPLEX_QUALIFIED - Deep attribute chains:
+app.services.database.connection.execute(query)  # Too deep to resolve
+
+# IMPORTED - Calls to imported functions (not yet implemented):
+from math import sqrt
+sqrt(16)  # Import tracking not yet supported
+
+import json
+json.dumps({'key': 'value'})  # Module function calls not tracked
+
+# UNKNOWN - Edge cases that don't fit other categories:
+(lambda x: x * 2)(5)  # Lambda calls
+callable_obj = SomeClass()
+callable_obj(args)  # Calls to callable objects (__call__ method)
 ```
 
 ## Technical Design
@@ -67,8 +84,8 @@ class UnresolvableCategory(StrEnum):
     """Categories for why a call couldn't be resolved."""
     DYNAMIC = "dynamic"  # getattr(), exec(), dictionary lookups
     IMPORTED = "imported"  # Calls to imported functions (not yet supported)
-    DECORATED = "decorated"  # Functions modified by decorators
     COMPLEX_QUALIFIED = "complex_qualified"  # Deep attribute chains
+    INSTANCE_METHOD = "instance_method"  # obj.method() where obj is a variable
     UNKNOWN = "unknown"  # Doesn't fit other categories
 
 @dataclass(frozen=True)
@@ -143,6 +160,16 @@ def categorize_unresolvable_call(node: ast.Call, source_lines: tuple[str, ...]) 
             category=UnresolvableCategory.DYNAMIC
         )
 
+    # Instance method calls: variable.method() where variable is not self/cls
+    # and doesn't start with uppercase (likely not a class name)
+    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
+        if func.value.id not in ("self", "cls") and not func.value.id[0].isupper():
+            return UnresolvableCall(
+                line_number=node.lineno,
+                call_text=call_text,
+                category=UnresolvableCategory.INSTANCE_METHOD
+            )
+
     # Complex qualified calls we can't resolve
     if isinstance(func, ast.Attribute):
         # Count depth of attribute chain
@@ -157,17 +184,6 @@ def categorize_unresolvable_call(node: ast.Call, source_lines: tuple[str, ...]) 
                 line_number=node.lineno,
                 call_text=call_text,
                 category=UnresolvableCategory.COMPLEX_QUALIFIED
-            )
-
-    # Imported function calls (when we detect them)
-    # This will be enhanced when import tracking is added
-    if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name):
-        # Heuristic: if it looks like a module name (lowercase)
-        if func.value.id.islower() and func.value.id not in ("self", "cls"):
-            return UnresolvableCall(
-                line_number=node.lineno,
-                call_text=call_text,
-                category=UnresolvableCategory.IMPORTED
             )
 
     # Default category for unrecognized patterns
@@ -186,11 +202,14 @@ Modify `CallCountVisitor` class:
 class CallCountVisitor(ast.NodeVisitor):
     """Enhanced visitor that tracks both resolved and unresolved calls."""
 
-    def __init__(self, known_functions: tuple[FunctionInfo, ...], source_lines: tuple[str, ...]) -> None:
+    def __init__(self, known_functions: tuple[FunctionInfo, ...],
+                 class_registry: ClassRegistry,
+                 source_lines: tuple[str, ...]) -> None:
         """Initialize with source lines for unresolvable call context."""
         super().__init__()
-        self.call_counts: dict[str, int] = {func.qualified_name: 0 for func in known_functions}
-        self._scope_stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
+        self.call_counts: dict[QualifiedName, int] = {func.qualified_name: 0 for func in known_functions}
+        self._class_registry = class_registry
+        self._scope_stack = create_initial_stack()
 
         # New: Track unresolvable calls
         self._source_lines = source_lines
@@ -199,7 +218,7 @@ class CallCountVisitor(ast.NodeVisitor):
     @override
     def visit_Call(self, node: ast.Call) -> None:
         """Visit call, tracking both resolved and unresolved."""
-        call_name = self._extract_call_name(node)
+        call_name = self._resolve_call_name(node)
 
         if call_name and call_name in self.call_counts:
             self.call_counts[call_name] += 1
@@ -260,31 +279,14 @@ def count_function_calls(
             unresolvable_examples=()
         )
 
-    visitor = CallCountVisitor(known_functions, source_lines)
+    class_registry = build_class_registry(tree)
+    visitor = CallCountVisitor(known_functions, class_registry, source_lines)
     visitor.visit(tree)
 
     return visitor.get_result()
 ```
 
-### 5. Backward Compatibility Layer
-
-Add compatibility function for existing code:
-
-```python
-def count_function_calls_legacy(
-    file_path: str,
-    known_functions: tuple[FunctionInfo, ...]
-) -> tuple[CallCount, ...]:
-    """Legacy interface that returns only resolved counts.
-
-    Provided for backward compatibility. New code should use
-    count_function_calls() directly for full transparency.
-    """
-    result = count_function_calls(file_path, known_functions)
-    return result.resolved_counts
-```
-
-### 6. Update Analyzer
+### 5. Update Analyzer
 
 Modify `analyzer.py` to handle new result type:
 
@@ -309,7 +311,7 @@ def analyze_file(file_path: str) -> tuple[FunctionPriority, ...]:
     # (Store call_result for potential future use in reporting)
 ```
 
-### 7. CLI Integration
+### 6. CLI Integration
 
 Add optional flag to `cli.py`:
 
@@ -361,7 +363,7 @@ def main() -> None:
         # ... rest of existing code ...
 ```
 
-### 8. Output Formatting
+### 7. Output Formatting
 
 Add to `output.py`:
 
@@ -483,41 +485,6 @@ def test_complex_real_world_file():
     # Verify specific unresolvable patterns are caught
     # Check category distribution
 ```
-
-## Implementation Steps
-
-### Phase 1: Core Data Models (30 min)
-1. Add `UnresolvableCategory` enum to models.py
-2. Add `UnresolvableCall` dataclass
-3. Add `CallCountResult` dataclass
-4. Run tests to ensure no breakage
-
-### Phase 2: Categorization Logic (45 min)
-1. Implement `categorize_unresolvable_call()` function
-2. Add comprehensive unit tests for categorization
-3. Test on real examples from demo_files/
-
-### Phase 3: Update CallCountVisitor (45 min)
-1. Add source_lines parameter and tracking
-2. Implement unresolvable call collection
-3. Add `get_result()` method
-4. Update `count_function_calls()` to return new type
-5. Add backward compatibility function
-
-### Phase 4: Integration (30 min)
-1. Update analyzer.py to use new result type
-2. Maintain backward compatibility
-3. Run all existing tests to ensure no breakage
-
-### Phase 5: CLI Enhancement (30 min)
-1. Add `--show-unresolvable` flag
-2. Implement `display_unresolvable_summary()`
-3. Test with various files and flags
-
-### Phase 6: Documentation (15 min)
-1. Update docstrings with new functionality
-2. Update project_status.md
-3. Add examples to demo files if needed
 
 ## Success Metrics
 

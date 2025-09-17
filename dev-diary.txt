@@ -334,3 +334,333 @@ DONE QualifiedName newtype?? could be useful for prod AND test code???
 DONE resolve_function_call and resolve_class_name are identical
 
 TODO helper for making a qualified name from a scope stack?
+
+hm apparently the "class improvements" plan is done now??
+
+ ======================================================================
+     Testing False Positive Elimination (Constants not treated as classes)
+     ======================================================================
+
+     Discovered classes: frozenset({'__module__.RealClass', '__module__.AnotherClass'})
+
+     --------------------------------------------------
+     Testing constants (should NOT be classes):
+     --------------------------------------------------
+       MAX_SIZE                  -> ✓ Correctly ignored
+       DEFAULT_CONFIG            -> ✓ Correctly ignored
+       PI                        -> ✓ Correctly ignored
+       EMPTY_LIST                -> ✓ Correctly ignored
+       NULL_VALUE                -> ✓ Correctly ignored
+       CONNECTION_TIMEOUT        -> ✓ Correctly ignored
+       ERROR_MESSAGE             -> ✓ Correctly ignored
+       CONSTANT_IN_CLASS         -> ✓ Correctly ignored
+
+     --------------------------------------------------
+     Testing actual classes (should BE classes):
+     --------------------------------------------------
+       RealClass                 -> ✓ Correctly identified
+       AnotherClass              -> ✓ Correctly identified
+
+     ======================================================================
+     ✅ SUCCESS: No false positives! Constants correctly ignored.
+     ======================================================================
+     Bash(cd /workspace/debug_verification && python test_non_pep8_classes.py)
+     Waiting…
+     ======================================================================
+     Testing Non-PEP8 Class Name Recognition
+     ======================================================================
+
+     Discovered classes (11 total):
+       - __module__.AnotherStandardClass
+       - __module__.HTTP404Handler
+       - __module__.Parser2
+       - __module__.SINGLETON
+       - __module__.StandardClass
+       - __module__._InternalClass
+       - __module__.dataProcessor
+       - __module__.htmlRenderer
+       - __module__.requestHandler
+       - __module__.x
+       - __module__.xmlParser
+
+     ----------------------------------------------------------------------
+     Testing class recognition:
+     ----------------------------------------------------------------------
+       xmlParser            (Non-PEP8: lowercase start     ) -> ✓ Recognized
+       dataProcessor        (Non-PEP8: camelCase           ) -> ✓ Recognized
+       htmlRenderer         (Non-PEP8: lowercase start     ) -> ✓ Recognized
+       requestHandler       (Non-PEP8: camelCase           ) -> ✓ Recognized
+       x                    (Non-PEP8: single letter       ) -> ✓ Recognized
+       _InternalClass       (Non-PEP8: underscore prefix   ) -> ✓ Recognized
+       SINGLETON            (Non-PEP8: all uppercase       ) -> ✓ Recognized
+       Parser2              (With number                   ) -> ✓ Recognized
+       HTTP404Handler       (Mixed case with numbers       ) -> ✓ Recognized
+       StandardClass        (PEP8: PascalCase              ) -> ✓ Recognized
+       AnotherStandardClass (PEP8: PascalCase              ) -> ✓ Recognized
+
+     ======================================================================
+     ✅ SUCCESS: All class names recognized, regardless of naming convention!
+     ======================================================================
+     Bash(cd /workspace/debug_verification && python test_nested_classes.py)
+     Waiting…
+     ======================================================================
+     Testing Nested Class Detection
+     ======================================================================
+
+     Discovered classes (19 total):
+       - __module__.ComplexOuter
+       - __module__.ComplexOuter.StaticNested
+       - __module__.ComplexOuter.method_with_class.MethodClass
+       - __module__.ComplexOuter.method_with_class.MethodClass.DoublyNested
+       - __module__.Container
+       - __module__.Container.First
+       - __module__.Container.Second
+       - __module__.Container.Third
+       - __module__.Container.Third.Nested
+       - __module__.Level1
+       - __module__.Level1.Level2
+       - __module__.Level1.Level2.Level3
+       - __module__.Level1.Level2.Level3.Level4
+       - __module__.Outer
+       - __module__.Outer.Inner
+       - __module__.WithMethod
+       - __module__.WithMethod.create_class.MethodLocalClass
+       - __module__.async_factory.AsyncLocalClass
+       - __module__.factory_function.LocalClass
+
+     ----------------------------------------------------------------------
+     Testing nested class recognition:
+     ----------------------------------------------------------------------
+       Outer                                                   -> ✓ Found
+       Outer.Inner                                             -> ✓ Found
+       Level1                                                  -> ✓ Found
+       Level1.Level2                                           -> ✓ Found
+       Level1.Level2.Level3                                    -> ✓ Found
+       Level1.Level2.Level3.Level4                             -> ✓ Found
+       Container                                               -> ✓ Found
+       Container.First                                         -> ✓ Found
+       Container.Second                                        -> ✓ Found
+       Container.Third                                         -> ✓ Found
+       Container.Third.Nested                                  -> ✓ Found
+       factory_function.LocalClass                             -> ✓ Found
+       async_factory.AsyncLocalClass                           -> ✓ Found
+       WithMethod                                              -> ✓ Found
+       WithMethod.create_class.MethodLocalClass                -> ✓ Found
+       ComplexOuter                                            -> ✓ Found
+       ComplexOuter.method_with_class.MethodClass              -> ✓ Found
+       ComplexOuter.method_with_class.MethodClass.DoublyNested -> ✓ Found
+       ComplexOuter.StaticNested                               -> ✓ Found
+
+     ----------------------------------------------------------------------
+     Checking for unexpected classes:
+     ----------------------------------------------------------------------
+       ✓ No unexpected classes found
+
+     ======================================================================
+     ✅ SUCCESS: All nested classes correctly detected!
+     ======================================================================
+     Bash(cd /workspace/debug_verification && python test_builtin_tracking.py)
+     Waiting…
+     ======================================================================
+     Testing Builtin Type Tracking (should NOT be tracked)
+     ======================================================================
+
+     Discovered classes (2 total):
+       - __module__.AnotherUserClass
+       - __module__.UserClass
+
+     ----------------------------------------------------------------------
+     Testing builtin types (should NOT be in registry):
+     ----------------------------------------------------------------------
+       int             -> ✓ Correctly excluded
+       str             -> ✓ Correctly excluded
+       list            -> ✓ Correctly excluded
+       dict            -> ✓ Correctly excluded
+       set             -> ✓ Correctly excluded
+       tuple           -> ✓ Correctly excluded
+       bool            -> ✓ Correctly excluded
+       float           -> ✓ Correctly excluded
+       bytes           -> ✓ Correctly excluded
+       bytearray       -> ✓ Correctly excluded
+       complex         -> ✓ Correctly excluded
+       frozenset       -> ✓ Correctly excluded
+       memoryview      -> ✓ Correctly excluded
+       range           -> ✓ Correctly excluded
+       slice           -> ✓ Correctly excluded
+       object          -> ✓ Correctly excluded
+       type            -> ✓ Correctly excluded
+       Exception       -> ✓ Correctly excluded
+       BaseException   -> ✓ Correctly excluded
+
+     ----------------------------------------------------------------------
+     Testing user classes (should BE in registry):
+     ----------------------------------------------------------------------
+       UserClass            -> ✓ Correctly tracked
+       AnotherUserClass     -> ✓ Correctly tracked
+
+     ----------------------------------------------------------------------
+     Registry contents verification:
+     ----------------------------------------------------------------------
+       ✓ Registry contains exactly the expected user classes
+
+     ======================================================================
+     ✅ SUCCESS: Builtins correctly excluded, only user classes tracked!
+     ======================================================================
+     Bash(cd /workspace/debug_verification && python test_instance_limitation.py)
+     Waiting…
+     ======================================================================
+     Testing Instance Method Call Limitation
+     ======================================================================
+
+     This test verifies the KNOWN LIMITATION that instance method
+     calls via variables are NOT counted (as documented in the plan).
+
+     ----------------------------------------------------------------------
+     Call counts for all discovered functions:
+     ----------------------------------------------------------------------
+       __module__.Calculator.add                          : 1 calls
+       __module__.Calculator.create                       : 2 calls
+       __module__.Calculator.multiply                     : 1 calls
+       __module__.Calculator.validate                     : 1 calls
+       __module__.Processor.process                       : 1 calls
+       __module__.test_class_method_calls                 : 0 calls
+       __module__.test_instance_method_calls              : 0 calls
+       __module__.test_self_method_calls                  : 0 calls
+       __module__.test_self_method_calls.InternalTest.method_a : 0 calls
+       __module__.test_self_method_calls.InternalTest.method_b : 0 calls
+
+     ----------------------------------------------------------------------
+     Verification of expected behavior:
+     ----------------------------------------------------------------------
+       __module__.Calculator.add                     -> ✓ Has calls
+         (Direct class method call)
+       __module__.Calculator.multiply                -> ✓ Has calls
+         (Direct class method call)
+       __module__.Calculator.create                  -> ✓ Has calls
+         (Class method call)
+       __module__.Calculator.validate                -> ✓ Has calls
+         (Static method call)
+       __module__.Processor.process                  -> ✓ Has calls
+         (Direct class method call)
+
+     ----------------------------------------------------------------------
+     Detailed count verification:
+     ----------------------------------------------------------------------
+       Calculator.add: 1 calls
+         - Expected: 1 (from Calculator.add(None, 5, 3) in test_class_method_calls)
+         - NOT counted: calc.add() calls in test_instance_method_calls
+         ✓ Correct: Only direct class calls counted
+
+     ======================================================================
+     ✅ SUCCESS: Instance method limitation working as documented!
+        - Direct class method calls ARE counted
+        - Instance variable method calls are NOT counted
+        - This is a known limitation pending variable tracking feature
+     ======================================================================
+
+i mean i guess it makes sense - we now have a class registry
+instead of just guessing based on isupper
+
+ ================================================================================
+     CLASS DETECTION VERIFICATION SUMMARY
+     ================================================================================
+
+     Verifying implementation against claims in:
+       /workspace/plans/completed/class-detection-improvements-2025-09-16.md
+
+     --------------------------------------------------------------------------------
+     RUNNING VERIFICATION TESTS
+     --------------------------------------------------------------------------------
+
+     📝 False Positive Elimination...
+        ✅ PASSED
+        → ✅ SUCCESS: No false positives! Constants correctly ignored.
+
+     📝 Non-PEP8 Class Recognition...
+        ✅ PASSED
+        → ✅ SUCCESS: All class names recognized, regardless of naming convention!
+
+     📝 Nested Class Support...
+        ✅ PASSED
+        → ✅ SUCCESS: All nested classes correctly detected!
+
+     📝 Builtin Exclusion...
+        ✅ PASSED
+        → ✅ SUCCESS: Builtins correctly excluded, only user classes tracked!
+
+     📝 Instance Method Limitation...
+        ✅ PASSED
+        → ✅ SUCCESS: Instance method limitation working as documented!
+
+     📝 QualifiedName Type Usage...
+        ✅ PASSED
+        → ✅ SUCCESS: QualifiedName type is properly used throughout!
+
+     📝 End-to-End Integration...
+        ✅ PASSED
+        → ✅ SUCCESS: All integration tests passed!
+
+     ================================================================================
+     VERIFICATION RESULTS AGAINST PLAN CLAIMS
+     ================================================================================
+
+     Claim Verification:
+       ✅ ClassRegistry tracks only user-defined classes                    [VERIFIED]
+       ✅ ClassDiscoveryVisitor finds all ClassDef nodes                    [VERIFIED]
+       ✅ No False Positives - constants NOT treated as classes             [VERIFIED]
+       ✅ Non-PEP8 class names ARE recognized (xmlParser, etc.)             [VERIFIED]
+       ✅ Nested classes supported (Outer.Inner.method patterns)            [VERIFIED]
+       ✅ QualifiedName type used throughout                                [VERIFIED]
+       ✅ Builtins (int, str, etc.) NOT tracked                             [VERIFIED]
+       ✅ Instance method calls NOT counted (documented limitation)         [VERIFIED]
+
+     --------------------------------------------------------------------------------
+     IMPLEMENTATION DETAILS CONFIRMED
+     --------------------------------------------------------------------------------
+       • ClassRegistry uses frozenset[QualifiedName] for immutability
+       • ClassDiscoveryVisitor correctly handles scope stacking
+       • CallCountVisitor accepts ClassRegistry parameter (breaking API change)
+       • Classes in functions are tracked (e.g., factory.LocalClass)
+       • Self/cls method calls properly resolved within classes
+       • Forward references in type annotations handled
+       • 100% test coverage maintained (per existing tests)
+
+     --------------------------------------------------------------------------------
+     KNOWN LIMITATIONS (AS DOCUMENTED)
+     --------------------------------------------------------------------------------
+       • Instance method calls via variables not counted (calc.add())
+       • Imported classes not tracked (requires import resolution)
+       • No support for @property methods yet
+       • No support for type aliases or generic classes
+       • No cross-module call tracking
+
+     ================================================================================
+     FINAL VERDICT
+     ================================================================================
+
+     ✅ IMPLEMENTATION FULLY MATCHES PLAN CLAIMS
+
+     All features described in the plan document have been successfully
+     implemented and verified through comprehensive testing:
+
+       1. False positives eliminated (constants no longer treated as classes)
+       2. Non-PEP8 class names correctly identified
+       3. Full nested class support including classes in functions
+       4. QualifiedName type used for type safety
+       5. Builtins excluded from tracking
+       6. Instance method limitation properly documented and working as expected
+
+     The implementation is production-ready and provides a solid foundation
+     for future enhancements like variable tracking and import resolution.
+     ================================================================================
+
+lol production-ready
+
+wow it wrote up a report and everything
+that's actually neat
+spawning a subagent to verify stuff is useful!
+
+ok then
+what next? unresolvability?
+
+ok TODO start on unresolvability
