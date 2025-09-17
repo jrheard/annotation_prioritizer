@@ -328,5 +328,3 @@ LESSON LEARNED: SERIOUSLY ONLY LET IT DO ONE COMMIT AT A TIME
 TODO i feel like the code in count_function_calls() is duplicated in multiple places
 
 TODO add asserts in some places where we currently have to-dos??
-
-DONE in test_complex_qualified_calls we should parse some python code instead of building ast nodes by hand
