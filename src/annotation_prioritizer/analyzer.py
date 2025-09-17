@@ -47,4 +47,3 @@ def analyze_file(file_path: str) -> tuple[FunctionPriority, ...]:
 
     # 4. Sort by priority score (highest first)
     return tuple(sorted(priorities, key=lambda p: p.priority_score, reverse=True))
-# Test comment

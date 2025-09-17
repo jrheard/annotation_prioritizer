@@ -164,7 +164,9 @@ class AnnotationScore:
 
 **Why this grouping:** Introducing the type and updating models together ensures the foundation is in place before we start using it elsewhere.
 
-### Commit 2: Update all qualified name producers
+### Commit 2: Update all qualified name producers ✅
+
+**Status:** COMPLETED
 
 **Files to modify:**
 - `src/annotation_prioritizer/scope_tracker.py`
