@@ -2,12 +2,12 @@
 
 This module provides utilities for tracking scope context during AST traversal,
 enabling proper resolution of qualified names for functions, classes, and methods.
-The design combines a stateful ScopeState class for convenient traversal with
-pure functions for name resolution logic.
+All functions are pure and work with immutable data structures.
 
 Key Components:
-    - ScopeState: Mutable class that maintains the scope stack during traversal
-    - Pure helper functions: Generate candidates and resolve names without side effects
+    - Pure scope stack functions: add_scope, drop_last_scope, create_initial_stack
+    - Name resolution functions: generate_name_candidates, build_qualified_name
+    - Helper functions: get_containing_class, in_class, in_function
 
 The scope tracking is used by multiple AST visitors throughout the codebase to
 consistently build qualified names like "__module__.ClassName.method_name".
@@ -18,92 +18,104 @@ from collections.abc import Set as AbstractSet
 
 from annotation_prioritizer.models import Scope, ScopeKind
 
+type ScopeStack = tuple[Scope, ...]
 
-class ScopeState:
-    """Mutable scope state that tracks traversal context during AST walking.
 
-    Maintains a stack of scopes (module, class, function) that represents the
-    current position in the AST. Always starts with a module scope that cannot
-    be popped.
+def create_initial_stack() -> ScopeStack:
+    """Create an initial scope stack with just the module scope.
 
     TODO: when we support multiple files, should we replace __module__ with foo/bar/baz.py?
 
-    Usage:
-        state = ScopeState()
-        state.push(Scope(kind=ScopeKind.CLASS, name="MyClass"))
-        qualified = build_qualified_name(state.stack, "method")  # "__module__.MyClass.method"
-        state.pop()
+    Returns:
+        Initial stack containing only the module scope
     """
-
-    def __init__(self) -> None:
-        """Initialize with module scope as the root."""
-        super().__init__()
-        self._stack: list[Scope] = [Scope(kind=ScopeKind.MODULE, name="__module__")]
-
-    def push(self, scope: Scope) -> None:
-        """Push a new scope onto the stack.
-
-        Args:
-            scope: The scope to enter (class or function)
-        """
-        self._stack.append(scope)
-
-    def pop(self) -> None:
-        """Pop the top scope from the stack.
-
-        Raises:
-            AssertionError: If attempting to pop the root module scope
-        """
-        assert len(self._stack) > 1, "Cannot pop module scope"
-        self._stack.pop()
-
-    @property
-    def stack(self) -> tuple[Scope, ...]:
-        """Get immutable view of current stack for use with pure functions.
-
-        Returns:
-            Current scope stack as an immutable tuple
-        """
-        return tuple(self._stack)
-
-    @property
-    def current_scope(self) -> Scope:
-        """Get the current (innermost) scope.
-
-        Returns:
-            The scope at the top of the stack
-        """
-        return self._stack[-1]
-
-    def get_containing_class(self) -> str | None:
-        """Get the qualified name of the containing class, if any.
-
-        Returns:
-            Qualified class name if inside a class, None otherwise
-        """
-        for i in range(len(self._stack) - 1, -1, -1):
-            if self._stack[i].kind == ScopeKind.CLASS:
-                return ".".join(s.name for s in self._stack[: i + 1])
-        return None
-
-    def in_class(self) -> bool:
-        """Check if currently inside a class definition.
-
-        Returns:
-            True if any scope in the stack is a class
-        """
-        return any(s.kind == ScopeKind.CLASS for s in self._stack)
-
-    def in_function(self) -> bool:
-        """Check if currently inside a function definition.
-
-        Returns:
-            True if any scope in the stack is a function
-        """
-        return any(s.kind == ScopeKind.FUNCTION for s in self._stack)
+    return (Scope(kind=ScopeKind.MODULE, name="__module__"),)
 
 
-def generate_name_candidates(scope_stack: tuple[Scope, ...], name: str) -> tuple[str, ...]:
+def add_scope(stack: ScopeStack, scope: Scope) -> ScopeStack:
+    """Add a new scope onto the scope state.
+
+    This is a pure function that returns a new stack rather than
+    modifying the input stack.
+
+    Args:
+        stack: Current scope stack (not modified)
+        scope: The scope to add (class or function)
+
+    Returns:
+        New stack with the scope appended
+    """
+    return (*stack, scope)
+
+
+def drop_last_scope(stack: ScopeStack) -> ScopeStack:
+    """Return a new stack without the last scope.
+
+    Args:
+        stack: Current scope stack
+
+    Returns:
+        New stack with the top scope removed
+
+    Raises:
+        AssertionError: If attempting to remove the root module scope
+    """
+    assert len(stack) > 1, "Cannot pop module scope"
+    return stack[:-1]
+
+
+def get_current_scope(stack: ScopeStack) -> Scope:
+    """Get the current (innermost) scope.
+
+    Args:
+        stack: Current scope stack
+
+    Returns:
+        The scope at the top of the stack
+    """
+    return stack[-1]
+
+
+def get_containing_class(stack: ScopeStack) -> str | None:
+    """Get the qualified name of the containing class, if any.
+
+    Args:
+        stack: Current scope stack
+
+    Returns:
+        Qualified class name if inside a class, None otherwise
+    """
+    for i in range(len(stack) - 1, -1, -1):
+        if stack[i].kind == ScopeKind.CLASS:
+            return ".".join(s.name for s in stack[: i + 1])
+    return None
+
+
+def in_class(stack: ScopeStack) -> bool:
+    """Check if currently inside a class definition.
+
+    Args:
+        stack: Current scope stack
+
+    Returns:
+        True if any scope in the stack is a class
+    """
+    return any(s.kind == ScopeKind.CLASS for s in stack)
+
+
+def in_function(stack: ScopeStack) -> bool:
+    """Check if currently inside a function definition.
+
+    Args:
+        stack: Current scope stack
+
+    Returns:
+        True if any scope in the stack is a function
+    """
+    return any(s.kind == ScopeKind.FUNCTION for s in stack)
+
+
+def generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[str, ...]:
     """Generate all possible qualified names from innermost to outermost scope.
 
     Matches Python's name resolution order where inner scopes shadow outer scopes.
@@ -134,7 +146,7 @@ def generate_name_candidates(scope_stack: tuple[Scope, ...], name: str) -> tuple
 
 
 def build_qualified_name(
-    scope_stack: tuple[Scope, ...], name: str, exclude_kinds: frozenset[ScopeKind] | None = None
+    scope_stack: ScopeStack, name: str, exclude_kinds: frozenset[ScopeKind] | None = None
 ) -> str:
     """Build a qualified name from scope stack with optional filtering.
 
@@ -199,5 +211,12 @@ def extract_attribute_chain(node: ast.Attribute) -> tuple[str, ...]:
 
     if isinstance(current, ast.Name):
         parts.insert(0, current.id)
+    else:
+        # If we hit something that's not a Name or Attribute, we have an incomplete chain
+        # This could happen with expressions like foo()[0].bar or (a + b).method
+        assert isinstance(current, ast.Name), (
+            f"Expected ast.Name at base of attribute chain, got {type(current).__name__}. "
+            "Complex expressions like foo()[0].bar are not currently supported."
+        )
 
     return tuple(parts)

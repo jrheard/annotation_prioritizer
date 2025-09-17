@@ -33,8 +33,10 @@ from typing import override
 from annotation_prioritizer.class_discovery import ClassRegistry, build_class_registry
 from annotation_prioritizer.models import CallCount, FunctionInfo, Scope, ScopeKind
 from annotation_prioritizer.scope_tracker import (
-    ScopeState,
+    add_scope,
     build_qualified_name,
+    create_initial_stack,
+    drop_last_scope,
     extract_attribute_chain,
     find_first_match,
     generate_name_candidates,
@@ -105,7 +107,7 @@ class CallCountVisitor(ast.NodeVisitor):
         - Imported function calls: imported_module.function()
         - Chained calls: obj.attr.method()
 
-    The visitor maintains state during traversal (_scope) to track the
+    The visitor maintains scope state during traversal (_scope_stack) to track the
     current scope context, enabling proper resolution of self.method() calls
     to their qualified names (e.g., "__module__.Calculator.add").
     """
@@ -121,28 +123,28 @@ class CallCountVisitor(ast.NodeVisitor):
         # Create internal call count tracking from known functions
         self.call_counts: dict[str, int] = {func.qualified_name: 0 for func in known_functions}
         self._class_registry = class_registry
-        self._scope = ScopeState()
+        self._scope_stack = create_initial_stack()
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Visit class definition to track scope context for method calls."""
-        self._scope.push(Scope(kind=ScopeKind.CLASS, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.CLASS, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Visit function definition to track scope context for nested function calls."""
-        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Visit async function definition to track scope context for nested function calls."""
-        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_Call(self, node: ast.Call) -> None:
@@ -195,7 +197,7 @@ class CallCountVisitor(ast.NodeVisitor):
             # Build qualified name from current scope, excluding function scopes
             # since self.method() calls should resolve to the class method, not nested function
             return build_qualified_name(
-                self._scope.stack, func.attr, exclude_kinds=frozenset({ScopeKind.FUNCTION})
+                self._scope_stack, func.attr, exclude_kinds=frozenset({ScopeKind.FUNCTION})
             )
 
         # Static/class method calls: ClassName.method_name()
@@ -210,7 +212,10 @@ class CallCountVisitor(ast.NodeVisitor):
             if resolved_class:
                 return f"{resolved_class}.{func.attr}"
 
-            # Not a class - might be a variable (TODO future work)
+            # Not a class - might be a variable holding an instance
+            # TODO: Instance method calls (calc = Calculator(); calc.add()) require
+            # variable tracking to associate variables with their class types.
+            # This is planned as a separate feature (commits 4-5 in the original plan).
             return None
 
         # Nested class method calls: Outer.Inner.method_name()
@@ -243,7 +248,7 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified function name if found in known functions, None otherwise
         """
-        candidates = generate_name_candidates(self._scope.stack, function_name)
+        candidates = generate_name_candidates(self._scope_stack, function_name)
         return find_first_match(candidates, set(self.call_counts.keys()))
 
     def _resolve_class_name(self, class_name: str) -> str | None:
@@ -257,5 +262,5 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified class name if found in registry, None otherwise
         """
-        candidates = generate_name_candidates(self._scope.stack, class_name)
+        candidates = generate_name_candidates(self._scope_stack, class_name)
         return find_first_match(candidates, self._class_registry.ast_classes)

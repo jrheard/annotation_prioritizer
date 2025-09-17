@@ -38,7 +38,7 @@ from pathlib import Path
 from typing import override
 
 from .models import FunctionInfo, ParameterInfo, Scope, ScopeKind
-from .scope_tracker import ScopeState
+from .scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
 
 
 def _extract_parameters(args: ast.arguments) -> tuple[ParameterInfo, ...]:
@@ -175,9 +175,9 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         # Internal: Source file path to include in each FunctionInfo for traceability
         self._file_path = file_path
         # Internal: Tracks current scope context during traversal for building qualified names.
-        # Uses ScopeState which maintains a stack that is pushed when entering a scope
-        # (class or function) and popped when exiting. Always starts with module scope as the root.
-        self._scope = ScopeState()
+        # Maintains an immutable scope stack that is replaced when entering/exiting scopes.
+        # Always starts with module scope as the root.
+        self._scope_stack: ScopeStack = create_initial_stack()
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
@@ -194,9 +194,9 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
             then pops it after traversal completes. This ensures methods get
             the correct qualified names.
         """
-        self._scope.push(Scope(kind=ScopeKind.CLASS, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.CLASS, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -211,15 +211,15 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
 
         Side Effects:
             Adds a FunctionInfo object to self.functions.
-            Pushes function scope to _scope, calls generic_visit to
+            Pushes function scope to _scope_stack, calls generic_visit to
             traverse nested functions, then pops the function scope.
         """
         # First record the function with the current scope
         self._process_function(node)
         # Then push the function scope and traverse nested definitions
-        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
@@ -234,15 +234,15 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
 
         Side Effects:
             Adds a FunctionInfo object to self.functions.
-            Pushes function scope to _scope, calls generic_visit to
+            Pushes function scope to _scope_stack, calls generic_visit to
             traverse nested functions, then pops the function scope.
         """
         # First record the function with the current scope
         self._process_function(node)
         # Then push the function scope and traverse nested definitions
-        self._scope.push(Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
         self.generic_visit(node)
-        self._scope.pop()
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     def _process_function(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         """Extract and store metadata from a function definition node.
@@ -288,7 +288,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
             Qualified name string that uniquely identifies the function with
             its complete scope hierarchy including the module scope.
         """
-        scope_names = [scope.name for scope in self._scope.stack]
+        scope_names = [scope.name for scope in self._scope_stack]
         return ".".join([*scope_names, function_name])
 
 
