@@ -5,7 +5,6 @@ import ast
 import pytest
 
 from annotation_prioritizer.class_discovery import (
-    PYTHON_BUILTIN_TYPES,
     ClassDiscoveryVisitor,
     ClassRegistry,
     build_class_registry,
@@ -133,21 +132,15 @@ class AnotherClass:
     tree = ast.parse(source)
     registry = build_class_registry(tree)
 
-    # Check AST classes
-    assert "__module__.MyClass" in registry.ast_classes
-    assert "__module__.AnotherClass" in registry.ast_classes
-    assert "__module__.AnotherClass.Nested" in registry.ast_classes
-
-    # Check builtin classes are included
-    assert "int" in registry.builtin_classes
-    assert "str" in registry.builtin_classes
+    # Check user-defined classes
+    assert "__module__.MyClass" in registry.classes
+    assert "__module__.AnotherClass" in registry.classes
+    assert "__module__.AnotherClass.Nested" in registry.classes
 
     # Test is_class method
     assert registry.is_class("__module__.MyClass") is True
     assert registry.is_class("__module__.AnotherClass") is True
     assert registry.is_class("__module__.AnotherClass.Nested") is True
-    assert registry.is_class("int") is True
-    assert registry.is_class("str") is True
     assert registry.is_class("NotAClass") is False
 
 
@@ -190,76 +183,55 @@ class MultiBase(Base1, Base2):
     assert "__module__.MultiBase" in visitor.class_names
 
 
-def test_class_registry_identifies_ast_classes() -> None:
-    """Test that ClassRegistry correctly identifies AST classes."""
+def test_class_registry_identifies_user_classes() -> None:
+    """Test that ClassRegistry correctly identifies user-defined classes."""
     registry = ClassRegistry(
-        ast_classes=frozenset(["__module__.Calculator", "__module__.Parser"]),
-        builtin_classes=frozenset(["int", "str"]),
+        classes=frozenset(["__module__.Calculator", "__module__.Parser"]),
     )
     assert registry.is_class("__module__.Calculator") is True
-    assert registry.is_class("int") is True
+    assert registry.is_class("__module__.Parser") is True
     assert registry.is_class("MAX_SIZE") is False
     assert registry.is_class("unknown") is False
-
-
-def test_class_registry_identifies_builtin_classes() -> None:
-    """Test that ClassRegistry correctly identifies built-in classes."""
-    registry = ClassRegistry(
-        ast_classes=frozenset(), builtin_classes=frozenset(["int", "str", "list", "dict"])
-    )
-    assert registry.is_class("int") is True
-    assert registry.is_class("str") is True
-    assert registry.is_class("list") is True
-    assert registry.is_class("dict") is True
-    assert registry.is_class("NotABuiltin") is False
+    assert registry.is_class("int") is False  # Builtins not tracked
 
 
 def test_class_registry_merge() -> None:
     """Test merging two ClassRegistry instances."""
-    registry1 = ClassRegistry(
-        ast_classes=frozenset(["__module__.ClassA"]), builtin_classes=PYTHON_BUILTIN_TYPES
-    )
-    registry2 = ClassRegistry(
-        ast_classes=frozenset(["__module__.ClassB"]), builtin_classes=PYTHON_BUILTIN_TYPES
-    )
+    registry1 = ClassRegistry(classes=frozenset(["__module__.ClassA"]))
+    registry2 = ClassRegistry(classes=frozenset(["__module__.ClassB"]))
     merged = registry1.merge(registry2)
     assert merged.is_class("__module__.ClassA") is True
     assert merged.is_class("__module__.ClassB") is True
-    # Built-ins should still be present
-    assert merged.is_class("int") is True
-
-
-def test_python_builtin_types_comprehensive() -> None:
-    """Test that PYTHON_BUILTIN_TYPES includes expected built-in types."""
-    # Check common built-in types
-    assert "int" in PYTHON_BUILTIN_TYPES
-    assert "str" in PYTHON_BUILTIN_TYPES
-    assert "list" in PYTHON_BUILTIN_TYPES
-    assert "dict" in PYTHON_BUILTIN_TYPES
-    assert "tuple" in PYTHON_BUILTIN_TYPES
-    assert "set" in PYTHON_BUILTIN_TYPES
-    assert "frozenset" in PYTHON_BUILTIN_TYPES
-    assert "bool" in PYTHON_BUILTIN_TYPES
-    assert "float" in PYTHON_BUILTIN_TYPES
-    assert "complex" in PYTHON_BUILTIN_TYPES
-    assert "bytes" in PYTHON_BUILTIN_TYPES
-    assert "bytearray" in PYTHON_BUILTIN_TYPES
-
-    # Check exceptions are included
-    assert "Exception" in PYTHON_BUILTIN_TYPES
-    assert "ValueError" in PYTHON_BUILTIN_TYPES
-    assert "TypeError" in PYTHON_BUILTIN_TYPES
-    assert "KeyError" in PYTHON_BUILTIN_TYPES
-
-    # Check that non-types are not included
-    assert "print" not in PYTHON_BUILTIN_TYPES  # function, not type
-    assert "len" not in PYTHON_BUILTIN_TYPES  # function, not type
-    assert "None" not in PYTHON_BUILTIN_TYPES  # None is not a type
-    assert "__name__" not in PYTHON_BUILTIN_TYPES  # string, not type
 
 
 def test_class_registry_empty() -> None:
     """Test ClassRegistry with empty sets."""
-    registry = ClassRegistry(ast_classes=frozenset(), builtin_classes=frozenset())
+    registry = ClassRegistry(classes=frozenset())
     assert registry.is_class("anything") is False
     assert registry.is_class("") is False
+
+
+def test_user_defined_class_shadows_builtin() -> None:
+    """Test that user-defined classes with builtin names are tracked."""
+    source = """
+# User defines their own 'int' class
+class int:
+    def __init__(self, value):
+        self.value = value
+
+# User defines their own 'list' class
+class list:
+    @staticmethod
+    def append(item):
+        pass
+"""
+    tree = ast.parse(source)
+    registry = build_class_registry(tree)
+
+    # User-defined classes are tracked
+    assert registry.is_class("__module__.int") is True
+    assert registry.is_class("__module__.list") is True
+
+    # But builtin 'int' and 'list' are NOT tracked
+    assert registry.is_class("int") is False
+    assert registry.is_class("list") is False

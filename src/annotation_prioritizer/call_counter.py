@@ -264,15 +264,12 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified function name if found in known functions, None otherwise
         """
-        candidates = generate_name_candidates(self._scope_stack, function_name)
-        return find_first_match(candidates, set(self.call_counts.keys()))
+        return self._resolve_name_in_scope(function_name, set(self.call_counts.keys()))
 
     def _resolve_class_name(self, class_name: str) -> str | None:
         """Resolve a class name to its qualified form based on current scope.
 
-        Handles simple and compound class names (e.g., "Calculator", "Outer.Inner").
-        Follows Python's name resolution order: local/nested scopes first, then
-        module-level, and finally builtin types.
+        Only resolves user-defined classes found in the AST.
 
         Args:
             class_name: The name to resolve (e.g., "Calculator", "Outer.Inner")
@@ -280,15 +277,19 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified class name if found in registry, None otherwise
         """
-        candidates = generate_name_candidates(self._scope_stack, class_name)
+        return self._resolve_name_in_scope(class_name, self._class_registry.classes)
 
-        # Check AST classes first (respects Python's scope resolution order)
-        match = find_first_match(candidates, self._class_registry.ast_classes)
-        if match:
-            return match
+    def _resolve_name_in_scope(self, name: str, registry: set[str] | frozenset[str]) -> str | None:
+        """Resolve a name to its qualified form by checking scope levels.
 
-        # Check builtin types last (they don't have __module__ prefix)
-        if class_name in self._class_registry.builtin_classes:
-            return class_name
+        Generates candidates from innermost to outermost scope and returns the first match.
 
-        return None
+        Args:
+            name: The name to resolve (e.g., "Calculator", "add")
+            registry: Set of qualified names to check against
+
+        Returns:
+            Qualified name if found in registry, None otherwise
+        """
+        candidates = generate_name_candidates(self._scope_stack, name)
+        return find_first_match(candidates, registry)
