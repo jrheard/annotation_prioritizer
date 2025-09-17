@@ -7,8 +7,9 @@ from annotation_prioritizer.call_counter import CallCountVisitor, count_function
 from annotation_prioritizer.class_discovery import build_class_registry
 from annotation_prioritizer.function_parser import parse_function_definitions
 from annotation_prioritizer.iteration import first
-from annotation_prioritizer.models import FunctionInfo, ParameterInfo, Scope, ScopeKind
+from annotation_prioritizer.models import Scope, ScopeKind
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
+from tests.helpers.factories import make_function_info, make_parameter
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -30,27 +31,18 @@ def caller():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="func_a",
-                qualified_name="__module__.func_a",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "func_a",
                 line_number=2,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="func_b",
-                qualified_name="__module__.func_b",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "func_b",
                 line_number=5,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="caller",
-                qualified_name="__module__.caller",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "caller",
                 line_number=8,
                 file_path=temp_path,
             ),
@@ -88,27 +80,25 @@ def use_calculator():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="add",
+            make_function_info(
+                "add",
                 qualified_name="__module__.Calculator.add",
                 parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="a", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="b", has_annotation=False, is_variadic=False, is_keyword=False),
+                    make_parameter("self"),
+                    make_parameter("a"),
+                    make_parameter("b"),
                 ),
-                has_return_annotation=False,
                 line_number=3,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="multiply",
+            make_function_info(
+                "multiply",
                 qualified_name="__module__.Calculator.multiply",
                 parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="a", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="b", has_annotation=False, is_variadic=False, is_keyword=False),
+                    make_parameter("self"),
+                    make_parameter("a"),
+                    make_parameter("b"),
                 ),
-                has_return_annotation=False,
                 line_number=6,
                 file_path=temp_path,
             ),
@@ -141,13 +131,10 @@ def external_use():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="format_number",
+            make_function_info(
+                "format_number",
                 qualified_name="__module__.Utils.format_number",
-                parameters=(
-                    ParameterInfo(name="n", has_annotation=False, is_variadic=False, is_keyword=False),
-                ),
-                has_return_annotation=False,
+                parameters=(make_parameter("n"),),
                 line_number=4,
                 file_path=temp_path,
             ),
@@ -172,19 +159,13 @@ def another_unused():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="unused_function",
-                qualified_name="__module__.unused_function",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "unused_function",
                 line_number=2,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="another_unused",
-                qualified_name="__module__.another_unused",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "another_unused",
                 line_number=5,
                 file_path=temp_path,
             ),
@@ -211,11 +192,8 @@ def caller():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="known_func",
-                qualified_name="__module__.known_func",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "known_func",
                 line_number=2,
                 file_path=temp_path,
             ),
@@ -276,13 +254,10 @@ class Outer:
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="inner_method",
+            make_function_info(
+                "inner_method",
                 qualified_name="__module__.Outer.Inner.inner_method",
-                parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                ),
-                has_return_annotation=False,
+                parameters=(make_parameter("self"),),
                 line_number=4,
                 file_path=temp_path,
             ),
@@ -320,21 +295,15 @@ def test_self_without_class():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="method_in_class",
+            make_function_info(
+                "method_in_class",
                 qualified_name="__module__.MyClass.method_in_class",
-                parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                ),
-                has_return_annotation=False,
+                parameters=(make_parameter("self"),),
                 line_number=3,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="standalone_method",
-                qualified_name="__module__.standalone_method",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "standalone_method",
                 line_number=12,
                 file_path=temp_path,
             ),
@@ -383,11 +352,8 @@ self.method()
 
     # Create a visitor with the known function
     known_functions = (
-        FunctionInfo(
-            name="method",
-            qualified_name="__module__.method",
-            parameters=(),
-            has_return_annotation=False,
+        make_function_info(
+            "method",
             line_number=1,
             file_path="dummy.py",
         ),
@@ -434,11 +400,8 @@ outer.inner.method()
 
     # Create a visitor with the known function
     known_functions = (
-        FunctionInfo(
-            name="method",
-            qualified_name="__module__.method",
-            parameters=(),
-            has_return_annotation=False,
+        make_function_info(
+            "method",
             line_number=1,
             file_path="dummy.py",
         ),
@@ -473,35 +436,25 @@ def top_level_caller():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="outer_function",
-                qualified_name="__module__.outer_function",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "outer_function",
                 line_number=2,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="inner_function",
+            make_function_info(
+                "inner_function",
                 qualified_name="__module__.outer_function.inner_function",
-                parameters=(),
-                has_return_annotation=False,
                 line_number=3,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="another_inner",
+            make_function_info(
+                "another_inner",
                 qualified_name="__module__.outer_function.another_inner",
-                parameters=(),
-                has_return_annotation=False,
                 line_number=6,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="helper_function",
-                qualified_name="__module__.helper_function",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "helper_function",
                 line_number=11,
                 file_path=temp_path,
             ),
@@ -557,27 +510,25 @@ class Calculator:
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="add",
+            make_function_info(
+                "add",
                 qualified_name="__module__.Calculator.add",
                 parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="a", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="b", has_annotation=False, is_variadic=False, is_keyword=False),
+                    make_parameter("self"),
+                    make_parameter("a"),
+                    make_parameter("b"),
                 ),
-                has_return_annotation=False,
                 line_number=14,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="multiply",
+            make_function_info(
+                "multiply",
                 qualified_name="__module__.Calculator.multiply",
                 parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="a", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="b", has_annotation=False, is_variadic=False, is_keyword=False),
+                    make_parameter("self"),
+                    make_parameter("a"),
+                    make_parameter("b"),
                 ),
-                has_return_annotation=False,
                 line_number=17,
                 file_path=temp_path,
             ),
@@ -620,21 +571,15 @@ def module_function():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="helper_method",
+            make_function_info(
+                "helper_method",
                 qualified_name="__module__.OuterClass.helper_method",
-                parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                ),
-                has_return_annotation=False,
+                parameters=(make_parameter("self"),),
                 line_number=10,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="module_function",
-                qualified_name="__module__.module_function",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "module_function",
                 line_number=13,
                 file_path=temp_path,
             ),
@@ -669,21 +614,15 @@ def module_helper():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="other_inner_method",
+            make_function_info(
+                "other_inner_method",
                 qualified_name="__module__.Outer.Inner.other_inner_method",
-                parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                ),
-                has_return_annotation=False,
+                parameters=(make_parameter("self"),),
                 line_number=8,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="module_helper",
-                qualified_name="__module__.module_helper",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "module_helper",
                 line_number=11,
                 file_path=temp_path,
             ),
@@ -786,11 +725,9 @@ def my_function():
 
     # Create a visitor with the Inner.method as a known function
     known_functions = (
-        FunctionInfo(
-            name="method",
+        make_function_info(
+            "method",
             qualified_name="__module__.my_function.Outer.Inner.method",
-            parameters=(),
-            has_return_annotation=False,
             line_number=5,
             file_path="test.py",
         ),
@@ -824,27 +761,19 @@ async def top_level_async():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="async_outer",
-                qualified_name="__module__.async_outer",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "async_outer",
                 line_number=2,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="async_inner",
+            make_function_info(
+                "async_inner",
                 qualified_name="__module__.async_outer.async_inner",
-                parameters=(),
-                has_return_annotation=False,
                 line_number=3,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="regular_helper",
-                qualified_name="__module__.regular_helper",
-                parameters=(),
-                has_return_annotation=False,
+            make_function_info(
+                "regular_helper",
                 line_number=12,
                 file_path=temp_path,
             ),
@@ -885,24 +814,20 @@ def test():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="append",
+            make_function_info(
+                "append",
                 qualified_name="__module__.list.append",  # Local class method
-                parameters=(
-                    ParameterInfo(name="item", has_annotation=False, is_variadic=False, is_keyword=False),
-                ),
-                has_return_annotation=False,
+                parameters=(make_parameter("item"),),
                 line_number=4,
                 file_path=temp_path,
             ),
-            FunctionInfo(
-                name="append",
+            make_function_info(
+                "append",
                 qualified_name="list.append",  # Builtin list.append
                 parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                    ParameterInfo(name="item", has_annotation=False, is_variadic=False, is_keyword=False),
+                    make_parameter("self"),
+                    make_parameter("item"),
                 ),
-                has_return_annotation=False,
                 line_number=1,
                 file_path=temp_path,
             ),
@@ -932,13 +857,10 @@ def test():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="method",
+            make_function_info(
+                "method",
                 qualified_name="__module__.MyClass.method",
-                parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                ),
-                has_return_annotation=False,
+                parameters=(make_parameter("self"),),
                 line_number=3,
                 file_path=temp_path,
             ),
@@ -967,13 +889,10 @@ def test():
 
     with temp_python_file(code) as temp_path:
         known_functions = (
-            FunctionInfo(
-                name="method",
+            make_function_info(
+                "method",
                 qualified_name="__module__.KnownClass.method",
-                parameters=(
-                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
-                ),
-                has_return_annotation=False,
+                parameters=(make_parameter("self"),),
                 line_number=3,
                 file_path=temp_path,
             ),
