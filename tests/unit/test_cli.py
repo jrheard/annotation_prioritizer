@@ -156,8 +156,8 @@ def test_main_analysis_error() -> None:
         ):
             main()
 
-        assert exc_info.value.code == 1
-        assert_console_contains(output, "Error analyzing file", "Test error")
+    assert exc_info.value.code == 1
+    assert_console_contains(output, "Error analyzing file", "Test error")
 
 
 def test_main_directory_input() -> None:
