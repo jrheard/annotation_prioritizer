@@ -380,7 +380,9 @@ def analyze_file(file_path: str) -> tuple[FunctionPriority, ...]:
 
 **Why this grouping:** All code that consumes qualified names is updated together, completing the type migration in production code.
 
-### Commit 4: Update all tests and remove obsolete runtime checks
+### Commit 4: Update all tests and remove obsolete runtime checks ✅
+
+**Status:** COMPLETED (commit d5c5ddf)
 
 **Files to modify:**
 - `tests/helpers/factories.py`

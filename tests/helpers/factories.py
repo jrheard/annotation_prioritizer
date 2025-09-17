@@ -9,6 +9,8 @@ from annotation_prioritizer.models import (
     FunctionInfo,
     FunctionPriority,
     ParameterInfo,
+    QualifiedName,
+    make_qualified_name,
 )
 
 
@@ -41,7 +43,7 @@ def make_parameter(
 def make_function_info(  # noqa: PLR0913
     name: str = "test_func",
     *,
-    qualified_name: str | None = None,
+    qualified_name: QualifiedName | None = None,
     parameters: tuple[ParameterInfo, ...] | None = None,
     has_return_annotation: bool = False,
     line_number: int = 1,
@@ -65,7 +67,7 @@ def make_function_info(  # noqa: PLR0913
         assert "." not in name, (
             f"Function name should not be qualified when qualified_name is not provided, got: {name}"
         )
-        qualified_name = f"__module__.{name}"
+        qualified_name = make_qualified_name(f"__module__.{name}")
     if parameters is None:
         parameters = ()
 
@@ -119,7 +121,7 @@ def make_priority(  # noqa: PLR0913
         f"Inconsistent return annotation state: return_score={return_score}, "
         f"has_return_annotation={has_return_annotation}"
     )
-    qualified_name = f"__module__.{name}"
+    qualified_name = make_qualified_name(f"__module__.{name}")
     if parameters is None:
         parameters = ()
 

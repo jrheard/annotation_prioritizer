@@ -1,4 +1,4 @@
-"""Tests for the models module, including QualifiedName type."""
+"""Tests for the models module."""
 
 from annotation_prioritizer.models import make_qualified_name
 

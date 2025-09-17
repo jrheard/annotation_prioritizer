@@ -3,7 +3,7 @@
 import pytest
 
 from annotation_prioritizer.function_parser import parse_function_definitions
-from annotation_prioritizer.models import ParameterInfo
+from annotation_prioritizer.models import ParameterInfo, make_qualified_name
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -40,7 +40,7 @@ def simple_function(a, b):
 
         func = result[0]
         assert func.name == "simple_function"
-        assert func.qualified_name == "__module__.simple_function"
+        assert func.qualified_name == make_qualified_name("__module__.simple_function")
         assert func.has_return_annotation is False
         assert func.line_number == 2
         assert func.file_path == path
@@ -145,18 +145,18 @@ class TestClass:
 
         # Check qualified names
         instance_method = next(f for f in result if f.name == "instance_method")
-        assert instance_method.qualified_name == "__module__.TestClass.instance_method"
+        assert instance_method.qualified_name == make_qualified_name("__module__.TestClass.instance_method")
         assert instance_method.has_return_annotation is True
         assert len(instance_method.parameters) == 2
         assert instance_method.parameters[0] == ParameterInfo("self", False, False, False)
         assert instance_method.parameters[1] == ParameterInfo("x", True, False, False)
 
         class_method = next(f for f in result if f.name == "class_method")
-        assert class_method.qualified_name == "__module__.TestClass.class_method"
+        assert class_method.qualified_name == make_qualified_name("__module__.TestClass.class_method")
         assert class_method.has_return_annotation is True
 
         static_method = next(f for f in result if f.name == "static_method")
-        assert static_method.qualified_name == "__module__.TestClass.static_method"
+        assert static_method.qualified_name == make_qualified_name("__module__.TestClass.static_method")
         assert static_method.has_return_annotation is False
 
 
@@ -177,10 +177,12 @@ class OuterClass:
         assert len(result) == 2
 
         outer_method = next(f for f in result if f.name == "outer_method")
-        assert outer_method.qualified_name == "__module__.OuterClass.outer_method"
+        assert outer_method.qualified_name == make_qualified_name("__module__.OuterClass.outer_method")
 
         inner_method = next(f for f in result if f.name == "inner_method")
-        assert inner_method.qualified_name == "__module__.OuterClass.InnerClass.inner_method"
+        assert inner_method.qualified_name == make_qualified_name(
+            "__module__.OuterClass.InnerClass.inner_method"
+        )
 
 
 def test_parse_async_functions() -> None:
@@ -199,11 +201,11 @@ class AsyncClass:
         assert len(result) == 2
 
         async_func = next(f for f in result if f.name == "async_function")
-        assert async_func.qualified_name == "__module__.async_function"
+        assert async_func.qualified_name == make_qualified_name("__module__.async_function")
         assert async_func.has_return_annotation is True
 
         async_method = next(f for f in result if f.name == "async_method")
-        assert async_method.qualified_name == "__module__.AsyncClass.async_method"
+        assert async_method.qualified_name == make_qualified_name("__module__.AsyncClass.async_method")
         assert async_method.has_return_annotation is False
 
 
@@ -306,15 +308,15 @@ def outer_function(x):
 
         # Verify specific function details
         outer_func = next(f for f in result if f.name == "outer_function")
-        assert outer_func.qualified_name == "__module__.outer_function"
+        assert outer_func.qualified_name == make_qualified_name("__module__.outer_function")
         assert outer_func.has_return_annotation is False
 
         inner_func = next(f for f in result if f.name == "inner_function")
-        assert inner_func.qualified_name == "__module__.outer_function.inner_function"
+        assert inner_func.qualified_name == make_qualified_name("__module__.outer_function.inner_function")
         assert inner_func.has_return_annotation is False
 
         another_inner = next(f for f in result if f.name == "another_inner")
-        assert another_inner.qualified_name == "__module__.outer_function.another_inner"
+        assert another_inner.qualified_name == make_qualified_name("__module__.outer_function.another_inner")
         assert another_inner.has_return_annotation is True
 
 

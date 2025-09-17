@@ -7,7 +7,7 @@ from annotation_prioritizer.call_counter import CallCountVisitor, count_function
 from annotation_prioritizer.class_discovery import build_class_registry
 from annotation_prioritizer.function_parser import parse_function_definitions
 from annotation_prioritizer.iteration import first
-from annotation_prioritizer.models import Scope, ScopeKind
+from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
 from tests.helpers.factories import make_function_info, make_parameter
 from tests.helpers.temp_files import temp_python_file
@@ -53,9 +53,9 @@ def caller():
         # Convert to dict for easier testing
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        assert call_counts["__module__.func_a"] == 3  # Called 3 times
-        assert call_counts["__module__.func_b"] == 2  # Called 2 times
-        assert call_counts["__module__.caller"] == 0  # Not called
+        assert call_counts[make_qualified_name("__module__.func_a")] == 3  # Called 3 times
+        assert call_counts[make_qualified_name("__module__.func_b")] == 2  # Called 2 times
+        assert call_counts[make_qualified_name("__module__.caller")] == 0  # Not called
 
 
 def test_count_method_calls() -> None:
@@ -82,7 +82,7 @@ def use_calculator():
         known_functions = (
             make_function_info(
                 "add",
-                qualified_name="__module__.Calculator.add",
+                qualified_name=make_qualified_name("__module__.Calculator.add"),
                 parameters=(
                     make_parameter("self"),
                     make_parameter("a"),
@@ -93,7 +93,7 @@ def use_calculator():
             ),
             make_function_info(
                 "multiply",
-                qualified_name="__module__.Calculator.multiply",
+                qualified_name=make_qualified_name("__module__.Calculator.multiply"),
                 parameters=(
                     make_parameter("self"),
                     make_parameter("a"),
@@ -110,8 +110,8 @@ def use_calculator():
         # self.add() called twice in calculate method + once in use_calculator = 3 times
         # But we can't track the external call to calc.add() because it's not self.add()
         # So we should only count self.add() calls = 2 times
-        assert call_counts["__module__.Calculator.add"] == 2
-        assert call_counts["__module__.Calculator.multiply"] == 1
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 2
+        assert call_counts[make_qualified_name("__module__.Calculator.multiply")] == 1
 
 
 def test_count_static_method_calls() -> None:
@@ -133,7 +133,7 @@ def external_use():
         known_functions = (
             make_function_info(
                 "format_number",
-                qualified_name="__module__.Utils.format_number",
+                qualified_name=make_qualified_name("__module__.Utils.format_number"),
                 parameters=(make_parameter("n"),),
                 line_number=4,
                 file_path=temp_path,
@@ -144,7 +144,7 @@ def external_use():
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Utils.format_number() called twice
-        assert call_counts["__module__.Utils.format_number"] == 2
+        assert call_counts[make_qualified_name("__module__.Utils.format_number")] == 2
 
 
 def test_count_no_calls() -> None:
@@ -174,8 +174,8 @@ def another_unused():
         result = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        assert call_counts["__module__.unused_function"] == 0
-        assert call_counts["__module__.another_unused"] == 0
+        assert call_counts[make_qualified_name("__module__.unused_function")] == 0
+        assert call_counts[make_qualified_name("__module__.another_unused")] == 0
 
 
 def test_count_unknown_functions_ignored() -> None:
@@ -202,7 +202,7 @@ def caller():
         result = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        assert call_counts["__module__.known_func"] == 1
+        assert call_counts[make_qualified_name("__module__.known_func")] == 1
 
 
 def test_count_calls_nonexistent_file() -> None:
@@ -256,7 +256,7 @@ class Outer:
         known_functions = (
             make_function_info(
                 "inner_method",
-                qualified_name="__module__.Outer.Inner.inner_method",
+                qualified_name=make_qualified_name("__module__.Outer.Inner.inner_method"),
                 parameters=(make_parameter("self"),),
                 line_number=4,
                 file_path=temp_path,
@@ -267,7 +267,7 @@ class Outer:
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Due to our simple implementation, these complex calls won't be tracked
-        assert call_counts["__module__.Outer.Inner.inner_method"] == 0
+        assert call_counts[make_qualified_name("__module__.Outer.Inner.inner_method")] == 0
 
 
 def test_count_edge_case_calls() -> None:
@@ -297,7 +297,7 @@ def test_self_without_class():
         known_functions = (
             make_function_info(
                 "method_in_class",
-                qualified_name="__module__.MyClass.method_in_class",
+                qualified_name=make_qualified_name("__module__.MyClass.method_in_class"),
                 parameters=(make_parameter("self"),),
                 line_number=3,
                 file_path=temp_path,
@@ -314,8 +314,8 @@ def test_self_without_class():
 
         # The obj.method_in_class() call won't match our known function because
         # it's not self.method_in_class(), so count should be 0
-        assert call_counts["__module__.MyClass.method_in_class"] == 0
-        assert call_counts["__module__.standalone_method"] == 0
+        assert call_counts[make_qualified_name("__module__.MyClass.method_in_class")] == 0
+        assert call_counts[make_qualified_name("__module__.standalone_method")] == 0
 
 
 def test_self_call_outside_class_context() -> None:
@@ -364,7 +364,7 @@ self.method()
 
     # Test by visiting the call - this should increment the count
     visitor.visit_Call(call_node)
-    assert visitor.call_counts["__module__.method"] == 1  # This covers line 70
+    assert visitor.call_counts[make_qualified_name("__module__.method")] == 1  # This covers line 70
 
 
 def test_complex_qualified_calls() -> None:
@@ -412,7 +412,8 @@ outer.inner.method()
 
     # Test by visiting the call - unresolved references should not be counted
     visitor.visit_Call(call_node)
-    assert visitor.call_counts["__module__.method"] == 0  # Unresolved compound name not counted
+    # Unresolved compound name not counted
+    assert visitor.call_counts[make_qualified_name("__module__.method")] == 0
 
 
 def test_function_calls_in_nested_functions() -> None:
@@ -443,13 +444,13 @@ def top_level_caller():
             ),
             make_function_info(
                 "inner_function",
-                qualified_name="__module__.outer_function.inner_function",
+                qualified_name=make_qualified_name("__module__.outer_function.inner_function"),
                 line_number=3,
                 file_path=temp_path,
             ),
             make_function_info(
                 "another_inner",
-                qualified_name="__module__.outer_function.another_inner",
+                qualified_name=make_qualified_name("__module__.outer_function.another_inner"),
                 line_number=6,
                 file_path=temp_path,
             ),
@@ -467,24 +468,24 @@ def top_level_caller():
         # - once from inner_function
         # - once from top_level_caller
         # Total: 2 calls
-        assert call_counts["__module__.outer_function"] == 2
+        assert call_counts[make_qualified_name("__module__.outer_function")] == 2
 
         # inner_function() called:
         # - once from another_inner
         # - once from outer_function itself
         # Total: 2 calls
-        assert call_counts["__module__.outer_function.inner_function"] == 2
+        assert call_counts[make_qualified_name("__module__.outer_function.inner_function")] == 2
 
         # another_inner() called:
         # - once from outer_function
         # Total: 1 call
-        assert call_counts["__module__.outer_function.another_inner"] == 1
+        assert call_counts[make_qualified_name("__module__.outer_function.another_inner")] == 1
 
         # helper_function() called:
         # - once from another_inner
         # - once from top_level_caller
         # Total: 2 calls
-        assert call_counts["__module__.helper_function"] == 2
+        assert call_counts[make_qualified_name("__module__.helper_function")] == 2
 
 
 def test_method_calls_in_nested_functions() -> None:
@@ -512,7 +513,7 @@ class Calculator:
         known_functions = (
             make_function_info(
                 "add",
-                qualified_name="__module__.Calculator.add",
+                qualified_name=make_qualified_name("__module__.Calculator.add"),
                 parameters=(
                     make_parameter("self"),
                     make_parameter("a"),
@@ -523,7 +524,7 @@ class Calculator:
             ),
             make_function_info(
                 "multiply",
-                qualified_name="__module__.Calculator.multiply",
+                qualified_name=make_qualified_name("__module__.Calculator.multiply"),
                 parameters=(
                     make_parameter("self"),
                     make_parameter("a"),
@@ -541,12 +542,12 @@ class Calculator:
         # - once from inner_helper nested function
         # - once from complex_operation directly
         # Total: 2 calls
-        assert call_counts["__module__.Calculator.add"] == 2
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 2
 
         # self.multiply() called:
         # - once from another_helper nested function
         # Total: 1 call
-        assert call_counts["__module__.Calculator.multiply"] == 1
+        assert call_counts[make_qualified_name("__module__.Calculator.multiply")] == 1
 
 
 def test_deeply_nested_function_calls() -> None:
@@ -573,7 +574,7 @@ def module_function():
         known_functions = (
             make_function_info(
                 "helper_method",
-                qualified_name="__module__.OuterClass.helper_method",
+                qualified_name=make_qualified_name("__module__.OuterClass.helper_method"),
                 parameters=(make_parameter("self"),),
                 line_number=10,
                 file_path=temp_path,
@@ -589,10 +590,10 @@ def module_function():
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.helper_method() called once from level3_function
-        assert call_counts["__module__.OuterClass.helper_method"] == 1
+        assert call_counts[make_qualified_name("__module__.OuterClass.helper_method")] == 1
 
         # module_function() called once from level2_function
-        assert call_counts["__module__.module_function"] == 1
+        assert call_counts[make_qualified_name("__module__.module_function")] == 1
 
 
 def test_nested_class_with_function_calls() -> None:
@@ -616,7 +617,7 @@ def module_helper():
         known_functions = (
             make_function_info(
                 "other_inner_method",
-                qualified_name="__module__.Outer.Inner.other_inner_method",
+                qualified_name=make_qualified_name("__module__.Outer.Inner.other_inner_method"),
                 parameters=(make_parameter("self"),),
                 line_number=8,
                 file_path=temp_path,
@@ -632,10 +633,10 @@ def module_helper():
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.other_inner_method() called once from inner_method
-        assert call_counts["__module__.Outer.Inner.other_inner_method"] == 1
+        assert call_counts[make_qualified_name("__module__.Outer.Inner.other_inner_method")] == 1
 
         # module_helper() called once from nested_function
-        assert call_counts["__module__.module_helper"] == 1
+        assert call_counts[make_qualified_name("__module__.module_helper")] == 1
 
 
 def test_extract_call_with_dynamic_call() -> None:
@@ -727,7 +728,7 @@ def my_function():
     known_functions = (
         make_function_info(
             "method",
-            qualified_name="__module__.my_function.Outer.Inner.method",
+            qualified_name=make_qualified_name("__module__.my_function.Outer.Inner.method"),
             line_number=5,
             file_path="test.py",
         ),
@@ -736,7 +737,7 @@ def my_function():
     visitor = CallCountVisitor(known_functions, class_registry)
     visitor.visit(tree)
 
-    assert visitor.call_counts["__module__.my_function.Outer.Inner.method"] == 1
+    assert visitor.call_counts[make_qualified_name("__module__.my_function.Outer.Inner.method")] == 1
 
 
 def test_async_function_calls() -> None:
@@ -768,7 +769,7 @@ async def top_level_async():
             ),
             make_function_info(
                 "async_inner",
-                qualified_name="__module__.async_outer.async_inner",
+                qualified_name=make_qualified_name("__module__.async_outer.async_inner"),
                 line_number=3,
                 file_path=temp_path,
             ),
@@ -786,18 +787,18 @@ async def top_level_async():
         # - once from async_inner (await async_outer())
         # - once from top_level_async (await async_outer())
         # Total: 2 calls
-        assert call_counts["__module__.async_outer"] == 2
+        assert call_counts[make_qualified_name("__module__.async_outer")] == 2
 
         # async_inner() called:
         # - once from async_outer (await async_inner())
         # Total: 1 call
-        assert call_counts["__module__.async_outer.async_inner"] == 1
+        assert call_counts[make_qualified_name("__module__.async_outer.async_inner")] == 1
 
         # regular_helper() called:
         # - once from sync_inner nested function
         # - once from top_level_async
         # Total: 2 calls
-        assert call_counts["__module__.regular_helper"] == 2
+        assert call_counts[make_qualified_name("__module__.regular_helper")] == 2
 
 
 def test_builtin_shadowing() -> None:
@@ -816,14 +817,14 @@ def test():
         known_functions = (
             make_function_info(
                 "append",
-                qualified_name="__module__.list.append",  # User-defined class method
+                qualified_name=make_qualified_name("__module__.list.append"),  # User-defined class method
                 parameters=(make_parameter("item"),),
                 line_number=4,
                 file_path=temp_path,
             ),
             make_function_info(
                 "append",
-                qualified_name="list.append",  # Never resolved (no builtin tracking)
+                qualified_name=make_qualified_name("list.append"),  # Never resolved (no builtin tracking)
                 parameters=(
                     make_parameter("self"),
                     make_parameter("item"),
@@ -838,8 +839,8 @@ def test():
 
         # User-defined class method should be called
         # The "list.append" entry (without __module__) is never resolved since we don't track builtins
-        assert call_counts["__module__.list.append"] == 1
-        assert call_counts["list.append"] == 0
+        assert call_counts[make_qualified_name("__module__.list.append")] == 1
+        assert call_counts[make_qualified_name("list.append")] == 0
 
 
 def test_complex_expression_calls_handled_gracefully() -> None:
@@ -860,7 +861,7 @@ def test():
         known_functions = (
             make_function_info(
                 "method",
-                qualified_name="__module__.MyClass.method",
+                qualified_name=make_qualified_name("__module__.MyClass.method"),
                 parameters=(make_parameter("self"),),
                 line_number=3,
                 file_path=temp_path,
@@ -871,7 +872,7 @@ def test():
         result = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        assert call_counts["__module__.MyClass.method"] == 0
+        assert call_counts[make_qualified_name("__module__.MyClass.method")] == 0
 
 
 def test_unresolvable_class_references_not_counted() -> None:
@@ -892,7 +893,7 @@ def test():
         known_functions = (
             make_function_info(
                 "method",
-                qualified_name="__module__.KnownClass.method",
+                qualified_name=make_qualified_name("__module__.KnownClass.method"),
                 parameters=(make_parameter("self"),),
                 line_number=3,
                 file_path=temp_path,
@@ -903,7 +904,7 @@ def test():
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # None of the unresolvable references should be counted
-        assert call_counts["__module__.KnownClass.method"] == 0
+        assert call_counts[make_qualified_name("__module__.KnownClass.method")] == 0
 
 
 def test_classmethod_cls_calls() -> None:
@@ -951,12 +952,13 @@ Calculator.create_and_compute(5, 10)
         # cls.add() should be counted:
         # - once in create_and_compute
         # - once in complex_operation's helper function
-        assert call_counts.get("__module__.Calculator.add", 0) == 2, (
-            f"Expected 2 calls to Calculator.add, got {call_counts.get('__module__.Calculator.add', 0)}"
+        assert call_counts.get(make_qualified_name("__module__.Calculator.add"), 0) == 2, (
+            f"Expected 2 calls to Calculator.add, got "
+            f"{call_counts.get(make_qualified_name('__module__.Calculator.add'), 0)}"
         )
 
         # cls.multiply() should be counted:
         # - once in create_and_compute
         # - once in complex_operation directly
-        multiply_count = call_counts.get("__module__.Calculator.multiply", 0)
+        multiply_count = call_counts.get(make_qualified_name("__module__.Calculator.multiply"), 0)
         assert multiply_count == 2, f"Expected 2 calls to Calculator.multiply, got {multiply_count}"
