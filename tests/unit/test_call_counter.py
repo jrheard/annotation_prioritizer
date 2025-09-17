@@ -5,6 +5,7 @@ import ast
 
 from annotation_prioritizer.call_counter import CallCountVisitor, count_function_calls
 from annotation_prioritizer.class_discovery import build_class_registry
+from annotation_prioritizer.function_parser import parse_function_definitions
 from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import FunctionInfo, ParameterInfo, Scope, ScopeKind
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
@@ -983,3 +984,59 @@ def test():
 
         # None of the unresolvable references should be counted
         assert call_counts["__module__.KnownClass.method"] == 0
+
+
+def test_classmethod_cls_calls() -> None:
+    """Test that cls.method() calls in @classmethod are properly counted."""
+    source = """
+class Calculator:
+    @classmethod
+    def create_and_compute(cls, x, y):
+        # cls.add should be resolved and counted
+        result = cls.add(x, y)
+        # cls.multiply should be resolved and counted
+        product = cls.multiply(x, y)
+        return result, product
+
+    @classmethod
+    def add(cls, a, b):
+        return a + b
+
+    @classmethod
+    def multiply(cls, a, b):
+        return a * b
+
+    @classmethod
+    def complex_operation(cls):
+        # Nested function using cls
+        def helper():
+            return cls.add(1, 2)  # Should resolve to Calculator.add
+
+        # Direct cls call
+        base = cls.multiply(3, 4)  # Should resolve to Calculator.multiply
+        return base + helper()
+
+# Usage outside class
+Calculator.create_and_compute(5, 10)
+"""
+
+    with temp_python_file(source) as temp_path:
+        # Parse to get function info
+        functions = parse_function_definitions(temp_path)
+
+        # Count calls
+        result = count_function_calls(temp_path, functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # cls.add() should be counted:
+        # - once in create_and_compute
+        # - once in complex_operation's helper function
+        assert call_counts.get("__module__.Calculator.add", 0) == 2, (
+            f"Expected 2 calls to Calculator.add, got {call_counts.get('__module__.Calculator.add', 0)}"
+        )
+
+        # cls.multiply() should be counted:
+        # - once in create_and_compute
+        # - once in complex_operation directly
+        multiply_count = call_counts.get("__module__.Calculator.multiply", 0)
+        assert multiply_count == 2, f"Expected 2 calls to Calculator.multiply, got {multiply_count}"

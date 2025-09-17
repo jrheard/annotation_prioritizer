@@ -221,11 +221,15 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified method name if resolvable, None otherwise
         """
-        # Self method calls: self.method_name() - use current scope context
-        # TODO: Should we also special-case `cls` in addition to `self`?
-        if isinstance(func.value, ast.Name) and func.value.id == "self":
-            # Build qualified name from current scope, excluding function scopes
-            # since self.method() calls should resolve to the class method, not nested function
+        # Self/cls method calls: self.method_name() or cls.method_name() - use current scope context
+        # Both 'self' (instance methods) and 'cls' (class methods) refer to the containing class
+        #
+        # Known limitation: Incorrectly resolves self/cls when classes are nested inside
+        # methods (e.g., self in OuterClass.method.InnerClass resolves to InnerClass,
+        # not OuterClass). Code like that should be extremely rare in practice, so this is OK.
+        if isinstance(func.value, ast.Name) and func.value.id in ("self", "cls"):
+            # Build qualified name from current scope, excluding function scopes since
+            # self.method() and cls.method() calls should resolve to the class method
             return build_qualified_name(
                 self._scope_stack, func.attr, exclude_kinds=frozenset({ScopeKind.FUNCTION})
             )
