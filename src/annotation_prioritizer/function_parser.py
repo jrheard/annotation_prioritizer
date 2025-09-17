@@ -37,7 +37,7 @@ import ast
 from pathlib import Path
 from typing import override
 
-from .models import FunctionInfo, ParameterInfo, Scope, ScopeKind
+from .models import FunctionInfo, ParameterInfo, QualifiedName, Scope, ScopeKind, make_qualified_name
 from .scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
 
 
@@ -272,7 +272,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
 
         self.functions.append(function_info)
 
-    def _build_qualified_name(self, function_name: str) -> str:
+    def _build_qualified_name(self, function_name: str) -> QualifiedName:
         """Construct a fully qualified name using the current scope context.
 
         Builds qualified names by combining all scopes in the current stack with
@@ -289,7 +289,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
             its complete scope hierarchy including the module scope.
         """
         scope_names = [scope.name for scope in self._scope_stack]
-        return ".".join([*scope_names, function_name])
+        return make_qualified_name(".".join([*scope_names, function_name]))
 
 
 def parse_function_definitions(file_path: str) -> tuple[FunctionInfo, ...]:

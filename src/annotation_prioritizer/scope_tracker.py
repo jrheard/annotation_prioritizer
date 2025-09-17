@@ -17,7 +17,7 @@ import ast
 from collections.abc import Set as AbstractSet
 
 from annotation_prioritizer.iteration import first
-from annotation_prioritizer.models import Scope, ScopeKind
+from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
 
 type ScopeStack = tuple[Scope, ...]
 
@@ -77,7 +77,7 @@ def get_current_scope(stack: ScopeStack) -> Scope:
     return stack[-1]
 
 
-def get_containing_class(stack: ScopeStack) -> str | None:
+def get_containing_class(stack: ScopeStack) -> QualifiedName | None:
     """Get the qualified name of the containing class, if any.
 
     Args:
@@ -88,7 +88,7 @@ def get_containing_class(stack: ScopeStack) -> str | None:
     """
     for i in range(len(stack) - 1, -1, -1):
         if stack[i].kind == ScopeKind.CLASS:
-            return ".".join(s.name for s in stack[: i + 1])
+            return make_qualified_name(".".join(s.name for s in stack[: i + 1]))
     return None
 
 
@@ -116,7 +116,7 @@ def in_function(stack: ScopeStack) -> bool:
     return any(s.kind == ScopeKind.FUNCTION for s in stack)
 
 
-def generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[str, ...]:
+def generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[QualifiedName, ...]:
     """Generate all possible qualified names from innermost to outermost scope.
 
     Matches Python's name resolution order where inner scopes shadow outer scopes.
@@ -136,19 +136,19 @@ def generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[str, .
          "__module__.Outer.Helper",
          "__module__.Helper")
     """
-    candidates: list[str] = []
+    candidates: list[QualifiedName] = []
 
     # Work from innermost to outermost (backwards through stack)
     for i in range(len(scope_stack) - 1, -1, -1):
         prefix = ".".join(s.name for s in scope_stack[: i + 1])
-        candidates.append(f"{prefix}.{name}")
+        candidates.append(make_qualified_name(f"{prefix}.{name}"))
 
     return tuple(candidates)
 
 
 def build_qualified_name(
     scope_stack: ScopeStack, name: str, exclude_kinds: frozenset[ScopeKind] | None = None
-) -> str:
+) -> QualifiedName:
     """Build a qualified name from scope stack with optional filtering.
 
     Used primarily for self.method() resolution where we need to exclude
@@ -169,10 +169,12 @@ def build_qualified_name(
     """
     exclude_kinds = exclude_kinds or frozenset()
     filtered = [s.name for s in scope_stack if s.kind not in exclude_kinds]
-    return ".".join([*filtered, name])
+    return make_qualified_name(".".join([*filtered, name]))
 
 
-def find_first_match(candidates: tuple[str, ...], registry: AbstractSet[str]) -> str | None:
+def find_first_match(
+    candidates: tuple[QualifiedName, ...], registry: AbstractSet[QualifiedName]
+) -> QualifiedName | None:
     """Check candidates against a registry and return first match.
 
     Args:

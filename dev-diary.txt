@@ -332,3 +332,5 @@ TODO add asserts in some places where we currently have to-dos??
 WIP QualifiedName newtype?? could be useful for prod AND test code???
 
 TODO resolve_function_call and resolve_class_name are identical
+
+TODO helper for making a qualified name from a scope stack?

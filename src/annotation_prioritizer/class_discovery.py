@@ -19,7 +19,7 @@ import ast
 from dataclasses import dataclass
 from typing import override
 
-from annotation_prioritizer.models import Scope, ScopeKind
+from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
 
 
@@ -31,9 +31,9 @@ class ClassRegistry:
     Does not track Python builtins since we never analyze their methods.
     """
 
-    classes: frozenset[str]  # Qualified names like "__module__.Calculator"
+    classes: frozenset[QualifiedName]  # Qualified names like "__module__.Calculator"
 
-    def is_class(self, name: str) -> bool:
+    def is_class(self, name: QualifiedName) -> bool:
         """Check if a name is a known user-defined class."""
         return name in self.classes
 
@@ -52,7 +52,7 @@ class ClassDiscoveryVisitor(ast.NodeVisitor):
     def __init__(self) -> None:
         """Initialize the visitor with an empty list of class names."""
         super().__init__()
-        self.class_names: list[str] = []
+        self.class_names: list[QualifiedName] = []
         self._scope_stack: ScopeStack = create_initial_stack()
 
     @override
@@ -60,7 +60,7 @@ class ClassDiscoveryVisitor(ast.NodeVisitor):
         """Record class definition with full qualified name."""
         # Build qualified name from current scope
         scope_names = [scope.name for scope in self._scope_stack]
-        qualified_name = ".".join([*scope_names, node.name])
+        qualified_name = make_qualified_name(".".join([*scope_names, node.name]))
         self.class_names.append(qualified_name)
 
         # Push class scope and continue traversal for nested classes
