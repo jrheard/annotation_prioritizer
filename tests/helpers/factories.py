@@ -50,8 +50,8 @@ def make_function_info(  # noqa: PLR0913
     """Create FunctionInfo with sensible defaults.
 
     Args:
-        name: Function name (default: "test_func")
-        qualified_name: Fully qualified name (default: "__module__.{name}")
+        name: Function name
+        qualified_name: Fully qualified name (if None, defaults to "__module__.{name}")
         parameters: Tuple of ParameterInfo objects (default: empty tuple)
         has_return_annotation: Whether function has return type annotation
         line_number: Line number where function is defined
@@ -61,6 +61,10 @@ def make_function_info(  # noqa: PLR0913
         FunctionInfo instance with the specified attributes
     """
     if qualified_name is None:
+        # Only check for dots if we're auto-generating the qualified name
+        assert "." not in name, (
+            f"Function name should not be qualified when qualified_name is not provided, got: {name}"
+        )
         qualified_name = f"__module__.{name}"
     if parameters is None:
         parameters = ()
@@ -72,36 +76,6 @@ def make_function_info(  # noqa: PLR0913
         has_return_annotation=has_return_annotation,
         line_number=line_number,
         file_path=file_path,
-    )
-
-
-def make_annotation_score(
-    function_name: str = "test_func",
-    *,
-    parameter_score: float = 0.0,
-    return_score: float = 0.0,
-    total_score: float | None = None,
-) -> AnnotationScore:
-    """Create AnnotationScore with explicit scores.
-
-    Args:
-        function_name: Function name for qualified name
-        parameter_score: Score for parameter annotations (0.0 to 1.0)
-        return_score: Score for return annotation (0.0 or 1.0)
-        total_score: Total score (if None, defaults to 0.0)
-
-    Returns:
-        AnnotationScore instance with specified scores
-    """
-    qualified_name = function_name if "__module__" in function_name else f"__module__.{function_name}"
-    if total_score is None:
-        total_score = 0.0
-
-    return AnnotationScore(
-        function_qualified_name=qualified_name,
-        parameter_score=parameter_score,
-        return_score=return_score,
-        total_score=total_score,
     )
 
 
@@ -121,7 +95,7 @@ def make_priority(  # noqa: PLR0913
     """Create FunctionPriority with explicit values.
 
     Args:
-        name: Function name
+        name: Function name (not a qualified name)
         param_score: Score for parameter annotations (0.0 to 1.0)
         return_score: Score for return annotation (0.0 or 1.0)
         call_count: Number of times function is called
@@ -135,6 +109,8 @@ def make_priority(  # noqa: PLR0913
     Returns:
         FunctionPriority instance with nested objects
     """
+    # Ensure name is not already qualified
+    assert "." not in name, f"Function name should not be qualified, got: {name}"
     qualified_name = f"__module__.{name}"
     if parameters is None:
         parameters = ()
