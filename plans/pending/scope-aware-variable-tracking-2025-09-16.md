@@ -1,5 +1,7 @@
 # Scope-Aware Variable Tracking Implementation Plan
 
+TODO: What about reassignment???? Save that for later if it comes up as a big source of unresolved calls maybe?
+
 ## Executive Summary
 
 This document outlines the implementation of scope-aware variable tracking to fix the **critical bug** where instance method calls are not counted. This is **Step 3 of 3** in our improvement sequence and represents the culmination of our accuracy improvements.
