@@ -179,6 +179,37 @@ class CallCountVisitor(ast.NodeVisitor):
         # Cannot be resolved statically - return None
         return None
 
+    def _extract_class_name_from_value(self, node: ast.expr) -> str | None:
+        """Extract a class name from an AST node.
+
+        Handles both simple names (ast.Name) and compound names (ast.Attribute).
+        Returns None for unsupported node types or complex expressions.
+
+        Args:
+            node: The AST node to extract from (typically func.value)
+
+        Returns:
+            Class name as string if extractable, None otherwise
+
+        Examples:
+            ast.Name(id="Calculator") -> "Calculator"
+            ast.Attribute chain for Outer.Inner -> "Outer.Inner"
+            ast.Call or other complex nodes -> None
+        """
+        if isinstance(node, ast.Name):
+            return node.id
+
+        if isinstance(node, ast.Attribute):
+            try:
+                chain = extract_attribute_chain(node)
+                return ".".join(chain)
+            except AssertionError:
+                # Complex expressions like foo()[0].bar aren't supported
+                return None
+
+        # Other node types (Call, Subscript, etc.) can't be class references
+        return None
+
     def _resolve_method_call(self, func: ast.Attribute) -> str | None:
         """Resolve qualified name from a method call (attribute access).
 
@@ -199,34 +230,21 @@ class CallCountVisitor(ast.NodeVisitor):
                 self._scope_stack, func.attr, exclude_kinds=frozenset({ScopeKind.FUNCTION})
             )
 
-        # Static/class method calls: ClassName.method_name()
-        if isinstance(func.value, ast.Name):
-            potential_class = func.value.id
-            resolved_class = self._resolve_class_name(potential_class)
-            if resolved_class:
-                return f"{resolved_class}.{func.attr}"
-
-            # Not a class - might be a variable holding an instance
-            # TODO: Instance method calls (calc = Calculator(); calc.add()) require
-            # variable tracking to associate variables with their class types.
-            # This is planned as a separate feature (commits 4-5 in the original plan).
+        # All other class method calls: extract class name and resolve
+        class_name = self._extract_class_name_from_value(func.value)
+        if not class_name:
+            # Not a resolvable class reference (e.g., complex expression)
             return None
 
-        # Nested class method calls: Outer.Inner.method_name()
-        if isinstance(func.value, ast.Attribute):
-            # Extract the chain of attributes
-            chain = extract_attribute_chain(func.value)
-            full_class_name = ".".join(chain)
-            resolved_class = self._resolve_class_name(full_class_name)
-            if resolved_class:
-                return f"{resolved_class}.{func.attr}"
+        # Try to resolve the class name to its qualified form
+        resolved_class = self._resolve_class_name(class_name)
+        if resolved_class:
+            return f"{resolved_class}.{func.attr}"
 
-            # Fall back to module-qualified name for unresolvable complex cases
-            # This handles cases like variable.attribute.method() where variable isn't a known class
-            return f"__module__.{func.attr}"
-
-        # TODO: add support for MyClass.attribute.method()
-
+        # Class name couldn't be resolved in any scope or registry
+        # TODO: Instance method calls (calc = Calculator(); calc.add()) require
+        # variable tracking to associate variables with their class types.
+        # This is planned as a separate feature (commits 4-5 in the original plan).
         return None
 
     def _resolve_function_call(self, function_name: str) -> str | None:

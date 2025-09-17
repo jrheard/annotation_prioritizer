@@ -383,7 +383,7 @@ def some_function():
 
 
 def test_complex_qualified_calls() -> None:
-    """Test complex qualified calls to cover line 81."""
+    """Test complex qualified calls - unresolved compound names should not be counted."""
     # Create a visitor and manually test the complex qualified call case
     known_functions = (
         FunctionInfo(
@@ -406,9 +406,9 @@ def test_complex_qualified_calls() -> None:
     func_node = ast.Attribute(value=inner_attr, attr="method", ctx=ast.Load())
     call_node = ast.Call(func=func_node, args=[], keywords=[])
 
-    # Test by actually visiting the call - this should increment the count
+    # Test by actually visiting the call - unresolved references should not be counted
     visitor.visit_Call(call_node)
-    assert visitor.call_counts["__module__.method"] == 1  # This covers line 81
+    assert visitor.call_counts["__module__.method"] == 0  # Unresolved compound name not counted
 
 
 def test_function_calls_in_nested_functions() -> None:
@@ -867,3 +867,73 @@ def test():
         # Local class method should be called, not builtin
         assert call_counts["__module__.list.append"] == 1
         assert call_counts["list.append"] == 0
+
+
+def test_complex_expression_calls_handled_gracefully() -> None:
+    """Test that complex expressions in method calls don't crash."""
+    code = """
+class MyClass:
+    def method(self):
+        pass
+
+def test():
+    # Complex expressions that can't be resolved
+    get_obj()[0].method()  # Should not crash
+    (a + b).method()       # Should not crash
+    foo().bar.method()     # Should not crash
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="method",
+                qualified_name="__module__.MyClass.method",
+                parameters=(
+                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
+                ),
+                has_return_annotation=False,
+                line_number=3,
+                file_path=temp_path,
+            ),
+        )
+
+        # Should not crash, just return 0 calls since we can't resolve complex expressions
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        assert call_counts["__module__.MyClass.method"] == 0
+
+
+def test_unresolvable_class_references_not_counted() -> None:
+    """Test that unresolvable class references are consistently not counted."""
+    code = """
+class KnownClass:
+    def method(self):
+        pass
+
+def test():
+    # These should not be counted as they can't be resolved
+    UnknownClass.method()      # Unknown class
+    unknown_var.method()       # Variable (not a class)
+    Outer.Unknown.method()     # Partially unknown compound name
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            FunctionInfo(
+                name="method",
+                qualified_name="__module__.KnownClass.method",
+                parameters=(
+                    ParameterInfo(name="self", has_annotation=False, is_variadic=False, is_keyword=False),
+                ),
+                has_return_annotation=False,
+                line_number=3,
+                file_path=temp_path,
+            ),
+        )
+
+        result = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # None of the unresolvable references should be counted
+        assert call_counts["__module__.KnownClass.method"] == 0
