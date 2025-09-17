@@ -18,6 +18,94 @@ The codebase extensively uses qualified names (e.g., `"__module__.Calculator.add
 
 ## Implementation Steps
 
+### Commit 0: Remove builtin tracking from ClassRegistry
+
+**Files to modify:**
+- `src/annotation_prioritizer/class_discovery.py`
+- `src/annotation_prioritizer/call_counter.py`
+- `tests/unit/test_class_discovery.py`
+- `tests/unit/test_call_counter.py`
+
+**Changes to class_discovery.py:**
+
+Remove builtin tracking entirely since we never count calls to builtin methods:
+
+```python
+import ast
+from dataclasses import dataclass
+from typing import override
+
+from annotation_prioritizer.models import Scope, ScopeKind
+from annotation_prioritizer.scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
+
+
+@dataclass(frozen=True)
+class ClassRegistry:
+    """Registry of user-defined classes found in the analyzed code.
+
+    Only tracks classes defined in the AST (via ClassDef nodes).
+    Does not track Python builtins since we never analyze their methods.
+    """
+
+    classes: frozenset[str]  # Qualified names like "__module__.Calculator"
+
+    def is_class(self, name: str) -> bool:
+        """Check if a name is a known user-defined class."""
+        return name in self.classes
+
+    def merge(self, other: "ClassRegistry") -> "ClassRegistry":
+        """Merge with another registry (for future multi-file analysis)."""
+        return ClassRegistry(classes=self.classes | other.classes)
+
+
+class ClassDiscoveryVisitor(ast.NodeVisitor):
+    # ... no changes needed to visitor implementation ...
+
+
+def build_class_registry(tree: ast.AST) -> ClassRegistry:
+    """Build a registry of all user-defined classes from an AST."""
+    visitor = ClassDiscoveryVisitor()
+    visitor.visit(tree)
+
+    return ClassRegistry(classes=frozenset(visitor.class_names))
+```
+
+**Changes to call_counter.py:**
+
+Update `_resolve_class_name` to only check user-defined classes (no longer checking builtins):
+
+```python
+def _resolve_class_name(self, class_name: str) -> str | None:
+    """Resolve a class name to its qualified form based on current scope.
+
+    Only resolves user-defined classes found in the AST.
+
+    Args:
+        class_name: The name to resolve (e.g., "Calculator", "Outer.Inner")
+
+    Returns:
+        Qualified class name if found in registry, None otherwise
+    """
+    candidates = generate_name_candidates(self._scope_stack, class_name)
+    return find_first_match(candidates, self._class_registry.classes)
+```
+
+**Test updates:**
+
+Remove all tests related to builtin classes:
+- Remove tests that check `is_class("int")` returns `True`
+- Remove tests that verify builtin types in the registry
+- Remove the `_build_builtin_types()` function and `PYTHON_BUILTIN_TYPES` constant
+- Update test comments to clarify we only track user-defined classes
+- Add/update tests for user-defined classes that shadow builtin names (e.g., user's `int` class)
+- Remove any test that expects builtin constructor calls to be resolved
+
+**Why this change:**
+- We never count calls to builtin methods (they're not in `known_functions`)
+- Removing builtin tracking simplifies the codebase significantly
+- Enables a cleaner QualifiedName implementation with a single type everywhere
+- Eliminates confusion about how to represent builtins with qualified names
+
 ### Commit 1: Introduce QualifiedName type and update all data models
 
 **Files to modify:**
@@ -131,24 +219,25 @@ def _build_qualified_name(self, function_name: str) -> QualifiedName:
 ```
 
 **Changes to class_discovery.py:**
+
+Update ClassRegistry to use QualifiedName (now that builtins have been removed in the previous commit):
+
 ```python
 from annotation_prioritizer.models import QualifiedName, make_qualified_name
 
 @dataclass(frozen=True)
 class ClassRegistry:
-    ast_classes: frozenset[QualifiedName]  # Changed from frozenset[str]
-    builtin_classes: frozenset[str]  # Keep as str for builtins
+    """Registry of user-defined classes found in the analyzed code."""
 
-    def is_class(self, name: str | QualifiedName) -> bool:
-        """Check if a name refers to a known class."""
-        if isinstance(name, QualifiedName):
-            return name in self.ast_classes or str(name) in self.builtin_classes
-        else:
-            # Check builtins first (simple names)
-            if name in self.builtin_classes:
-                return True
-            # Check AST classes (convert string for comparison)
-            return any(str(qn) == name for qn in self.ast_classes)
+    classes: frozenset[QualifiedName]  # Changed from frozenset[str]
+
+    def is_class(self, name: QualifiedName) -> bool:
+        """Check if a name is a known user-defined class."""
+        return name in self.classes
+
+    def merge(self, other: "ClassRegistry") -> "ClassRegistry":
+        """Merge with another registry (for future multi-file analysis)."""
+        return ClassRegistry(classes=self.classes | other.classes)
 
 class ClassDiscoveryVisitor(ast.NodeVisitor):
     def __init__(self) -> None:
@@ -164,13 +253,10 @@ class ClassDiscoveryVisitor(ast.NodeVisitor):
         # ... rest of method ...
 
 def build_class_registry(tree: ast.AST) -> ClassRegistry:
-    """Build a registry of all classes defined in the AST."""
+    """Build a registry of all user-defined classes from an AST."""
     visitor = ClassDiscoveryVisitor()
     visitor.visit(tree)
-    return ClassRegistry(
-        ast_classes=frozenset(visitor.class_names),  # Now QualifiedName
-        builtin_classes=PYTHON_BUILTINS
-    )
+    return ClassRegistry(classes=frozenset(visitor.class_names))  # Now QualifiedName
 ```
 
 **Why this grouping:** All functions that create qualified names are updated together, ensuring consistent production of the new type.
@@ -225,13 +311,7 @@ class CallCountVisitor(ast.NodeVisitor):
     def _resolve_class_name(self, class_name: str) -> QualifiedName | None:
         """Resolve a class name to its qualified form based on current scope."""
         candidates = generate_name_candidates(self._scope_stack, class_name)
-        for candidate in candidates:
-            if self._class_registry.is_class(candidate):
-                return candidate
-        # Check if it's a built-in
-        if self._class_registry.is_class(class_name):
-            return make_qualified_name(class_name)
-        return None
+        return find_first_match(candidates, self._class_registry.classes)
 
     def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
         """Resolve qualified name from a method call."""
@@ -380,7 +460,7 @@ Each commit should:
 
 - **NewType behavior**: At runtime, `QualifiedName` is still a `str`, so serialization and comparison work normally
 - **String operations**: When string methods are needed, use `str(qualified_name)`
-- **Type narrowing**: The `is_class` method in `ClassRegistry` accepts both `str` and `QualifiedName` for flexibility
+- **Simplified API**: With builtins removed, `ClassRegistry` has a clean, single-type interface
 - **Backward compatibility**: The changes are internal only, no external API changes
 
 ## Migration Benefits
@@ -391,3 +471,5 @@ After this implementation:
 3. IDE support improves with better autocomplete
 4. Code becomes more maintainable and less error-prone
 5. Runtime assertions can potentially be removed in the future
+6. Simpler codebase with no special cases for builtins
+7. Single, consistent type (`QualifiedName`) throughout the system
