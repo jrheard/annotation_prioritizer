@@ -33,7 +33,7 @@ class ClassRegistry:
 
     classes: frozenset[QualifiedName]  # Qualified names like "__module__.Calculator"
 
-    def is_class(self, name: QualifiedName) -> bool:
+    def is_known_class(self, name: QualifiedName) -> bool:
         """Check if a name is a known user-defined class."""
         return name in self.classes
 

@@ -84,11 +84,11 @@ DONE experiment more with suggesting that claude use subagents -- both for paral
 
 TODO investigate tdd guard
 
-TODO figure out what to do about the unresolvable calls prereq. turn it into a project that we do first before continuing with scope work?
+DONE figure out what to do about the unresolvable calls prereq. turn it into a project that we do first before continuing with scope work?
 
 NOTE: when picking up the stuff in the appendixes (or really any of these plans), treat the code snippets as POTENTIAL STARTING POINTS FOR IDEATION, not actual cut-and-dry patterns that we definitely have to follow.
 
-i really feel like TODO there's going to have to be some intermediate stage where i turn this high-level plan doc into several smaller implementation docs that each get handled one at a time.
+i really feel like DONE there's going to have to be some intermediate stage where i turn this high-level plan doc into several smaller implementation docs that each get handled one at a time.
 
 ===
 
@@ -300,7 +300,7 @@ this seems to work!!
 NOTE: i don't think sub-agents get the full conversation history, so i need to have it prompt them with lots of context
 i'll add more about this to the description field of the agent
 
-TODO use /review-plan on each of these new docs
+DONE use /review-plan on each of these new docs
 
 gosh
 these new docs are not perfect :/
@@ -313,11 +313,11 @@ gonna stash my changes for now
 
 ok this is much better :)
 
-TODO use /review-plan on each of these new docs
+DONE use /review-plan on each of these new docs
 
 TODO think about when to implement import support. should we do this before or after "scope-aware" variable resolution?
 
-TODO is there any way to simplify / condense _resolve_class_name and _resolve_compound_class_name?
+DONE is there any way to simplify / condense _resolve_class_name and _resolve_compound_class_name?
 
 TODO make sure test filenames match the prod filenames; add this to claude.md
 
