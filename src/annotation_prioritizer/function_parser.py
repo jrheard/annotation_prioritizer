@@ -278,7 +278,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         Builds qualified names by combining all scopes in the current stack with
         the function name. This creates names like "__module__.function_name" for
         module-level functions, "__module__.ClassName.method_name" for methods,
-        and "__module__.OuterFunc.inner_func" for nested functions. The complete
+        and "__module__.outer_func.inner_func" for nested functions. The complete
         scope hierarchy is preserved for full explicitness.
 
         Args:
