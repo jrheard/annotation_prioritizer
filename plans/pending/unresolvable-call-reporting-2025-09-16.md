@@ -47,13 +47,16 @@ self.method_name()  # Self method call within class
 processor = DataProcessor(config)
 processor.process_data(data)  # Shows 0 calls - silently ignored!
 
-# DYNAMIC - Dynamic calls using getattr:
+# GETATTR - Dynamic calls using getattr:
 method = getattr(processor, 'process_data')
-result = method(data)  # Dynamic call - unresolvable
+result = method(data)  # getattr call - unresolvable
 
-# DYNAMIC - Dictionary/subscript dispatch:
+# SUBSCRIPT - Dictionary/subscript dispatch:
 handlers = {'process': processor.process_data}
 handlers['process'](data)  # Subscript call - unresolvable
+
+# EVAL - Dynamic code execution:
+eval("processor.process_data(data)")  # eval call - unresolvable
 
 # COMPLEX_QUALIFIED - Deep attribute chains:
 app.services.database.connection.execute(query)  # Too deep to resolve
@@ -82,7 +85,9 @@ from enum import StrEnum
 
 class UnresolvableCategory(StrEnum):
     """Categories for why a call couldn't be resolved."""
-    DYNAMIC = "dynamic"  # getattr(), exec(), dictionary lookups
+    GETATTR = "getattr"  # getattr() dynamic attribute access
+    SUBSCRIPT = "subscript"  # Dictionary/list subscript calls: obj[key]()
+    EVAL = "eval"  # eval() or exec() dynamic code execution
     IMPORTED = "imported"  # Calls to imported functions (not yet supported)
     COMPLEX_QUALIFIED = "complex_qualified"  # Deep attribute chains
     INSTANCE_METHOD = "instance_method"  # obj.method() where obj is a variable
@@ -96,7 +101,7 @@ class UnresolvableCall:
     helping users understand coverage limitations.
     """
     line_number: int  # Line where the unresolvable call appears
-    call_text: str  # First 100 chars of the call for context
+    call_text: str  # First 1000 chars of the call for context
     category: UnresolvableCategory  # Why it couldn't be resolved
 
 @dataclass(frozen=True)
@@ -129,27 +134,27 @@ def categorize_unresolvable_call(node: ast.Call, source_lines: tuple[str, ...]) 
     Returns:
         UnresolvableCall with category and context
     """
-    # Extract call text (first 100 chars for context)
+    # Extract call text (first 1000 chars for context)
     line_idx = node.lineno - 1  # Convert to 0-indexed
     if 0 <= line_idx < len(source_lines):
         line = source_lines[line_idx]
         # Find the call in the line (approximate)
         call_start = node.col_offset
-        call_text = line[call_start:call_start + 100].strip()
+        call_text = line[call_start:call_start + 1000].strip()
     else:
         call_text = "<unable to extract call text>"
 
     # Categorize based on AST structure
     func = node.func
 
-    # Dynamic calls: getattr(), exec(), etc.
+    # getattr() calls
     if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Call):
         if isinstance(func.value.func, ast.Name):
             if func.value.func.id == "getattr":
                 return UnresolvableCall(
                     line_number=node.lineno,
                     call_text=call_text,
-                    category=UnresolvableCategory.DYNAMIC
+                    category=UnresolvableCategory.GETATTR
                 )
 
     # Dictionary/subscript calls: obj[key]()
@@ -157,8 +162,17 @@ def categorize_unresolvable_call(node: ast.Call, source_lines: tuple[str, ...]) 
         return UnresolvableCall(
             line_number=node.lineno,
             call_text=call_text,
-            category=UnresolvableCategory.DYNAMIC
+            category=UnresolvableCategory.SUBSCRIPT
         )
+
+    # eval() or exec() calls
+    if isinstance(func, ast.Call):
+        if isinstance(func.func, ast.Name) and func.func.id in ("eval", "exec"):
+            return UnresolvableCall(
+                line_number=node.lineno,
+                call_text=call_text,
+                category=UnresolvableCategory.EVAL
+            )
 
     # Instance method calls: variable.method() where variable is not self/cls
     # and doesn't start with uppercase (likely not a class name)
@@ -400,7 +414,7 @@ def display_unresolvable_summary(console: Console, result: CallCountResult) -> N
         console.print("\n[yellow]Example Unresolvable Calls:[/yellow]")
         for example in result.unresolvable_examples[:3]:  # Show max 3
             console.print(
-                f"  Line {example.line_number}: {example.call_text[:50]}... "
+                f"  Line {example.line_number}: {example.call_text} "
                 f"[{example.category}]"
             )
 ```
@@ -412,24 +426,33 @@ def display_unresolvable_summary(console: Console, result: CallCountResult) -> N
 #### Test categorize_unresolvable_call()
 
 ```python
-def test_categorize_dynamic_getattr_call():
-    """Test categorizing getattr() as dynamic."""
+def test_categorize_getattr_call():
+    """Test categorizing getattr() as GETATTR."""
     source = "result = getattr(obj, 'method')()"
     node = ast.parse(source).body[0].value
     result = categorize_unresolvable_call(node, (source,))
 
-    assert result.category == UnresolvableCategory.DYNAMIC
+    assert result.category == UnresolvableCategory.GETATTR
     assert result.line_number == 1
     assert "getattr" in result.call_text
 
 def test_categorize_subscript_call():
-    """Test categorizing obj[key]() as dynamic."""
+    """Test categorizing obj[key]() as SUBSCRIPT."""
     source = "result = handlers[event_type](data)"
     node = ast.parse(source).body[0].value
     result = categorize_unresolvable_call(node, (source,))
 
-    assert result.category == UnresolvableCategory.DYNAMIC
+    assert result.category == UnresolvableCategory.SUBSCRIPT
     assert "handlers[event_type]" in result.call_text
+
+def test_categorize_eval_call():
+    """Test categorizing eval() and exec() as EVAL."""
+    source = "result = eval('func()')"
+    node = ast.parse(source).body[0].value
+    result = categorize_unresolvable_call(node, (source,))
+
+    assert result.category == UnresolvableCategory.EVAL
+    assert "eval" in result.call_text
 
 def test_categorize_complex_qualified():
     """Test categorizing deep attribute chains."""

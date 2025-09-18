@@ -49,9 +49,24 @@ Critical: Can another Claude instance implement this plan WITHOUT asking questio
 Look for these specific issues:
 - Vague language ("handle appropriately", "process as needed")
 - Untested assumptions about existing code
-- Scope creep disguised as "future enhancements"
 - Performance/scalability concerns not addressed
 - Breaking changes not explicitly called out
+
+### 7. Scope Creep Detection
+Aggressively challenge ANY features that don't deliver immediate, measurable value:
+- "Nice to have" features that complicate the core solution
+- "While we're at it" additions that expand the original problem
+- "Future-proofing" that adds complexity for hypothetical scenarios
+- Features that benefit <5% of use cases but affect 100% of the code
+- Abstractions added "just in case" without concrete current needs
+
+For each non-essential feature ask:
+- What breaks TODAY without this?
+- Can we ship a valuable solution without it?
+- Is this solving the original problem or a different one?
+- Would deferring this to v2 harm anyone?
+
+Remember: Every line of code is a liability. The best feature is often the one you don't build.
 
 ## Output Format
 

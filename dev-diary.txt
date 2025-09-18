@@ -666,3 +666,9 @@ what next? unresolvability?
 ok TODO start on unresolvability
 
 TODO update project_status doc
+
+===
+
+9/18
+
+TODO investigate https://www.augmentcode.com/ ?
