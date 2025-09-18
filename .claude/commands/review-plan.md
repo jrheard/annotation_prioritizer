@@ -25,6 +25,7 @@ Perform these review passes in order:
 - Are there simpler alternatives that would work equally well?
 - Is the complexity justified by the problem's importance?
 - Would a phased/incremental approach be better?
+- Note: This is a single-developer project - backward compatibility is NOT a concern. Breaking changes are acceptable if they improve the codebase.
 
 ### 3. Implementation Clarity
 Critical: Can another Claude instance implement this plan WITHOUT asking questions?
@@ -50,7 +51,6 @@ Look for these specific issues:
 - Vague language ("handle appropriately", "process as needed")
 - Untested assumptions about existing code
 - Performance/scalability concerns not addressed
-- Breaking changes not explicitly called out
 
 ### 7. Scope Creep Detection
 Aggressively challenge ANY features that don't deliver immediate, measurable value:

@@ -672,3 +672,9 @@ TODO update project_status doc
 9/18
 
 TODO investigate https://www.augmentcode.com/ ?
+
+TODO why only hold onto 5 unresolvable examples? let's keep them all for now and limit later if needed
+
+TODO the unresolvability plan is getting complicated. what features can we cut now and add later if needed?
+
+TODO
