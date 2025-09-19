@@ -989,30 +989,44 @@ unknown_function({long_args})
     assert unresolvable_calls[0].call_text.endswith("...")
     assert len(unresolvable_calls[0].call_text) == 203  # 200 chars + "..."
 
-    # Test 2: ast.get_source_segment returns None (simulating edge case)
-    # We need to test when ast.get_source_segment returns None
-    # This happens with certain malformed AST nodes or when source is mismatched
+    # Test 2: ast.get_source_segment returns None (nodes without position info)
     simple_code = "unknown_func()"
     tree = ast.parse(simple_code)
     call_node = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
 
-    # Create visitor with None source to trigger the fallback
-    # We'll monkey-patch _track_unresolvable_call to test the None case
     visitor2 = CallCountVisitor((), class_registry, simple_code)
 
     # Monkey-patch ast.get_source_segment to return None for this test
     original_get_source_segment = ast.get_source_segment
 
-    def mock_get_source_segment(source: str, node: ast.AST, *, padded: bool = False) -> None:
+    def mock_get_source_segment_none(source: str, node: ast.AST, *, padded: bool = False) -> None:
         _ = source, node, padded  # Mark as used
 
-    ast.get_source_segment = mock_get_source_segment
+    ast.get_source_segment = mock_get_source_segment_none
     try:
         visitor2.visit_Call(call_node)
         unresolvable_calls2 = visitor2.get_unresolvable_calls()
 
         assert len(unresolvable_calls2) == 1
         assert unresolvable_calls2[0].call_text == "<unable to extract call text>"
+    finally:
+        # Restore original function
+        ast.get_source_segment = original_get_source_segment
+
+    # Test 3: ast.get_source_segment returns empty string (source mismatch)
+    visitor3 = CallCountVisitor((), class_registry, simple_code)
+
+    def mock_get_source_segment_empty(source: str, node: ast.AST, *, padded: bool = False) -> str:
+        _ = source, node, padded  # Mark as used
+        return ""
+
+    ast.get_source_segment = mock_get_source_segment_empty
+    try:
+        visitor3.visit_Call(call_node)
+        unresolvable_calls3 = visitor3.get_unresolvable_calls()
+
+        assert len(unresolvable_calls3) == 1
+        assert unresolvable_calls3[0].call_text == "<unable to extract call text>"
     finally:
         # Restore original function
         ast.get_source_segment = original_get_source_segment

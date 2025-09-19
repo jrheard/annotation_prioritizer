@@ -51,6 +51,9 @@ from annotation_prioritizer.scope_tracker import (
     generate_name_candidates,
 )
 
+# Maximum length for unresolvable call text before truncation
+MAX_UNRESOLVABLE_CALL_LENGTH = 200
+
 
 def count_function_calls(
     file_path: str, known_functions: tuple[FunctionInfo, ...]
@@ -191,13 +194,12 @@ class CallCountVisitor(ast.NodeVisitor):
             node: The AST Call node that couldn't be resolved
         """
         call_text = ast.get_source_segment(self._source_code, node)
-        if call_text is None:
+        if not call_text:
             call_text = "<unable to extract call text>"
 
         # Truncate very long calls while preserving readability
-        max_length = 200
-        if len(call_text) > max_length:
-            call_text = call_text[:max_length] + "..."
+        if len(call_text) > MAX_UNRESOLVABLE_CALL_LENGTH:
+            call_text = call_text[:MAX_UNRESOLVABLE_CALL_LENGTH] + "..."
 
         unresolvable = UnresolvableCall(
             line_number=node.lineno,
