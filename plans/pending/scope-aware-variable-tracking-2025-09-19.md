@@ -116,7 +116,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from annotation_prioritizer.models import QualifiedName
-from annotation_prioritizer.scope_tracker import ScopeStack
+from annotation_prioritizer.scope_tracker import ScopeStack, resolve_name_in_scope
 
 
 @dataclass(frozen=True)
@@ -138,22 +138,10 @@ class VariableRegistry:
     - Module-level: "__module__.variable_name"
     - Function-level: "__module__.function_name.variable_name"
     - Method-level: "__module__.ClassName.method_name.variable_name"
+
+    Note: These keys match the format produced by generate_name_candidates in scope_tracker.py
     """
     variables: Mapping[str, VariableType]  # Immutable mapping to prevent mutation
-
-
-def build_variable_key(scope_stack: ScopeStack, variable_name: str) -> str:
-    """Build a scope-qualified key for a variable.
-
-    Args:
-        scope_stack: Current scope context
-        variable_name: Local variable name
-
-    Returns:
-        Scope-qualified key like "__module__.foo.calc"
-    """
-    parts = [scope.name for scope in scope_stack]
-    return ".".join([*parts, variable_name])
 
 
 def lookup_variable(
@@ -163,33 +151,28 @@ def lookup_variable(
 ) -> VariableType | None:
     """Look up a variable's type, checking parent scopes.
 
-    Searches from innermost to outermost scope, implementing Python's
-    variable resolution rules.
+    Finds variables with proper Python scoping rules (inner shadows outer).
 
     Args:
         registry: Variable registry to search
-        scope_stack: Current scope context for building lookup keys
+        scope_stack: Current scope context for resolution
         variable_name: Variable name to look up
 
     Returns:
         Variable type if found in any accessible scope, None otherwise
     """
-    # Try each scope level from innermost to outermost
-    for i in range(len(scope_stack), 0, -1):
-        partial_stack = scope_stack[:i]
-        key = build_variable_key(partial_stack, variable_name)
-        if key in registry.variables:
-            return registry.variables[key]
-    return None
+    key = resolve_name_in_scope(scope_stack, variable_name, registry.variables.keys())
+    return registry.variables.get(key) if key else None
 ```
 
 These data models and utilities maintain functional purity and immutability throughout.
 
 **Test coverage for this commit (tests/unit/test_variable_registry.py):**
-- Test `build_variable_key` with various scope depths
 - Test `lookup_variable` with parent scope resolution
+- Test `lookup_variable` with shadowing (inner scope shadows outer)
 - Test frozen dataclass immutability
-- Test edge cases (empty scope stack, non-existent variables)
+- Test edge cases (empty scope stack, empty registry, non-existent variables)
+- Test that keys match the format expected by resolve_name_in_scope
 
 ### Commit 3: Create variable discovery AST visitor with comprehensive tests
 
@@ -217,7 +200,6 @@ from annotation_prioritizer.scope_tracker import (
 from annotation_prioritizer.variable_registry import (
     VariableRegistry,
     VariableType,
-    build_variable_key,
 )
 
 
@@ -378,7 +360,9 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
         is_instance: bool
     ) -> None:
         """Add or update a variable in the registry."""
-        key = build_variable_key(self._scope_stack, variable_name)
+        # Build key using the same format as generate_name_candidates
+        parts = [scope.name for scope in self._scope_stack]
+        key = ".".join([*parts, variable_name])
         # Resolve class name to qualified form
         qualified_class = self._resolve_class_name(class_name)
         if qualified_class:
