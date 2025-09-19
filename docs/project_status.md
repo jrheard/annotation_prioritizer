@@ -87,6 +87,26 @@ def process():
 
 ## Completed Improvements ✅
 
+### Unresolvable Call Reporting (Completed 2025-09-19)
+**What was implemented:** Full transparency system for tracking calls that cannot be resolved statically.
+
+**Completed:**
+- ✅ **UnresolvableCall model**: Data structure with line number and call text
+- ✅ **Call tracking in CallCountVisitor**: Tracks all unresolvable calls during traversal
+- ✅ **AnalysisResult integration**: Returns both priorities and unresolvable calls
+- ✅ **CLI output support**: Displays summary and examples of unresolvable calls
+- ✅ **Accurate call text extraction**: Uses ast.get_source_segment() for multi-line calls
+- ✅ **Full test coverage**: Comprehensive tests for all unresolvable call scenarios
+
+### QualifiedName Type Safety (Completed 2025-09-17)
+**What was implemented:** Type-safe qualified name handling using NewType.
+
+**Completed:**
+- ✅ **QualifiedName NewType**: Type-safe wrapper for qualified name strings
+- ✅ **make_qualified_name() factory**: Single entry point for creating QualifiedName instances
+- ✅ **Full codebase migration**: All qualified name usage converted to use QualifiedName type
+- ✅ **Type checking enforcement**: Pyright validates proper usage throughout codebase
+
 ### Class Detection Foundation (Partially Completed 2025-09-16)
 **What was implemented:** The foundational ClassRegistry system from commits 1-3 of the class detection plan.
 
@@ -102,7 +122,6 @@ def process():
 **NOT Completed:**
 - ❌ **Instance method call bug**: `calc = Calculator(); calc.add()` still shows 0 calls
 - ❌ **Variable tracking**: No tracking of variable assignments or types
-- ❌ **Unresolvable call reporting**: No transparency about what can't be resolved
 
 ## In Progress 🚧
 
@@ -114,15 +133,10 @@ These improvements must be completed in order to achieve very accurate single-fi
    - ❌ Commits 4-5 NOT implemented (variable tracking for instance methods)
    - ❌ Instance method call bug NOT fixed (requires variable tracking)
 
-2. **Unresolvable Call Reporting** (Step 2 - Transparency) [NOT STARTED]
-   - Track and report calls that cannot be resolved
-   - Provides transparency about analysis coverage
-   - Prerequisites: Complete class detection improvements first
-
-3. **Scope-Aware Variable Tracking** (Step 3 - Bug Fix) [NOT STARTED]
+2. **Scope-Aware Variable Tracking** (Step 2 - Bug Fix) [NOT STARTED]
    - Fix critical instance method call counting bug
    - Track variable assignments and resolve method calls
-   - Prerequisites: Complete both class detection and unresolvable call reporting first
+   - Prerequisites: Complete class detection improvements first
 
 ### Scope Infrastructure (Completed Foundation)
 - ✅ **Scope Stack Foundation**: Replaced `_class_stack` with typed `_scope_stack` using `Scope` dataclass
@@ -163,18 +177,13 @@ These improvements must be completed in order to achieve very accurate single-fi
    - Dynamic imports and star imports (too complex for reliable static analysis)
    - Decorators (too complex for static analysis)
 
-3. **Unresolvable Call Reporting**
-   - Track and report calls that can't be resolved
-   - Provide statistics on analysis completeness
-   - Help identify missing functionality
-
 ### Medium Priority
 
-4. **@property Support**
+3. **@property Support**
    - Distinguish properties from regular attributes
    - Count property access as method calls
 
-5. **Enhanced Call Attribution**
+4. **Enhanced Call Attribution**
    - Support chained calls (`get_calc().add()`)
    - Handle module.function patterns
    - Improve qualified name resolution
