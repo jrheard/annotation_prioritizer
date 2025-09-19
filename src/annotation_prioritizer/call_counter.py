@@ -76,13 +76,12 @@ def count_function_calls(
 
     try:
         source_code = file_path_obj.read_text(encoding="utf-8")
-        source_lines = tuple(source_code.splitlines())
         tree = ast.parse(source_code, filename=file_path)
     except (OSError, SyntaxError):
         return ((), ())
 
     class_registry = build_class_registry(tree)
-    visitor = CallCountVisitor(known_functions, class_registry, source_lines)
+    visitor = CallCountVisitor(known_functions, class_registry, source_code)
     visitor.visit(tree)
 
     resolved = tuple(
@@ -129,21 +128,21 @@ class CallCountVisitor(ast.NodeVisitor):
         self,
         known_functions: tuple[FunctionInfo, ...],
         class_registry: ClassRegistry,
-        source_lines: tuple[str, ...],
+        source_code: str,
     ) -> None:
         """Initialize visitor with functions to track and class registry.
 
         Args:
             known_functions: Functions to count calls for
             class_registry: Registry of known classes for definitive identification
-            source_lines: Source lines for extracting unresolvable call text
+            source_code: Source code for extracting unresolvable call text
         """
         super().__init__()
         # Create internal call count tracking from known functions
         self.call_counts: dict[QualifiedName, int] = {func.qualified_name: 0 for func in known_functions}
         self._class_registry = class_registry
         self._scope_stack = create_initial_stack()
-        self._source_lines = source_lines
+        self._source_code = source_code
         self._unresolvable_calls: list[UnresolvableCall] = []
 
     @override
@@ -185,20 +184,20 @@ class CallCountVisitor(ast.NodeVisitor):
     def _track_unresolvable_call(self, node: ast.Call) -> None:
         """Track a call that cannot be resolved to a known function.
 
-        Extracts the call text from source lines and creates an UnresolvableCall
-        record for reporting purposes.
+        Uses ast.get_source_segment() to extract the exact call text, handling
+        multi-line calls and complex expressions correctly.
 
         Args:
             node: The AST Call node that couldn't be resolved
         """
-        line_idx = node.lineno - 1  # Convert to 0-indexed
-        if 0 <= line_idx < len(self._source_lines):
-            line = self._source_lines[line_idx]
-            # Find the call in the line (approximate)
-            call_start = node.col_offset
-            call_text = line[call_start : call_start + 50].strip()
-        else:
+        call_text = ast.get_source_segment(self._source_code, node)
+        if call_text is None:
             call_text = "<unable to extract call text>"
+
+        # Truncate very long calls while preserving readability
+        max_length = 200
+        if len(call_text) > max_length:
+            call_text = call_text[:max_length] + "..."
 
         unresolvable = UnresolvableCall(
             line_number=node.lineno,
