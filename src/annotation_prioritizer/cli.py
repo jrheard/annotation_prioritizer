@@ -7,7 +7,7 @@ from pathlib import Path
 from rich.console import Console
 
 from .analyzer import analyze_file
-from .output import display_results
+from .output import display_results, display_unresolvable_summary
 
 
 def parse_args() -> argparse.Namespace:
@@ -48,10 +48,15 @@ def main() -> None:
         sys.exit(1)
 
     try:
-        # Analyze the file
-        priorities = analyze_file(str(args.target))
+        # Analyze the file (now returns AnalysisResult)
+        result = analyze_file(str(args.target))
+
+        # Always display unresolvable summary if there are any
+        if result.unresolvable_calls:
+            display_unresolvable_summary(console, result.unresolvable_calls)
 
         # Filter by minimum call count
+        priorities = result.priorities
         if args.min_calls > 0:
             priorities = tuple(p for p in priorities if p.call_count >= args.min_calls)
 

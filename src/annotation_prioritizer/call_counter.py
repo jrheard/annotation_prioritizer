@@ -38,6 +38,8 @@ from annotation_prioritizer.models import (
     QualifiedName,
     Scope,
     ScopeKind,
+    UnresolvableCall,
+    UnresolvableCategory,
     make_qualified_name,
 )
 from annotation_prioritizer.scope_tracker import (
@@ -51,41 +53,142 @@ from annotation_prioritizer.scope_tracker import (
 )
 
 
-def count_function_calls(file_path: str, known_functions: tuple[FunctionInfo, ...]) -> tuple[CallCount, ...]:
+def categorize_unresolvable_call(node: ast.Call, source_lines: tuple[str, ...]) -> UnresolvableCall:
+    """Categorize why a call couldn't be resolved.
+
+    Pure function that examines the AST node structure to determine
+    why the call is unresolvable, providing transparency for users.
+
+    Args:
+        node: The unresolvable call AST node
+        source_lines: Source code lines for extracting call text
+
+    Returns:
+        UnresolvableCall with category and context
+    """
+    # Extract call text (first 1000 chars for context)
+    line_idx = node.lineno - 1  # Convert to 0-indexed
+    if 0 <= line_idx < len(source_lines):
+        line = source_lines[line_idx]
+        # Find the call in the line (approximate)
+        call_start = node.col_offset
+        call_text = line[call_start : call_start + 1000].strip()
+    else:
+        call_text = "<unable to extract call text>"
+
+    # Categorize based on AST structure
+    func = node.func
+
+    # getattr() calls - the pattern is getattr(obj, 'method')() which creates a Call node
+    # where func is the result of getattr call
+    if isinstance(func, ast.Call) and isinstance(func.func, ast.Name) and func.func.id == "getattr":
+        return UnresolvableCall(
+            line_number=node.lineno,
+            call_text=call_text,
+            category=UnresolvableCategory.GETATTR,
+        )
+
+    # Dictionary/subscript calls: obj[key]()
+    if isinstance(func, ast.Subscript):
+        return UnresolvableCall(
+            line_number=node.lineno,
+            call_text=call_text,
+            category=UnresolvableCategory.SUBSCRIPT,
+        )
+
+    # eval() or exec() calls - these are themselves unresolvable when used as calls
+    # Also check if this is a direct call to eval/exec (which is also problematic)
+    if isinstance(func, ast.Name) and func.id in ("eval", "exec"):
+        return UnresolvableCall(
+            line_number=node.lineno,
+            call_text=call_text,
+            category=UnresolvableCategory.EVAL,
+        )
+    # Also handle the case where eval/exec result is being called: eval("func")()
+    if isinstance(func, ast.Call) and isinstance(func.func, ast.Name) and func.func.id in ("eval", "exec"):
+        return UnresolvableCall(
+            line_number=node.lineno,
+            call_text=call_text,
+            category=UnresolvableCategory.EVAL,
+        )
+
+    # Instance method calls: variable.method() where variable is not self/cls
+    # and doesn't start with uppercase (likely not a class name)
+    if (
+        isinstance(func, ast.Attribute)
+        and isinstance(func.value, ast.Name)
+        and func.value.id not in ("self", "cls")
+        and not func.value.id[0].isupper()
+    ):
+        return UnresolvableCall(
+            line_number=node.lineno,
+            call_text=call_text,
+            category=UnresolvableCategory.INSTANCE_METHOD,
+        )
+
+    # Complex qualified calls we can't resolve
+    if isinstance(func, ast.Attribute):
+        # Count depth of attribute chain
+        depth = 0
+        current = func
+        while isinstance(current, ast.Attribute):
+            depth += 1
+            current = current.value
+
+        if depth > 2:  # e.g., a.b.c.d()
+            return UnresolvableCall(
+                line_number=node.lineno,
+                call_text=call_text,
+                category=UnresolvableCategory.COMPLEX_QUALIFIED,
+            )
+
+    # Default category for unrecognized patterns
+    return UnresolvableCall(
+        line_number=node.lineno,
+        call_text=call_text,
+        category=UnresolvableCategory.UNKNOWN,
+    )
+
+
+def count_function_calls(
+    file_path: str, known_functions: tuple[FunctionInfo, ...]
+) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
     """Count calls to known functions within the same file using AST parsing.
 
     Parses the Python source file and identifies calls to functions from the
     known_functions list. Handles direct function calls, method calls on self,
-    and class method calls. Returns empty tuple if file doesn't exist or has
-    syntax errors.
+    and class method calls. Also tracks calls that cannot be resolved statically.
 
     Args:
         file_path: Path to the Python source file to analyze
         known_functions: Functions to count calls for, matched by qualified_name
 
     Returns:
-        Tuple of CallCount objects with call counts for each known function.
-        Functions with zero calls are still included in the results.
+        Tuple of (resolved call counts, all unresolvable calls).
+        Functions with zero calls are still included in resolved counts.
 
     """
     file_path_obj = Path(file_path)
     if not file_path_obj.exists():
-        return ()
+        return ((), ())
 
     try:
         source_code = file_path_obj.read_text(encoding="utf-8")
+        source_lines = tuple(source_code.splitlines())
         tree = ast.parse(source_code, filename=file_path)
     except (OSError, SyntaxError):
-        return ()
+        return ((), ())
 
     class_registry = build_class_registry(tree)
-    visitor = CallCountVisitor(known_functions, class_registry)
+    visitor = CallCountVisitor(known_functions, class_registry, source_lines)
     visitor.visit(tree)
 
-    return tuple(
+    resolved = tuple(
         CallCount(function_qualified_name=name, call_count=count)
         for name, count in visitor.call_counts.items()
     )
+
+    return (resolved, visitor.get_unresolvable_calls())
 
 
 class CallCountVisitor(ast.NodeVisitor):
@@ -120,18 +223,26 @@ class CallCountVisitor(ast.NodeVisitor):
     to their qualified names (e.g., "__module__.Calculator.add").
     """
 
-    def __init__(self, known_functions: tuple[FunctionInfo, ...], class_registry: ClassRegistry) -> None:
+    def __init__(
+        self,
+        known_functions: tuple[FunctionInfo, ...],
+        class_registry: ClassRegistry,
+        source_lines: tuple[str, ...],
+    ) -> None:
         """Initialize visitor with functions to track and class registry.
 
         Args:
             known_functions: Functions to count calls for
             class_registry: Registry of known classes for definitive identification
+            source_lines: Source lines for extracting unresolvable call text
         """
         super().__init__()
         # Create internal call count tracking from known functions
         self.call_counts: dict[QualifiedName, int] = {func.qualified_name: 0 for func in known_functions}
         self._class_registry = class_registry
         self._scope_stack = create_initial_stack()
+        self._source_lines = source_lines
+        self._unresolvable_calls: list[UnresolvableCall] = []
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
@@ -160,8 +271,16 @@ class CallCountVisitor(ast.NodeVisitor):
         call_name = self._resolve_call_name(node)
         if call_name and call_name in self.call_counts:
             self.call_counts[call_name] += 1
+        elif call_name is None:
+            # Track unresolvable calls
+            unresolvable = categorize_unresolvable_call(node, self._source_lines)
+            self._unresolvable_calls.append(unresolvable)
 
         self.generic_visit(node)
+
+    def get_unresolvable_calls(self) -> tuple[UnresolvableCall, ...]:
+        """Get all unresolvable calls found during traversal."""
+        return tuple(self._unresolvable_calls)
 
     def _resolve_call_name(self, node: ast.Call) -> QualifiedName | None:
         """Resolve the qualified name of the called function.

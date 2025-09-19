@@ -1,6 +1,7 @@
 """Tests for output module."""
 
-from annotation_prioritizer.output import display_results, format_results_table, print_summary_stats
+from annotation_prioritizer.models import UnresolvableCall, UnresolvableCategory
+from annotation_prioritizer.output import display_results, display_unresolvable_summary, format_results_table, print_summary_stats
 from tests.helpers.console import assert_console_contains, capture_console_output
 from tests.helpers.factories import make_parameter, make_priority
 
@@ -181,4 +182,115 @@ def test_display_results_with_data() -> None:
             "Function Annotation Priority Analysis",
             "Summary:",
             "Total functions analyzed: 1",
+        )
+
+
+def test_display_unresolvable_summary_empty() -> None:
+    """Test displaying empty unresolvable summary."""
+    with capture_console_output() as (console, output):
+        display_unresolvable_summary(console, ())
+        # Should display nothing when there are no unresolvable calls
+        assert output.getvalue() == ""
+
+
+def test_display_unresolvable_summary_with_few_calls() -> None:
+    """Test displaying unresolvable summary with a few calls."""
+    calls = (
+        UnresolvableCall(
+            line_number=10,
+            call_text="processor.process_data()",
+            category=UnresolvableCategory.INSTANCE_METHOD,
+        ),
+        UnresolvableCall(
+            line_number=15,
+            call_text="getattr(obj, 'method')()",
+            category=UnresolvableCategory.GETATTR,
+        ),
+        UnresolvableCall(
+            line_number=20,
+            call_text="handlers['key']()",
+            category=UnresolvableCategory.SUBSCRIPT,
+        ),
+    )
+
+    with capture_console_output() as (console, output):
+        display_unresolvable_summary(console, calls)
+        assert_console_contains(
+            output,
+            "Warning: 3 unresolvable call(s) found",
+            "Categories:",
+            "getattr: 1 call(s)",
+            "instance_method: 1 call(s)",
+            "subscript: 1 call(s)",
+            "Examples:",
+            "Line 10:",
+            "Line 15:",
+            "Line 20:",
+        )
+
+
+def test_display_unresolvable_summary_with_many_calls() -> None:
+    """Test displaying unresolvable summary with more than 5 calls."""
+    calls = []
+    for i in range(8):
+        calls.append(
+            UnresolvableCall(
+                line_number=i + 1,
+                call_text=f"call_{i}() with a very long text that should be truncated at 50 characters",
+                category=UnresolvableCategory.UNKNOWN,
+            )
+        )
+
+    with capture_console_output() as (console, output):
+        display_unresolvable_summary(console, tuple(calls))
+        assert_console_contains(
+            output,
+            "Warning: 8 unresolvable call(s) found",
+            "Categories:",
+            "unknown: 8 call(s)",
+            "Examples:",
+            # Should show only first 5
+            "Line 1:",
+            "Line 2:",
+            "Line 3:",
+            "Line 4:",
+            "Line 5:",
+            # Should indicate there are more
+            "... and 3 more",
+        )
+        # Should not show lines 6-8
+        assert "Line 6:" not in output.getvalue()
+        assert "Line 7:" not in output.getvalue()
+        assert "Line 8:" not in output.getvalue()
+
+
+def test_display_unresolvable_summary_mixed_categories() -> None:
+    """Test displaying unresolvable summary with mixed categories."""
+    calls = (
+        UnresolvableCall(line_number=1, call_text="eval('code')", category=UnresolvableCategory.EVAL),
+        UnresolvableCall(line_number=2, call_text="eval('more')", category=UnresolvableCategory.EVAL),
+        UnresolvableCall(line_number=3, call_text="obj.method()", category=UnresolvableCategory.INSTANCE_METHOD),
+        UnresolvableCall(line_number=4, call_text="a.b.c.d()", category=UnresolvableCategory.COMPLEX_QUALIFIED),
+        UnresolvableCall(line_number=5, call_text="json.dumps()", category=UnresolvableCategory.UNKNOWN),
+        UnresolvableCall(line_number=6, call_text="import.func()", category=UnresolvableCategory.IMPORTED),
+    )
+
+    with capture_console_output() as (console, output):
+        display_unresolvable_summary(console, calls)
+        assert_console_contains(
+            output,
+            "Warning: 6 unresolvable call(s) found",
+            "Categories:",
+            "complex_qualified: 1 call(s)",
+            "eval: 2 call(s)",
+            "imported: 1 call(s)",
+            "instance_method: 1 call(s)",
+            "unknown: 1 call(s)",
+            # First 5 examples shown
+            "Line 1:",
+            "Line 2:",
+            "Line 3:",
+            "Line 4:",
+            "Line 5:",
+            "... and 1 more",
         )

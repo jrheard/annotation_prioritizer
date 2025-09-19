@@ -7,6 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from annotation_prioritizer.cli import main, parse_args
+from annotation_prioritizer.models import AnalysisResult, UnresolvableCall, UnresolvableCategory
 from tests.helpers.console import assert_console_contains, capture_console_output
 from tests.helpers.factories import make_priority
 
@@ -80,7 +81,7 @@ def test_main_successful_analysis() -> None:
             capture_console_output() as (test_console, _),
         ):
             mock_console.return_value = test_console
-            mock_analyze.return_value = (mock_priority,)
+            mock_analyze.return_value = AnalysisResult(priorities=(mock_priority,), unresolvable_calls=())
 
             main()
 
@@ -112,13 +113,53 @@ def test_main_with_min_calls_filter() -> None:
             capture_console_output() as (test_console, _),
         ):
             mock_console.return_value = test_console
-            mock_analyze.return_value = (mock_priority,)
+            mock_analyze.return_value = AnalysisResult(priorities=(mock_priority,), unresolvable_calls=())
 
             main()
 
             mock_analyze.assert_called_once_with(tmp.name)
             # Should be called with empty tuple due to filtering
             mock_display.assert_called_once_with(test_console, ())
+
+
+def test_main_with_unresolvable_calls() -> None:
+    """Test main() with unresolvable calls displays warning."""
+    with tempfile.NamedTemporaryFile(suffix=".py", mode="w", delete=False) as tmp:
+        tmp.write("def test_func(): pass\n")
+        tmp.flush()
+
+        # Create mock data
+        mock_priority = make_priority(
+            "test_func",
+            param_score=1.0,
+            return_score=0.0,
+            call_count=3,
+            line_number=1,
+            file_path=tmp.name,
+        )
+
+        mock_unresolvable = UnresolvableCall(
+            line_number=5, call_text="processor.process()", category=UnresolvableCategory.INSTANCE_METHOD
+        )
+
+        with (
+            patch("annotation_prioritizer.cli.Console") as mock_console,
+            patch("annotation_prioritizer.cli.analyze_file") as mock_analyze,
+            patch("annotation_prioritizer.cli.display_results") as mock_display,
+            patch("annotation_prioritizer.cli.display_unresolvable_summary") as mock_unresolvable_display,
+            patch("sys.argv", ["annotation-prioritizer", tmp.name]),
+            capture_console_output() as (test_console, _),
+        ):
+            mock_console.return_value = test_console
+            mock_analyze.return_value = AnalysisResult(
+                priorities=(mock_priority,), unresolvable_calls=(mock_unresolvable,)
+            )
+
+            main()
+
+            mock_analyze.assert_called_once_with(tmp.name)
+            mock_unresolvable_display.assert_called_once_with(test_console, (mock_unresolvable,))
+            mock_display.assert_called_once_with(test_console, (mock_priority,))
 
 
 def test_main_analysis_error() -> None:
