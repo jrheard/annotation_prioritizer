@@ -29,13 +29,40 @@ The solution tracks variables from three sources:
 
 ## Implementation Steps
 
-### Commit 1: Add VariableType and VariableRegistry data models
+### Commit 0: Reorganize AST visitors into dedicated directory
 
-**Files to modify:**
-- `src/annotation_prioritizer/models.py` - Add new data models
+**Files to move:**
+- `src/annotation_prioritizer/call_counter.py` → `src/annotation_prioritizer/ast_visitors/call_counter.py`
+- `src/annotation_prioritizer/class_discovery.py` → `src/annotation_prioritizer/ast_visitors/class_discovery.py`
+- `src/annotation_prioritizer/function_parser.py` → `src/annotation_prioritizer/ast_visitors/function_parser.py`
 
-**Changes:**
+**Files to update:**
+- `src/annotation_prioritizer/__init__.py` - Update imports if needed
+- `src/annotation_prioritizer/analyzer.py` - Update imports
+- `src/annotation_prioritizer/cli.py` - Update imports
+- All test files that import these modules
+
+This reorganization creates a clear separation between AST traversal logic and other components.
+
+### Commit 1: Add variable tracking data models and utilities
+
+**Files to create:**
+- `src/annotation_prioritizer/variable_registry.py` - Data models and pure functions
+
+**Implementation:**
 ```python
+"""Variable type registry and tracking utilities.
+
+This module provides data models and utilities for tracking variable-to-type
+mappings across different scopes in Python code.
+"""
+
+from dataclasses import dataclass
+
+from annotation_prioritizer.models import QualifiedName
+from annotation_prioritizer.scope_tracker import ScopeStack
+
+
 @dataclass(frozen=True)
 class VariableType:
     """Type information for a variable.
@@ -57,21 +84,6 @@ class VariableRegistry:
     - Method-level: "__module__.ClassName.method_name.variable_name"
     """
     variables: dict[str, VariableType]  # Immutable after construction
-```
-
-Add these after the existing Scope-related models. The models are intentionally minimal - just what's needed for the MVP.
-
-### Commit 2: Add scope-qualified variable name builder
-
-**Files to create:**
-- `src/annotation_prioritizer/variable_utils.py` - Pure functions for variable operations
-
-**Implementation:**
-```python
-"""Utilities for working with scope-qualified variable names."""
-
-from annotation_prioritizer.models import VariableRegistry, VariableType
-from annotation_prioritizer.scope_tracker import ScopeStack
 
 
 def build_variable_key(scope_stack: ScopeStack, variable_name: str) -> str:
@@ -89,9 +101,7 @@ def build_variable_key(scope_stack: ScopeStack, variable_name: str) -> str:
 
 
 def update_variable(
-    registry: VariableRegistry,
-    key: str,
-    variable_type: VariableType
+    registry: VariableRegistry, key: str, variable_type: VariableType
 ) -> VariableRegistry:
     """Create a new registry with an updated variable mapping.
 
@@ -137,12 +147,12 @@ def lookup_variable(
     return None
 ```
 
-These utilities maintain functional purity and immutability throughout.
+These data models and utilities maintain functional purity and immutability throughout.
 
-### Commit 3: Create VariableTracker AST visitor
+### Commit 2: Create variable discovery AST visitor
 
 **Files to create:**
-- `src/annotation_prioritizer/variable_tracker.py` - AST visitor for variable discovery
+- `src/annotation_prioritizer/ast_visitors/variable_discovery.py` - AST visitor for variable discovery
 
 **Implementation structure:**
 ```python
@@ -151,21 +161,17 @@ These utilities maintain functional purity and immutability throughout.
 import ast
 from typing import override
 
-from annotation_prioritizer.class_discovery import ClassRegistry
-from annotation_prioritizer.models import (
-    Scope,
-    ScopeKind,
-    VariableRegistry,
-    VariableType,
-    make_qualified_name,
-)
+from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
+from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import (
     add_scope,
     create_initial_stack,
     drop_last_scope,
     ScopeStack,
 )
-from annotation_prioritizer.variable_utils import (
+from annotation_prioritizer.variable_registry import (
+    VariableRegistry,
+    VariableType,
     build_variable_key,
     update_variable,
 )
@@ -325,12 +331,12 @@ class VariableTracker(ast.NodeVisitor):
         return None
 ```
 
-### Commit 4: Add build_variable_registry orchestration function
+### Commit 3: Add build_variable_registry orchestration function
 
 **Files to modify:**
-- `src/annotation_prioritizer/variable_tracker.py` - Add orchestration function
+- `src/annotation_prioritizer/ast_visitors/variable_discovery.py` - Add orchestration function
 
-**Add to the file:**
+**Add to the end of the file:**
 ```python
 def build_variable_registry(tree: ast.AST, class_registry: ClassRegistry) -> VariableRegistry:
     """Build a registry of variable-to-type mappings from an AST.
@@ -349,17 +355,17 @@ def build_variable_registry(tree: ast.AST, class_registry: ClassRegistry) -> Var
     return tracker.get_registry()
 ```
 
-### Commit 5: Enhance CallCountVisitor to use VariableRegistry
+### Commit 4: Enhance CallCountVisitor to use VariableRegistry
 
 **Files to modify:**
-- `src/annotation_prioritizer/call_counter.py` - Add variable resolution
+- `src/annotation_prioritizer/ast_visitors/call_counter.py` - Add variable resolution
 
 **Changes to make:**
 
 1. Update imports to include variable tracking:
 ```python
-from annotation_prioritizer.variable_tracker import build_variable_registry
-from annotation_prioritizer.variable_utils import lookup_variable
+from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
+from annotation_prioritizer.variable_registry import lookup_variable
 ```
 
 2. Modify `CallCountVisitor.__init__` to accept the registry:
@@ -412,10 +418,10 @@ def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
     # ... rest of existing logic for class method calls ...
 ```
 
-### Commit 6: Update count_function_calls to perform two-pass analysis
+### Commit 5: Update count_function_calls to perform two-pass analysis
 
 **Files to modify:**
-- `src/annotation_prioritizer/call_counter.py` - Implement two-pass approach
+- `src/annotation_prioritizer/ast_visitors/call_counter.py` - Implement two-pass approach
 
 **Update the main function:**
 ```python
@@ -458,20 +464,20 @@ def count_function_calls(
     return (resolved, visitor.get_unresolvable_calls())
 ```
 
-### Commit 7: Add comprehensive unit tests for variable tracking
+### Commit 6: Add comprehensive unit tests for variable tracking
 
 **Files to create:**
-- `tests/unit/test_variable_utils.py` - Test utility functions
-- `tests/unit/test_variable_tracker.py` - Test the tracker visitor
+- `tests/unit/test_variable_registry.py` - Test data models and utility functions
+- `tests/unit/test_variable_discovery.py` - Test the tracker visitor
 
 **Test coverage needed:**
 
-For `test_variable_utils.py`:
+For `test_variable_registry.py`:
 - Test `build_variable_key` with various scope depths
 - Test `update_variable` for both new and reassignment
 - Test `lookup_variable` with parent scope resolution
 
-For `test_variable_tracker.py`:
+For `test_variable_discovery.py`:
 - Test direct instantiation: `calc = Calculator()`
 - Test parameter annotations: `def foo(calc: Calculator)`
 - Test variable annotations: `calc: Calculator = ...`
@@ -481,7 +487,7 @@ For `test_variable_tracker.py`:
 - Test module-level variable tracking
 - Test class references vs instances
 
-### Commit 8: Add unit tests for enhanced CallCountVisitor
+### Commit 7: Add unit tests for enhanced CallCountVisitor
 
 **Files to modify:**
 - `tests/unit/test_call_counter.py` - Add variable resolution tests
@@ -553,7 +559,7 @@ def outer():
     # Assert inner function's use of calc.add() is counted
 ```
 
-### Commit 9: Add integration tests for end-to-end variable tracking
+### Commit 8: Add integration tests for end-to-end variable tracking
 
 **Files to modify:**
 - `tests/integration/test_end_to_end.py` - Add variable tracking scenarios
@@ -565,11 +571,11 @@ def outer():
 - Verify that the call counts match expectations
 - Ensure unresolvable calls are reduced
 
-### Commit 10: Update project documentation
+### Commit 9: Update project documentation
 
 **Files to modify:**
 - `docs/project_status.md` - Mark variable tracking as complete
-- `src/annotation_prioritizer/call_counter.py` - Update module docstring
+- `src/annotation_prioritizer/ast_visitors/call_counter.py` - Update module docstring
 
 **Update call_counter.py docstring:**
 Remove the TODO comment and update the "Limitations" section to reflect that basic instance method calls via variables are now supported.
@@ -614,11 +620,12 @@ These limitations are acceptable for an MVP. The infrastructure built here provi
 ## Testing Strategy
 
 Each commit should include its associated tests to ensure atomic, working commits:
-- Commits 1-2: Basic model tests
-- Commit 3-4: Variable tracker tests
-- Commits 5-6: Enhanced call counter tests
-- Commits 7-9: Comprehensive test coverage
-- Commit 10: Documentation only
+- Commit 0: Update all imports and ensure tests pass
+- Commit 1: Basic model and utility function tests
+- Commit 2-3: Variable discovery tests
+- Commits 4-5: Enhanced call counter tests
+- Commits 6-8: Comprehensive test coverage
+- Commit 9: Documentation only
 
 Run the test suite after each commit to ensure nothing breaks:
 ```bash
