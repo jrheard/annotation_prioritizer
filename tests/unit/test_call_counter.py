@@ -2,9 +2,13 @@
 """Tests for call counting functionality."""
 
 import ast
+from unittest.mock import patch
+
+import pytest
 
 from annotation_prioritizer.call_counter import (
     CallCountVisitor,
+    UnresolvableCall,
     count_function_calls,
 )
 from annotation_prioritizer.class_discovery import build_class_registry
@@ -967,66 +971,51 @@ Calculator.create_and_compute(5, 10)
         assert multiply_count == 2, f"Expected 2 calls to Calculator.multiply, got {multiply_count}"
 
 
-def test_unresolvable_call_text_extraction_edge_cases() -> None:
-    """Test edge cases in unresolvable call text extraction."""
-    # Test 1: Very long call that needs truncation
-    long_args = ", ".join([f"arg{i}" for i in range(100)])  # Creates a very long argument list
+def _get_first_call_node(code: str) -> ast.Call:
+    """Extract the first Call node from parsed code."""
+    tree = ast.parse(code)
+    return next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
+
+
+def _create_visitor_and_visit_call(
+    code: str, call_node: ast.Call
+) -> tuple[CallCountVisitor, tuple[UnresolvableCall, ...]]:
+    """Create a visitor and visit a call node, returning visitor and unresolvable calls."""
+    class_registry = build_class_registry(ast.parse(""))
+    visitor = CallCountVisitor((), class_registry, code)
+    visitor.visit_Call(call_node)
+    return visitor, visitor.get_unresolvable_calls()
+
+
+def test_unresolvable_call_text_truncation() -> None:
+    """Test that very long unresolvable calls are truncated to 200 chars + ellipsis."""
+    # Create a call with more than 200 characters
+    long_args = ", ".join([f"arg{i}" for i in range(100)])
     long_call_code = f"""
 # This unresolvable call has more than 200 characters
 unknown_function({long_args})
 """
 
-    tree = ast.parse(long_call_code)
-    call_node = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
-
-    class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor((), class_registry, long_call_code)
-
-    visitor.visit_Call(call_node)
-    unresolvable_calls = visitor.get_unresolvable_calls()
+    call_node = _get_first_call_node(long_call_code)
+    _, unresolvable_calls = _create_visitor_and_visit_call(long_call_code, call_node)
 
     assert len(unresolvable_calls) == 1
     assert unresolvable_calls[0].call_text.endswith("...")
     assert len(unresolvable_calls[0].call_text) == 203  # 200 chars + "..."
 
-    # Test 2: ast.get_source_segment returns None (nodes without position info)
+
+@pytest.mark.parametrize("return_value", [None, ""])
+def test_unresolvable_call_when_source_segment_fails(return_value: str | None) -> None:
+    """Test handling when ast.get_source_segment returns None or empty string."""
     simple_code = "unknown_func()"
-    tree = ast.parse(simple_code)
-    call_node = next(node for node in ast.walk(tree) if isinstance(node, ast.Call))
+    call_node = _get_first_call_node(simple_code)
 
-    visitor2 = CallCountVisitor((), class_registry, simple_code)
+    class_registry = build_class_registry(ast.parse(""))
+    visitor = CallCountVisitor((), class_registry, simple_code)
 
-    # Monkey-patch ast.get_source_segment to return None for this test
-    original_get_source_segment = ast.get_source_segment
+    with patch.object(ast, "get_source_segment", return_value=return_value):
+        visitor.visit_Call(call_node)
+        unresolvable_calls = visitor.get_unresolvable_calls()
 
-    def mock_get_source_segment_none(source: str, node: ast.AST, *, padded: bool = False) -> None:
-        _ = source, node, padded  # Mark as used
-
-    ast.get_source_segment = mock_get_source_segment_none
-    try:
-        visitor2.visit_Call(call_node)
-        unresolvable_calls2 = visitor2.get_unresolvable_calls()
-
-        assert len(unresolvable_calls2) == 1
-        assert unresolvable_calls2[0].call_text == "<unable to extract call text>"
-    finally:
-        # Restore original function
-        ast.get_source_segment = original_get_source_segment
-
-    # Test 3: ast.get_source_segment returns empty string (source mismatch)
-    visitor3 = CallCountVisitor((), class_registry, simple_code)
-
-    def mock_get_source_segment_empty(source: str, node: ast.AST, *, padded: bool = False) -> str:
-        _ = source, node, padded  # Mark as used
-        return ""
-
-    ast.get_source_segment = mock_get_source_segment_empty
-    try:
-        visitor3.visit_Call(call_node)
-        unresolvable_calls3 = visitor3.get_unresolvable_calls()
-
-        assert len(unresolvable_calls3) == 1
-        assert unresolvable_calls3[0].call_text == "<unable to extract call text>"
-    finally:
-        # Restore original function
-        ast.get_source_segment = original_get_source_segment
+        assert len(unresolvable_calls) == 1
+        assert unresolvable_calls[0].call_text == "<unable to extract call text>"
