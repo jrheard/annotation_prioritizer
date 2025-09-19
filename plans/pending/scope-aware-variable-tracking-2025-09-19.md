@@ -31,7 +31,7 @@ The solution tracks variables from three sources:
 
 **IMPORTANT**: This project enforces 100% test coverage. Each commit must include both implementation AND tests (except for pure refactoring commits). All commits must pass pre-commit hooks including ruff, pyright, and pytest with 100% coverage.
 
-### Commit 0: Extract shared name resolution utility
+### Commit 0: Extract shared name resolution utility ✅ COMPLETED
 
 **Files to modify:**
 - `src/annotation_prioritizer/scope_tracker.py` - Add public resolve_name_in_scope function
@@ -66,6 +66,13 @@ Update `CallCountVisitor` to use the public function:
 - Remove the private `_resolve_name_in_scope` method
 
 This refactoring enables code reuse between CallCountVisitor and VariableDiscoveryVisitor.
+
+**Completion notes:**
+- Successfully extracted `_resolve_name_in_scope` from CallCountVisitor to a public function in scope_tracker.py
+- Updated both usages in CallCountVisitor to use the new public function
+- Removed unused imports (generate_name_candidates, find_first_match) from call_counter.py
+- All tests pass with 100% coverage maintained
+- No behavior changes - pure refactoring commit
 
 ### Commit 1: Reorganize AST visitors into dedicated directory
 
