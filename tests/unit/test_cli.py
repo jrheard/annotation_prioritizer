@@ -7,7 +7,7 @@ from unittest.mock import patch
 import pytest
 
 from annotation_prioritizer.cli import main, parse_args
-from annotation_prioritizer.models import AnalysisResult, UnresolvableCall, UnresolvableCategory
+from annotation_prioritizer.models import AnalysisResult, UnresolvableCall
 from tests.helpers.console import assert_console_contains, capture_console_output
 from tests.helpers.factories import make_priority
 
@@ -138,9 +138,7 @@ def test_main_with_unresolvable_calls() -> None:
             file_path=tmp.name,
         )
 
-        mock_unresolvable = UnresolvableCall(
-            line_number=5, call_text="processor.process()", category=UnresolvableCategory.INSTANCE_METHOD
-        )
+        mock_unresolvable = UnresolvableCall(line_number=5, call_text="processor.process()")
 
         with (
             patch("annotation_prioritizer.cli.Console") as mock_console,

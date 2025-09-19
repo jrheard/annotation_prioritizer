@@ -145,29 +145,16 @@ class FunctionPriority:
     priority_score: float  # Final priority for annotation (higher = more urgent)
 
 
-class UnresolvableCategory(StrEnum):
-    """Categories for why a call couldn't be resolved."""
-
-    GETATTR = "getattr"  # getattr() dynamic attribute access
-    SUBSCRIPT = "subscript"  # Dictionary/list subscript calls: obj[key]()
-    EVAL = "eval"  # eval() or exec() dynamic code execution
-    IMPORTED = "imported"  # Calls to imported functions (not yet supported)
-    COMPLEX_QUALIFIED = "complex_qualified"  # Deep attribute chains
-    INSTANCE_METHOD = "instance_method"  # obj.method() where obj is a variable
-    UNKNOWN = "unknown"  # Doesn't fit other categories
-
-
 @dataclass(frozen=True)
 class UnresolvableCall:
     """Information about a call that couldn't be resolved.
 
-    Provides context about why the tool couldn't count a specific call,
+    Provides context about calls the tool couldn't count,
     helping users understand coverage limitations.
     """
 
     line_number: int  # Line where the unresolvable call appears
-    call_text: str  # First 1000 chars of the call for context
-    category: UnresolvableCategory  # Why it couldn't be resolved
+    call_text: str  # First 50 chars of the call for context
 
 
 @dataclass(frozen=True)

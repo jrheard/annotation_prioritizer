@@ -1,7 +1,7 @@
 """End-to-end integration tests for the type annotation prioritizer."""
 
 from annotation_prioritizer.analyzer import analyze_file
-from annotation_prioritizer.models import UnresolvableCategory, make_qualified_name
+from annotation_prioritizer.models import make_qualified_name
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -51,22 +51,19 @@ def main():
         # Check unresolvable calls
         assert len(result.unresolvable_calls) > 0
 
-        # Group by category
-        categories: dict[UnresolvableCategory, int] = {}
-        for call in result.unresolvable_calls:
-            categories[call.category] = categories.get(call.category, 0) + 1
+        # Check that various types of unresolvable calls were found
+        call_texts = [call.call_text for call in result.unresolvable_calls]
 
-        # We should have various categories
-        assert UnresolvableCategory.INSTANCE_METHOD in categories
-        assert UnresolvableCategory.GETATTR in categories
-        assert UnresolvableCategory.SUBSCRIPT in categories
-        assert UnresolvableCategory.EVAL in categories
-        # json.dumps would be UNKNOWN (not IMPORTED since we don't track imports yet)
-        assert UnresolvableCategory.UNKNOWN in categories or UnresolvableCategory.IMPORTED in categories
+        # We should have captured different kinds of unresolvable calls
+        assert any("processor.process_data" in text for text in call_texts)  # Instance method
+        assert any("getattr" in text for text in call_texts)  # getattr call
+        assert any("handlers" in text for text in call_texts)  # Subscript call
+        assert any("eval" in text for text in call_texts)  # eval call
+        assert any("json.dumps" in text for text in call_texts)  # Imported function
 
 
 def test_complex_qualified_calls() -> None:
-    """Test that deeply nested attribute chains are categorized as complex."""
+    """Test that deeply nested attribute chains are tracked as unresolvable."""
     test_code = """class App:
     class Services:
         class Database:
@@ -86,11 +83,9 @@ def test():
         assert len(result.unresolvable_calls) > 0
 
         # Find the complex qualified call
-        complex_calls = [
-            c for c in result.unresolvable_calls if c.category == UnresolvableCategory.COMPLEX_QUALIFIED
-        ]
+        complex_calls = [c for c in result.unresolvable_calls if "execute" in c.call_text]
         assert len(complex_calls) >= 1
-        assert "execute" in complex_calls[0].call_text
+        assert "app.services.database.connection.execute" in complex_calls[0].call_text
 
 
 def test_analyze_simple_file() -> None:

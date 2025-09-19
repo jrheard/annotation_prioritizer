@@ -39,7 +39,6 @@ from annotation_prioritizer.models import (
     Scope,
     ScopeKind,
     UnresolvableCall,
-    UnresolvableCategory,
     make_qualified_name,
 )
 from annotation_prioritizer.scope_tracker import (
@@ -51,103 +50,6 @@ from annotation_prioritizer.scope_tracker import (
     find_first_match,
     generate_name_candidates,
 )
-
-
-def categorize_unresolvable_call(node: ast.Call, source_lines: tuple[str, ...]) -> UnresolvableCall:
-    """Categorize why a call couldn't be resolved.
-
-    Pure function that examines the AST node structure to determine
-    why the call is unresolvable, providing transparency for users.
-
-    Args:
-        node: The unresolvable call AST node
-        source_lines: Source code lines for extracting call text
-
-    Returns:
-        UnresolvableCall with category and context
-    """
-    # Extract call text (first 1000 chars for context)
-    line_idx = node.lineno - 1  # Convert to 0-indexed
-    if 0 <= line_idx < len(source_lines):
-        line = source_lines[line_idx]
-        # Find the call in the line (approximate)
-        call_start = node.col_offset
-        call_text = line[call_start : call_start + 1000].strip()
-    else:
-        call_text = "<unable to extract call text>"
-
-    # Categorize based on AST structure
-    func = node.func
-
-    # getattr() calls - the pattern is getattr(obj, 'method')() which creates a Call node
-    # where func is the result of getattr call
-    if isinstance(func, ast.Call) and isinstance(func.func, ast.Name) and func.func.id == "getattr":
-        return UnresolvableCall(
-            line_number=node.lineno,
-            call_text=call_text,
-            category=UnresolvableCategory.GETATTR,
-        )
-
-    # Dictionary/subscript calls: obj[key]()
-    if isinstance(func, ast.Subscript):
-        return UnresolvableCall(
-            line_number=node.lineno,
-            call_text=call_text,
-            category=UnresolvableCategory.SUBSCRIPT,
-        )
-
-    # eval() or exec() calls - these are themselves unresolvable when used as calls
-    # Also check if this is a direct call to eval/exec (which is also problematic)
-    if isinstance(func, ast.Name) and func.id in ("eval", "exec"):
-        return UnresolvableCall(
-            line_number=node.lineno,
-            call_text=call_text,
-            category=UnresolvableCategory.EVAL,
-        )
-    # Also handle the case where eval/exec result is being called: eval("func")()
-    if isinstance(func, ast.Call) and isinstance(func.func, ast.Name) and func.func.id in ("eval", "exec"):
-        return UnresolvableCall(
-            line_number=node.lineno,
-            call_text=call_text,
-            category=UnresolvableCategory.EVAL,
-        )
-
-    # Instance method calls: variable.method() where variable is not self/cls
-    # and doesn't start with uppercase (likely not a class name)
-    if (
-        isinstance(func, ast.Attribute)
-        and isinstance(func.value, ast.Name)
-        and func.value.id not in ("self", "cls")
-        and not func.value.id[0].isupper()
-    ):
-        return UnresolvableCall(
-            line_number=node.lineno,
-            call_text=call_text,
-            category=UnresolvableCategory.INSTANCE_METHOD,
-        )
-
-    # Complex qualified calls we can't resolve
-    if isinstance(func, ast.Attribute):
-        # Count depth of attribute chain
-        depth = 0
-        current = func
-        while isinstance(current, ast.Attribute):
-            depth += 1
-            current = current.value
-
-        if depth > 2:  # e.g., a.b.c.d()
-            return UnresolvableCall(
-                line_number=node.lineno,
-                call_text=call_text,
-                category=UnresolvableCategory.COMPLEX_QUALIFIED,
-            )
-
-    # Default category for unrecognized patterns
-    return UnresolvableCall(
-        line_number=node.lineno,
-        call_text=call_text,
-        category=UnresolvableCategory.UNKNOWN,
-    )
 
 
 def count_function_calls(
@@ -273,7 +175,19 @@ class CallCountVisitor(ast.NodeVisitor):
             self.call_counts[call_name] += 1
         elif call_name is None:
             # Track unresolvable calls
-            unresolvable = categorize_unresolvable_call(node, self._source_lines)
+            line_idx = node.lineno - 1  # Convert to 0-indexed
+            if 0 <= line_idx < len(self._source_lines):
+                line = self._source_lines[line_idx]
+                # Find the call in the line (approximate)
+                call_start = node.col_offset
+                call_text = line[call_start : call_start + 50].strip()
+            else:
+                call_text = "<unable to extract call text>"
+
+            unresolvable = UnresolvableCall(
+                line_number=node.lineno,
+                call_text=call_text,
+            )
             self._unresolvable_calls.append(unresolvable)
 
         self.generic_visit(node)
