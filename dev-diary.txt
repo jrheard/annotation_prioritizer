@@ -673,21 +673,23 @@ TODO update project_status doc
 
 TODO investigate https://www.augmentcode.com/ ?
 
-TODO why only hold onto 5 unresolvable examples? let's keep them all for now and limit later if needed
+DONE why only hold onto 5 unresolvable examples? let's keep them all for now and limit later if needed
 
-TODO remove categorization entirely for now
+DONE remove categorization entirely for now
 
-TODO remove optional flag, just have this be always-on for now
+DONE remove optional flag, just have this be always-on for now
 
-TODO the unresolvability plan is getting complicated. what features can we cut now and add later if needed?
+NVM the unresolvability plan is getting complicated. what features can we cut now and add later if needed?
 
 TODO update /make-plan to first give me a bulleted outline for confirmation before writing the md file
 
-TODO tomorrow regenerate a new plan file for unresolvability - simple stuff, no categorization, no flag
+NVM tomorrow regenerate a new plan file for unresolvability - simple stuff, no categorization, no flag
 although need to figure out what we'll do re: capturing the original text of the call - use that ast function?
 
-TODO omg lol it implemented the plan...
+omg lol it implemented the plan...
 
 ===
 
 9/19
+
+TODO consider experimenting with the agents in the appendix of https://zachwills.net/how-to-use-claude-code-subagents-to-parallelize-development/
