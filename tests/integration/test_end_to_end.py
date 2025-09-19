@@ -1,8 +1,96 @@
 """End-to-end integration tests for the type annotation prioritizer."""
 
 from annotation_prioritizer.analyzer import analyze_file
-from annotation_prioritizer.models import make_qualified_name
+from annotation_prioritizer.models import UnresolvableCategory, make_qualified_name
 from tests.helpers.temp_files import temp_python_file
+
+
+def test_unresolvable_calls_tracking() -> None:
+    """Test that unresolvable calls are properly tracked and categorized."""
+    test_code = '''import json
+
+class DataProcessor:
+    def process_data(self, data):
+        """Process data."""
+        return data
+
+def utility_function(value):
+    """Utility function."""
+    return value * 2
+
+def main():
+    """Function with various types of calls."""
+    # Resolvable calls
+    utility_function("hello")  # Direct function call - resolvable
+
+    # Unresolvable calls
+    processor = DataProcessor()
+    processor.process_data("test")  # Instance method - unresolvable
+
+    getattr(processor, 'process_data')("dynamic")  # getattr - unresolvable
+
+    handlers = {'process': processor.process_data}
+    handlers['process']("subscript")  # Subscript - unresolvable
+
+    json.dumps({'key': 'value'})  # Imported module - unresolvable
+
+    eval("utility_function('eval')")  # eval - unresolvable
+'''
+
+    with temp_python_file(test_code) as path:
+        result = analyze_file(path)
+
+        # Check that we have functions
+        assert len(result.priorities) == 3  # DataProcessor.process_data, utility_function, main
+
+        # Check call counts (only the direct call to utility_function is resolvable)
+        priorities_by_name = {p.function_info.qualified_name: p for p in result.priorities}
+        utility = priorities_by_name[make_qualified_name("__module__.utility_function")]
+        assert utility.call_count == 1  # Only the direct call is counted
+
+        # Check unresolvable calls
+        assert len(result.unresolvable_calls) > 0
+
+        # Group by category
+        categories: dict[UnresolvableCategory, int] = {}
+        for call in result.unresolvable_calls:
+            categories[call.category] = categories.get(call.category, 0) + 1
+
+        # We should have various categories
+        assert UnresolvableCategory.INSTANCE_METHOD in categories
+        assert UnresolvableCategory.GETATTR in categories
+        assert UnresolvableCategory.SUBSCRIPT in categories
+        assert UnresolvableCategory.EVAL in categories
+        # json.dumps would be UNKNOWN (not IMPORTED since we don't track imports yet)
+        assert UnresolvableCategory.UNKNOWN in categories or UnresolvableCategory.IMPORTED in categories
+
+
+def test_complex_qualified_calls() -> None:
+    """Test that deeply nested attribute chains are categorized as complex."""
+    test_code = """class App:
+    class Services:
+        class Database:
+            class Connection:
+                def execute(self, query):
+                    return query
+
+def test():
+    # This deeply nested call should be unresolvable
+    app.services.database.connection.execute("SELECT * FROM users")
+"""
+
+    with temp_python_file(test_code) as path:
+        result = analyze_file(path)
+
+        # Should have unresolvable calls
+        assert len(result.unresolvable_calls) > 0
+
+        # Find the complex qualified call
+        complex_calls = [
+            c for c in result.unresolvable_calls if c.category == UnresolvableCategory.COMPLEX_QUALIFIED
+        ]
+        assert len(complex_calls) >= 1
+        assert "execute" in complex_calls[0].call_text
 
 
 def test_analyze_simple_file() -> None:
@@ -33,7 +121,8 @@ def caller():
 '''
 
     with temp_python_file(test_code) as path:
-        priorities = analyze_file(path)
+        result = analyze_file(path)
+        priorities = result.priorities
 
         # Should find 4 functions
         assert len(priorities) == 4
@@ -94,7 +183,8 @@ def caller():
 def test_analyze_empty_file() -> None:
     """Test analyzing an empty Python file."""
     with temp_python_file("# Empty file\n") as path:
-        priorities = analyze_file(path)
+        result = analyze_file(path)
+        priorities = result.priorities
         assert priorities == ()
 
 
@@ -127,7 +217,8 @@ def use_calculator():
 '''
 
     with temp_python_file(test_code) as path:
-        priorities = analyze_file(path)
+        result = analyze_file(path)
+        priorities = result.priorities
 
         # Should find 5 functions (4 methods + 1 function)
         assert len(priorities) == 5

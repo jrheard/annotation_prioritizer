@@ -3,11 +3,15 @@
 
 import ast
 
-from annotation_prioritizer.call_counter import CallCountVisitor, count_function_calls
+from annotation_prioritizer.call_counter import (
+    CallCountVisitor,
+    categorize_unresolvable_call,
+    count_function_calls,
+)
 from annotation_prioritizer.class_discovery import build_class_registry
 from annotation_prioritizer.function_parser import parse_function_definitions
 from annotation_prioritizer.iteration import first
-from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
+from annotation_prioritizer.models import Scope, ScopeKind, UnresolvableCategory, make_qualified_name
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
 from tests.helpers.factories import make_function_info, make_parameter
 from tests.helpers.temp_files import temp_python_file
@@ -48,7 +52,7 @@ def caller():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
 
         # Convert to dict for easier testing
         call_counts = {call.function_qualified_name: call.call_count for call in result}
@@ -104,7 +108,7 @@ def use_calculator():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.add() called twice in calculate method + once in use_calculator = 3 times
@@ -140,7 +144,7 @@ def external_use():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Utils.format_number() called twice
@@ -171,7 +175,7 @@ def another_unused():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         assert call_counts[make_qualified_name("__module__.unused_function")] == 0
@@ -199,7 +203,7 @@ def caller():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         assert call_counts[make_qualified_name("__module__.known_func")] == 1
@@ -207,7 +211,7 @@ def caller():
 
 def test_count_calls_nonexistent_file() -> None:
     """Test handling of nonexistent files."""
-    result = count_function_calls("/nonexistent/file.py", ())
+    result, _ = count_function_calls("/nonexistent/file.py", ())
     assert result == ()
 
 
@@ -219,7 +223,7 @@ def broken_syntax(
 """
 
     with temp_python_file(code) as temp_path:
-        result = count_function_calls(temp_path, ())
+        result, _ = count_function_calls(temp_path, ())
         assert result == ()
 
 
@@ -231,7 +235,7 @@ def some_function():
 """
 
     with temp_python_file(code) as temp_path:
-        result = count_function_calls(temp_path, ())
+        result, _ = count_function_calls(temp_path, ())
         assert result == ()
 
 
@@ -263,7 +267,7 @@ class Outer:
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Due to our simple implementation, these complex calls won't be tracked
@@ -309,7 +313,7 @@ def test_self_without_class():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # The obj.method_in_class() call won't match our known function because
@@ -360,7 +364,7 @@ self.method()
     )
 
     class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor(known_functions, class_registry)
+    visitor = CallCountVisitor(known_functions, class_registry, ())
 
     # Test by visiting the call - this should increment the count
     visitor.visit_Call(call_node)
@@ -408,7 +412,7 @@ outer.inner.method()
     )
 
     class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor(known_functions, class_registry)
+    visitor = CallCountVisitor(known_functions, class_registry, ())
 
     # Test by visiting the call - unresolved references should not be counted
     visitor.visit_Call(call_node)
@@ -461,7 +465,7 @@ def top_level_caller():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # outer_function() called:
@@ -535,7 +539,7 @@ class Calculator:
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.add() called:
@@ -586,7 +590,7 @@ def module_function():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.helper_method() called once from level3_function
@@ -629,7 +633,7 @@ def module_helper():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.other_inner_method() called once from inner_method
@@ -666,7 +670,7 @@ getattr(obj, 'method')()
 
     # Create a visitor with an empty class registry
     class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor((), class_registry)
+    visitor = CallCountVisitor((), class_registry, ())
 
     # Test that resolve_call_name returns None for dynamic calls
     result = visitor._resolve_call_name(call_node)
@@ -684,7 +688,7 @@ class Outer:
     tree = ast.parse(source)
     class_registry = build_class_registry(tree)
 
-    visitor = CallCountVisitor((), class_registry)
+    visitor = CallCountVisitor((), class_registry, ())
 
     # Try to resolve a compound name that doesn't exist
     result = visitor._resolve_class_name("NonExistent.Inner")
@@ -734,7 +738,7 @@ def my_function():
         ),
     )
 
-    visitor = CallCountVisitor(known_functions, class_registry)
+    visitor = CallCountVisitor(known_functions, class_registry, ())
     visitor.visit(tree)
 
     assert visitor.call_counts[make_qualified_name("__module__.my_function.Outer.Inner.method")] == 1
@@ -780,7 +784,7 @@ async def top_level_async():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # async_outer() called:
@@ -834,7 +838,7 @@ def test():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # User-defined class method should be called
@@ -869,7 +873,7 @@ def test():
         )
 
         # Should not crash, just return 0 calls since we can't resolve complex expressions
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         assert call_counts[make_qualified_name("__module__.MyClass.method")] == 0
@@ -900,7 +904,7 @@ def test():
             ),
         )
 
-        result = count_function_calls(temp_path, known_functions)
+        result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # None of the unresolvable references should be counted
@@ -946,7 +950,7 @@ Calculator.create_and_compute(5, 10)
         functions = parse_function_definitions(temp_path)
 
         # Count calls
-        result = count_function_calls(temp_path, functions)
+        result, _ = count_function_calls(temp_path, functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # cls.add() should be counted:
@@ -962,3 +966,106 @@ Calculator.create_and_compute(5, 10)
         # - once in complex_operation directly
         multiply_count = call_counts.get(make_qualified_name("__module__.Calculator.multiply"), 0)
         assert multiply_count == 2, f"Expected 2 calls to Calculator.multiply, got {multiply_count}"
+
+
+def test_categorize_getattr_call() -> None:
+    """Test categorizing getattr() as GETATTR."""
+    source = "result = getattr(obj, 'method')()"
+    tree = ast.parse(source)
+    call_node = tree.body[0].value  # type: ignore[attr-defined]
+    result = categorize_unresolvable_call(call_node, (source,))  # type: ignore[arg-type]
+
+    assert result.category == UnresolvableCategory.GETATTR
+    assert result.line_number == 1
+    assert "getattr" in result.call_text
+
+
+def test_categorize_subscript_call() -> None:
+    """Test categorizing obj[key]() as SUBSCRIPT."""
+    source = "result = handlers[event_type](data)"
+    tree = ast.parse(source)
+    call_node = tree.body[0].value  # type: ignore[attr-defined]
+    result = categorize_unresolvable_call(call_node, (source,))  # type: ignore[arg-type]
+
+    assert result.category == UnresolvableCategory.SUBSCRIPT
+    assert result.line_number == 1
+    assert "handlers[event_type]" in result.call_text
+
+
+def test_categorize_eval_call() -> None:
+    """Test categorizing eval() and exec() as EVAL."""
+    source = "result = eval('func()')()"
+    tree = ast.parse(source)
+    call_node = tree.body[0].value  # type: ignore[attr-defined]
+    result = categorize_unresolvable_call(call_node, (source,))  # type: ignore[arg-type]
+
+    assert result.category == UnresolvableCategory.EVAL
+    assert result.line_number == 1
+    assert "eval" in result.call_text
+
+
+def test_categorize_instance_method_call() -> None:
+    """Test categorizing instance method calls as INSTANCE_METHOD."""
+    source = "result = processor.process_data()"
+    tree = ast.parse(source)
+    call_node = tree.body[0].value  # type: ignore[attr-defined]
+    result = categorize_unresolvable_call(call_node, (source,))  # type: ignore[arg-type]
+
+    assert result.category == UnresolvableCategory.INSTANCE_METHOD
+    assert result.line_number == 1
+    assert "processor.process_data()" in result.call_text
+
+
+def test_categorize_complex_qualified_call() -> None:
+    """Test categorizing deep attribute chains as COMPLEX_QUALIFIED."""
+    source = "result = a.b.c.d.method()"
+    tree = ast.parse(source)
+    call_node = tree.body[0].value  # type: ignore[attr-defined]
+    result = categorize_unresolvable_call(call_node, (source,))  # type: ignore[arg-type]
+
+    assert result.category == UnresolvableCategory.COMPLEX_QUALIFIED
+    assert result.line_number == 1
+    assert "a.b.c.d.method()" in result.call_text
+
+
+def test_categorize_unknown_call() -> None:
+    """Test categorizing unrecognized patterns as UNKNOWN."""
+    source = "(lambda x: x * 2)(5)"
+    tree = ast.parse(source)
+    call_node = tree.body[0].value  # type: ignore[attr-defined]
+    result = categorize_unresolvable_call(call_node, (source,))  # type: ignore[arg-type]
+
+    assert result.category == UnresolvableCategory.UNKNOWN
+    assert result.line_number == 1
+
+
+def test_categorize_call_text_extraction() -> None:
+    """Test that call text is properly extracted from source."""
+    source_lines = [
+        "# Comment",
+        "result = some_function(arg1,",
+        "                       arg2,",
+        "                       arg3)",
+    ]
+    code = "\n".join(source_lines)
+    tree = ast.parse(code)
+    call_node = tree.body[0].value  # type: ignore[attr-defined]
+    result = categorize_unresolvable_call(call_node, tuple(source_lines))  # type: ignore[arg-type]
+
+    # Check that the text is extracted from the correct line
+    assert result.line_number == 2
+    assert "some_function" in result.call_text
+
+
+def test_categorize_call_invalid_line_number() -> None:
+    """Test handling when line number is out of bounds."""
+    source = "func()"
+    tree = ast.parse(source)
+    call_node = tree.body[0].value  # type: ignore[attr-defined]
+    # Manually set an invalid line number
+    call_node.lineno = 999
+
+    result = categorize_unresolvable_call(call_node, (source,))  # type: ignore[arg-type]
+
+    assert result.call_text == "<unable to extract call text>"
+    assert result.line_number == 999

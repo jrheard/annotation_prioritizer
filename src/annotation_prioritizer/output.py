@@ -4,7 +4,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from .models import FunctionPriority
+from .models import FunctionPriority, UnresolvableCall
 
 
 def format_results_table(priorities: tuple[FunctionPriority, ...]) -> Table:
@@ -65,6 +65,32 @@ def print_summary_stats(console: Console, priorities: tuple[FunctionPriority, ..
         console.print("[green]🎉 All functions are fully annotated![/green]")
     elif high_priority > 0:
         console.print(f"[yellow]⚠️  {high_priority} function(s) need attention.[/yellow]")
+
+
+def display_unresolvable_summary(console: Console, unresolvable_calls: tuple[UnresolvableCall, ...]) -> None:
+    """Display summary of unresolvable calls."""
+    if not unresolvable_calls:
+        return  # Don't show anything if all calls resolved
+
+    # Summary
+    console.print(f"\n[yellow]Warning: {len(unresolvable_calls)} unresolvable call(s) found[/yellow]")
+
+    # Category breakdown
+    categories: dict[str, int] = {}
+    for call in unresolvable_calls:
+        categories[call.category] = categories.get(call.category, 0) + 1
+
+    console.print("[yellow]Categories:[/yellow]")
+    for category, count in sorted(categories.items()):
+        console.print(f"  {category}: {count} call(s)")
+
+    # Show first 5 examples
+    console.print("\n[yellow]Examples:[/yellow]")
+    for call in unresolvable_calls[:5]:
+        console.print(f"  Line {call.line_number}: {call.call_text[:50]}... [{call.category}]")
+
+    if len(unresolvable_calls) > 5:
+        console.print(f"  ... and {len(unresolvable_calls) - 5} more")
 
 
 def display_results(console: Console, priorities: tuple[FunctionPriority, ...]) -> None:

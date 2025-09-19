@@ -105,15 +105,14 @@ class UnresolvableCall:
     category: UnresolvableCategory  # Why it couldn't be resolved
 
 @dataclass(frozen=True)
-class CallCountResult:
-    """Enhanced result including both resolved and unresolved calls.
+class AnalysisResult:
+    """Complete result from analyzing a file.
 
-    Provides full transparency about what was and wasn't counted,
-    allowing users to assess the completeness of the analysis.
+    Contains both the prioritized functions and all calls that
+    couldn't be resolved, providing full transparency.
     """
-    resolved_counts: tuple[CallCount, ...]  # Successfully resolved
-    unresolvable_count: int  # Total number we couldn't resolve
-    unresolvable_examples: tuple[UnresolvableCall, ...]  # First 5 for debugging
+    priorities: tuple[FunctionPriority, ...]
+    unresolvable_calls: tuple[UnresolvableCall, ...]
 ```
 
 ### 2. Categorization Logic
@@ -243,21 +242,9 @@ class CallCountVisitor(ast.NodeVisitor):
 
         self.generic_visit(node)
 
-    def get_result(self) -> CallCountResult:
-        """Build complete result with resolved and unresolved calls."""
-        resolved = tuple(
-            CallCount(function_qualified_name=name, call_count=count)
-            for name, count in self.call_counts.items()
-        )
-
-        # Limit examples to first 5 for manageable output
-        examples = tuple(self._unresolvable_calls[:5])
-
-        return CallCountResult(
-            resolved_counts=resolved,
-            unresolvable_count=len(self._unresolvable_calls),
-            unresolvable_examples=examples
-        )
+    def get_unresolvable_calls(self) -> tuple[UnresolvableCall, ...]:
+        """Get all unresolvable calls found during traversal."""
+        return tuple(self._unresolvable_calls)
 ```
 
 ### 4. Update count_function_calls()
@@ -268,36 +255,33 @@ Modify the main function:
 def count_function_calls(
     file_path: str,
     known_functions: tuple[FunctionInfo, ...]
-) -> CallCountResult:
+) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
     """Count calls with full transparency about resolved and unresolved.
 
-    Returns CallCountResult with both successful resolutions and
-    information about calls that couldn't be resolved.
+    Returns:
+        Tuple of (resolved call counts, all unresolvable calls)
     """
     file_path_obj = Path(file_path)
     if not file_path_obj.exists():
-        return CallCountResult(
-            resolved_counts=(),
-            unresolvable_count=0,
-            unresolvable_examples=()
-        )
+        return ((), ())
 
     try:
         source_code = file_path_obj.read_text(encoding="utf-8")
         source_lines = tuple(source_code.splitlines())
         tree = ast.parse(source_code, filename=file_path)
     except (OSError, SyntaxError):
-        return CallCountResult(
-            resolved_counts=(),
-            unresolvable_count=0,
-            unresolvable_examples=()
-        )
+        return ((), ())
 
     class_registry = build_class_registry(tree)
     visitor = CallCountVisitor(known_functions, class_registry, source_lines)
     visitor.visit(tree)
 
-    return visitor.get_result()
+    resolved = tuple(
+        CallCount(function_qualified_name=name, call_count=count)
+        for name, count in visitor.call_counts.items()
+    )
+
+    return (resolved, visitor.get_unresolvable_calls())
 ```
 
 ### 5. Update Analyzer
@@ -305,53 +289,34 @@ def count_function_calls(
 Modify `analyzer.py` to handle new result type:
 
 ```python
-def analyze_file(file_path: str) -> tuple[FunctionPriority, ...]:
+def analyze_file(file_path: str) -> AnalysisResult:
     """Analyze file with transparency about unresolved calls."""
     # Parse functions
     functions = parse_functions(file_path)
     if not functions:
-        return ()
+        return AnalysisResult(priorities=(), unresolvable_calls=())
 
-    # Count calls (new: get full result)
-    call_result = count_function_calls(file_path, functions)
+    # Count calls (returns tuple of resolved counts and unresolvable calls)
+    resolved_counts, unresolvable_calls = count_function_calls(file_path, functions)
 
     # Build lookup from resolved counts (maintains existing logic)
     call_count_lookup = {
         cc.function_qualified_name: cc.call_count
-        for cc in call_result.resolved_counts
+        for cc in resolved_counts
     }
 
-    # Rest of the function remains the same...
-    # (Store call_result for potential future use in reporting)
+    # Rest of the function builds priorities as before...
+    # ... existing priority calculation logic ...
+
+    return AnalysisResult(
+        priorities=priorities,
+        unresolvable_calls=unresolvable_calls
+    )
 ```
 
 ### 6. CLI Integration
 
-Add optional flag to `cli.py`:
-
-```python
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Analyze Python files to prioritize type annotation additions"
-    )
-    parser.add_argument("target", help="Python file to analyze", type=Path)
-    parser.add_argument(
-        "--min-calls",
-        type=int,
-        default=0,
-        help="Filter functions with fewer than N calls (default: 0)",
-    )
-    # New flag
-    parser.add_argument(
-        "--show-unresolvable",
-        action="store_true",
-        help="Show details about calls that couldn't be resolved",
-    )
-    return parser.parse_args()
-```
-
-Update main() to handle unresolvable reporting:
+Update main() in `cli.py` to always show unresolvable info:
 
 ```python
 def main() -> None:
@@ -362,19 +327,15 @@ def main() -> None:
     # ... validation code ...
 
     try:
-        # Analyze the file
-        priorities = analyze_file(str(args.target))
+        # Analyze the file (now returns AnalysisResult)
+        result = analyze_file(str(args.target))
 
-        # New: Get unresolvable info if requested
-        if args.show_unresolvable:
-            # Re-parse to get unresolvable info
-            functions = parse_functions(str(args.target))
-            call_result = count_function_calls(str(args.target), functions)
+        # Always display unresolvable summary if there are any
+        if result.unresolvable_calls:
+            display_unresolvable_summary(console, result.unresolvable_calls)
 
-            # Display unresolvable summary
-            display_unresolvable_summary(console, call_result)
-
-        # ... rest of existing code ...
+        # Display the priorities table
+        # ... existing table display code using result.priorities ...
 ```
 
 ### 7. Output Formatting
@@ -382,41 +343,35 @@ def main() -> None:
 Add to `output.py`:
 
 ```python
-def display_unresolvable_summary(console: Console, result: CallCountResult) -> None:
+def display_unresolvable_summary(console: Console, unresolvable_calls: tuple[UnresolvableCall, ...]) -> None:
     """Display summary of unresolvable calls."""
-    total_calls = sum(cc.call_count for cc in result.resolved_counts)
-    total_attempted = total_calls + result.unresolvable_count
-
-    if result.unresolvable_count == 0:
-        console.print("[green]✓ All calls resolved successfully[/green]")
-        return
+    if not unresolvable_calls:
+        return  # Don't show anything if all calls resolved
 
     # Summary
     console.print(
-        f"\n[yellow]Call Resolution Summary:[/yellow]\n"
-        f"  Resolved: {total_calls}/{total_attempted} calls "
-        f"({100 * total_calls / total_attempted:.1f}%)\n"
-        f"  Unresolvable: {result.unresolvable_count} calls\n"
+        f"\n[yellow]Warning: {len(unresolvable_calls)} unresolvable call(s) found[/yellow]"
     )
 
     # Category breakdown
-    if result.unresolvable_examples:
-        categories = {}
-        for example in result.unresolvable_examples:
-            categories[example.category] = categories.get(example.category, 0) + 1
+    categories = {}
+    for call in unresolvable_calls:
+        categories[call.category] = categories.get(call.category, 0) + 1
 
-        console.print("[yellow]Unresolvable Categories:[/yellow]")
-        for category, count in sorted(categories.items()):
-            console.print(f"  {category}: {count} example(s)")
+    console.print("[yellow]Categories:[/yellow]")
+    for category, count in sorted(categories.items()):
+        console.print(f"  {category}: {count} call(s)")
 
-    # Examples
-    if result.unresolvable_examples:
-        console.print("\n[yellow]Example Unresolvable Calls:[/yellow]")
-        for example in result.unresolvable_examples[:3]:  # Show max 3
-            console.print(
-                f"  Line {example.line_number}: {example.call_text} "
-                f"[{example.category}]"
-            )
+    # Show first 5 examples
+    console.print("\n[yellow]Examples:[/yellow]")
+    for call in unresolvable_calls[:5]:
+        console.print(
+            f"  Line {call.line_number}: {call.call_text[:50]}... "
+            f"[{call.category}]"
+        )
+
+    if len(unresolvable_calls) > 5:
+        console.print(f"  ... and {len(unresolvable_calls) - 5} more")
 ```
 
 ## Testing Strategy
@@ -463,11 +418,11 @@ def test_categorize_complex_qualified():
     assert result.category == UnresolvableCategory.COMPLEX_QUALIFIED
 ```
 
-#### Test CallCountResult
+#### Test count_function_calls Return
 
 ```python
-def test_call_count_result_with_unresolvable():
-    """Test CallCountResult with both resolved and unresolved."""
+def test_count_function_calls_with_unresolvable():
+    """Test count_function_calls returns both resolved and unresolved."""
     source = '''
 def func1(): pass
 def func2(): pass
@@ -478,30 +433,21 @@ func2()  # Resolved
 handlers[key]()  # Unresolved
 '''
     # ... setup and run ...
+    resolved, unresolvable = count_function_calls(file_path, functions)
 
-    assert len(result.resolved_counts) == 2
-    assert result.unresolvable_count == 2
-    assert len(result.unresolvable_examples) == 2
-
-def test_unresolvable_examples_limited_to_five():
-    """Test that only first 5 unresolvable calls are kept as examples."""
-    # Create source with 10 unresolvable calls
-    # Verify only 5 examples are returned
+    assert len(resolved) == 2
+    assert len(unresolvable) == 2
+    assert unresolvable[0].category == UnresolvableCategory.GETATTR
+    assert unresolvable[1].category == UnresolvableCategory.SUBSCRIPT
 ```
 
 ### Integration Tests
 
 ```python
-def test_backward_compatibility():
-    """Test that legacy interface still works."""
-    result = count_function_calls_legacy("test.py", functions)
-    assert isinstance(result, tuple)
-    assert all(isinstance(cc, CallCount) for cc in result)
-
-def test_cli_show_unresolvable_flag():
-    """Test CLI with --show-unresolvable flag."""
-    # Run CLI with flag
-    # Verify unresolvable summary is displayed
+def test_cli_always_shows_unresolvable():
+    """Test CLI always shows unresolvable summary when present."""
+    # Run CLI without any flags
+    # Verify unresolvable summary is displayed if unresolvable calls exist
 
 def test_complex_real_world_file():
     """Test on demo_files/complex_cases.py."""
@@ -511,12 +457,11 @@ def test_complex_real_world_file():
 
 ## Success Metrics
 
-1. **Transparency**: Users can see exactly what percentage of calls were resolved
+1. **Transparency**: Users always see what calls couldn't be resolved
 2. **Categorization**: Unresolvable calls are categorized meaningfully
 3. **Examples**: Users get concrete examples of what couldn't be resolved
-4. **Backward Compatibility**: Existing code continues to work unchanged
-5. **Performance**: No significant performance degradation
-6. **Coverage**: Maintains 100% test coverage
+4. **Performance**: No significant performance degradation
+5. **Coverage**: Maintains 100% test coverage
 
 ## Future Enhancements
 
@@ -531,11 +476,9 @@ This foundation enables future improvements:
 
 1. **Performance**: Limit examples to 5 to avoid memory issues
 2. **Complexity**: Keep categorization simple and conservative
-3. **User Experience**: Make reporting optional to avoid overwhelming users
+3. **User Experience**: Keep reporting concise to avoid overwhelming users
 4. **Maintenance**: Clear separation between resolution and categorization
 
 ## Conclusion
 
 This implementation provides critical transparency about what the tool can and cannot analyze. By explicitly reporting unresolvable calls, we build user trust and help them understand the tool's coverage. The conservative approach aligns with the project philosophy: it's better to say "I don't know" than to guess wrong.
-
-The implementation is modular, testable, and maintains backward compatibility while adding significant value for users who want to understand their analysis coverage.
