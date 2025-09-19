@@ -27,7 +27,6 @@ Limitations:
 """
 
 import ast
-from collections.abc import Iterable
 from pathlib import Path
 from typing import override
 
@@ -47,8 +46,7 @@ from annotation_prioritizer.scope_tracker import (
     create_initial_stack,
     drop_last_scope,
     extract_attribute_chain,
-    find_first_match,
-    generate_name_candidates,
+    resolve_name_in_scope,
 )
 
 # Maximum length for unresolvable call text before truncation
@@ -305,23 +303,8 @@ class CallCountVisitor(ast.NodeVisitor):
 
     def _resolve_function_call(self, function_name: str) -> QualifiedName | None:
         """Resolve a function call to its qualified name."""
-        return self._resolve_name_in_scope(function_name, self.call_counts.keys())
+        return resolve_name_in_scope(self._scope_stack, function_name, self.call_counts.keys())
 
     def _resolve_class_name(self, class_name: str) -> QualifiedName | None:
         """Resolve a class name to its qualified name."""
-        return self._resolve_name_in_scope(class_name, self._class_registry.classes)
-
-    def _resolve_name_in_scope(self, name: str, registry: Iterable[QualifiedName]) -> QualifiedName | None:
-        """Resolve a name to its qualified form by checking scope levels.
-
-        Generates candidates from innermost to outermost scope and returns the first match.
-
-        Args:
-            name: The name to resolve (e.g., "Calculator", "add")
-            registry: Set of qualified names to check against
-
-        Returns:
-            Qualified name if found in registry, None otherwise
-        """
-        candidates = generate_name_candidates(self._scope_stack, name)
-        return find_first_match(candidates, registry)
+        return resolve_name_in_scope(self._scope_stack, class_name, self._class_registry.classes)

@@ -878,3 +878,5 @@ DONE rename VariableTracker to VariableTrackingVisitor
 TODO review-plan
 
 TODO keep an eye on "explicitly deferred features" section in scope-tracking
+
+TODO update call_counter to ignore builtin functions

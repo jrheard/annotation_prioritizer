@@ -187,6 +187,32 @@ def find_first_match(
     return first(candidates, lambda c: c in registry)
 
 
+def resolve_name_in_scope(
+    scope_stack: ScopeStack, name: str, registry: Iterable[QualifiedName]
+) -> QualifiedName | None:
+    """Resolve a name to its qualified form by checking scope levels.
+
+    Generates candidates from innermost to outermost scope and returns the first match
+    found in the registry. This function supports Python's name resolution order where
+    inner scopes shadow outer scopes.
+
+    Args:
+        scope_stack: Current scope context
+        name: The name to resolve (e.g., "Calculator", "add")
+        registry: Collection of qualified names to check against
+
+    Returns:
+        Qualified name if found in registry, None otherwise
+
+    Example:
+        With scope stack [MODULE("__module__"), CLASS("Outer")] and name "Inner":
+        - Generates candidates: "__module__.Outer.Inner", "__module__.Inner"
+        - Returns the first candidate that exists in the registry
+    """
+    candidates = generate_name_candidates(scope_stack, name)
+    return find_first_match(candidates, registry)
+
+
 def extract_attribute_chain(node: ast.Attribute) -> tuple[str, ...]:
     """Extract the chain of attributes from nested ast.Attribute nodes.
 
