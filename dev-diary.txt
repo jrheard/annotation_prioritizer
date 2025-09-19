@@ -867,3 +867,5 @@ The project should continue using pyright while monitoring ty's development. Onc
 
 ok
 what next
+
+added /update-project-status

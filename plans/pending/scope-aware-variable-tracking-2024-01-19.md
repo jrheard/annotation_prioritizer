@@ -57,6 +57,7 @@ This module provides data models and utilities for tracking variable-to-type
 mappings across different scopes in Python code.
 """
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 
 from annotation_prioritizer.models import QualifiedName
@@ -83,7 +84,7 @@ class VariableRegistry:
     - Function-level: "__module__.function_name.variable_name"
     - Method-level: "__module__.ClassName.method_name.variable_name"
     """
-    variables: dict[str, VariableType]  # Immutable after construction
+    variables: Mapping[str, VariableType]  # Immutable mapping to prevent mutation
 
 
 def build_variable_key(scope_stack: ScopeStack, variable_name: str) -> str:
@@ -98,26 +99,6 @@ def build_variable_key(scope_stack: ScopeStack, variable_name: str) -> str:
     """
     parts = [scope.name for scope in scope_stack]
     return ".".join([*parts, variable_name])
-
-
-def update_variable(
-    registry: VariableRegistry, key: str, variable_type: VariableType
-) -> VariableRegistry:
-    """Create a new registry with an updated variable mapping.
-
-    This handles both new variables and reassignments by overwriting
-    any existing entry with the same key.
-
-    Args:
-        registry: Current registry (not modified)
-        key: Scope-qualified variable key
-        variable_type: Type information for the variable
-
-    Returns:
-        New registry with the variable updated
-    """
-    new_variables = {**registry.variables, key: variable_type}
-    return VariableRegistry(variables=new_variables)
 
 
 def lookup_variable(
@@ -159,6 +140,7 @@ These data models and utilities maintain functional purity and immutability thro
 """AST visitor for discovering variable-to-type mappings."""
 
 import ast
+import logging
 from typing import override
 
 from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
@@ -173,7 +155,6 @@ from annotation_prioritizer.variable_registry import (
     VariableRegistry,
     VariableType,
     build_variable_key,
-    update_variable,
 )
 
 
@@ -196,11 +177,11 @@ class VariableTracker(ast.NodeVisitor):
         """
         self._class_registry = class_registry
         self._scope_stack = create_initial_stack()
-        self._registry = VariableRegistry(variables={})
+        self._variables: dict[str, VariableType] = {}  # Mutable dict for internal tracking
 
     def get_registry(self) -> VariableRegistry:
-        """Return the built variable registry."""
-        return self._registry
+        """Return the built variable registry as an immutable registry."""
+        return VariableRegistry(variables=self._variables)
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
@@ -249,6 +230,12 @@ class VariableTracker(ast.NodeVisitor):
         """Handle annotated assignments like calc: Calculator = ..."""
         if isinstance(node.target, ast.Name):
             self._process_annotation(node.target.id, node.annotation)
+        else:
+            # Log when we skip complex annotated assignments
+            logging.debug(
+                f"Cannot track annotated assignment: complex target type "
+                f"{type(node.target).__name__} not supported"
+            )
         self.generic_visit(node)
 
     @override
@@ -267,6 +254,12 @@ class VariableTracker(ast.NodeVisitor):
                         class_name,
                         is_instance=True
                     )
+                elif class_name:
+                    # Log when we can't resolve a call to a known class
+                    logging.debug(
+                        f"Cannot track assignment to '{variable_name}': "
+                        f"'{class_name}' is not a known class"
+                    )
             # Check if it's a class reference (calc = Calculator)
             elif isinstance(node.value, ast.Name):
                 if self._is_known_class(node.value.id):
@@ -275,6 +268,29 @@ class VariableTracker(ast.NodeVisitor):
                         node.value.id,
                         is_instance=False
                     )
+                else:
+                    # Log when we encounter a name that isn't a known class
+                    logging.debug(
+                        f"Cannot track assignment to '{variable_name}': "
+                        f"'{node.value.id}' is not a known class"
+                    )
+            else:
+                # Log other assignment types we don't handle
+                logging.debug(
+                    f"Cannot track assignment to '{variable_name}': "
+                    f"unsupported value type {type(node.value).__name__}"
+                )
+        else:
+            # Log when we skip complex assignments
+            if len(node.targets) > 1:
+                logging.debug(
+                    f"Cannot track assignment: multiple targets not supported"
+                )
+            elif node.targets and not isinstance(node.targets[0], ast.Name):
+                logging.debug(
+                    f"Cannot track assignment: complex target type "
+                    f"{type(node.targets[0]).__name__} not supported"
+                )
 
         self.generic_visit(node)
 
@@ -285,6 +301,17 @@ class VariableTracker(ast.NodeVisitor):
             if self._is_known_class(class_name):
                 # Annotations typically indicate instances
                 self._track_variable(variable_name, class_name, is_instance=True)
+            else:
+                logging.debug(
+                    f"Cannot track annotation for '{variable_name}': "
+                    f"'{class_name}' is not a known class"
+                )
+        else:
+            # Log when we encounter complex annotations we don't handle
+            logging.debug(
+                f"Cannot track annotation for '{variable_name}': "
+                f"complex annotation type {type(annotation).__name__} not supported"
+            )
         # Could extend to handle Optional, Union, etc. in the future
 
     def _extract_class_from_call(self, call_node: ast.Call) -> str | None:
@@ -319,7 +346,7 @@ class VariableTracker(ast.NodeVisitor):
                 class_name=qualified_class,
                 is_instance=is_instance
             )
-            self._registry = update_variable(self._registry, key, variable_type)
+            self._variables[key] = variable_type
 
     def _resolve_class_name(self, class_name: str) -> QualifiedName | None:
         """Resolve a class name to its qualified form."""
@@ -474,7 +501,7 @@ def count_function_calls(
 
 For `test_variable_registry.py`:
 - Test `build_variable_key` with various scope depths
-- Test `update_variable` for both new and reassignment
+- Test variable tracking for both new and reassignment
 - Test `lookup_variable` with parent scope resolution
 
 For `test_variable_discovery.py`:

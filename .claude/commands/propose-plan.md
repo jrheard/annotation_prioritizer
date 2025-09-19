@@ -66,7 +66,7 @@ Then:
 2. Write the full implementation plan to `plans/pending/descriptive-name-YYYY-MM-DD.md`
 
 The full plan should expand the outline into a detailed document following this format:
-- Full implementation steps with detailed context for each
+- Full implementation steps with detailed context for each. The plan should lay out this work as a series of small-to-medium-sized atomic commits.
 - Recommended file structures with explanations
 - Example code snippets where helpful
 - Comprehensive list of assumptions and dependencies
