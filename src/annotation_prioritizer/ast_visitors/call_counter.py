@@ -30,7 +30,7 @@ import ast
 from pathlib import Path
 from typing import override
 
-from annotation_prioritizer.class_discovery import ClassRegistry, build_class_registry
+from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry, build_class_registry
 from annotation_prioritizer.models import (
     CallCount,
     FunctionInfo,

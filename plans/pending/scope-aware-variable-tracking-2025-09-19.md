@@ -74,7 +74,7 @@ This refactoring enables code reuse between CallCountVisitor and VariableDiscove
 - All tests pass with 100% coverage maintained
 - No behavior changes - pure refactoring commit
 
-### Commit 1: Reorganize AST visitors into dedicated directory
+### Commit 1: Reorganize AST visitors into dedicated directory ✅ COMPLETED
 
 **Files to move:**
 - `src/annotation_prioritizer/call_counter.py` → `src/annotation_prioritizer/ast_visitors/call_counter.py`
@@ -88,6 +88,15 @@ This refactoring enables code reuse between CallCountVisitor and VariableDiscove
 - All test files that import these modules
 
 **Note**: This is a pure refactoring commit. Existing tests should continue to pass with only import path updates. No new tests needed.
+
+**Completion notes:**
+- Successfully moved all three AST visitor files to new `ast_visitors/` subdirectory
+- Updated imports in `analyzer.py` and `call_counter.py` (internal import)
+- Fixed relative imports in `function_parser.py` to use absolute imports
+- Updated all test file imports (unit and integration tests)
+- All tests pass with 100% coverage maintained
+- Ruff auto-fixed one import ordering issue in function_parser.py
+- CLI tool still works correctly
 
 ### Commit 2: Add variable tracking data models and utilities with tests
 

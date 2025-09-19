@@ -6,13 +6,13 @@ from unittest.mock import patch
 
 import pytest
 
-from annotation_prioritizer.call_counter import (
+from annotation_prioritizer.ast_visitors.call_counter import (
     CallCountVisitor,
     UnresolvableCall,
     count_function_calls,
 )
-from annotation_prioritizer.class_discovery import build_class_registry
-from annotation_prioritizer.function_parser import parse_function_definitions
+from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
+from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope

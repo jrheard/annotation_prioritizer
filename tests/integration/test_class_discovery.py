@@ -1,8 +1,8 @@
 """Integration tests for class_discovery.py's functionality."""
 
 from annotation_prioritizer.analyzer import analyze_file
-from annotation_prioritizer.call_counter import count_function_calls
-from annotation_prioritizer.function_parser import parse_function_definitions
+from annotation_prioritizer.ast_visitors.call_counter import count_function_calls
+from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.models import make_qualified_name
 from tests.helpers.temp_files import temp_python_file
 
