@@ -63,7 +63,7 @@ When the user says something like:
 
 Then:
 1. Exit PROPOSE_PLAN_DOC mode
-2. Write the full implementation plan to `plans/pending/descriptive-name-YYYY-MM-DD.md`
+2. Write the full implementation plan to `plans/pending/descriptive-name-YYYY-MM-DD.md` (first run `date` to see today's date)
 
 The full plan should expand the outline into a detailed document following this format:
 - Full implementation steps with detailed context for each. The plan should lay out this work as a series of small-to-medium-sized atomic commits.

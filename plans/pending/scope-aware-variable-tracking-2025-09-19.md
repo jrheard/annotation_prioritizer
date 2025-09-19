@@ -285,7 +285,7 @@ class VariableTracker(ast.NodeVisitor):
                     )
             # Check if it's a class reference (calc = Calculator)
             elif isinstance(node.value, ast.Name):
-                if self._is_known_class(node.value.id):
+                if self._resolve_class_name(node.value.id):
                     self._track_variable(
                         variable_name,
                         node.value.id,
@@ -321,8 +321,7 @@ class VariableTracker(ast.NodeVisitor):
         """Process a type annotation."""
         if isinstance(annotation, ast.Name):
             class_name = annotation.id
-            if self._is_known_class(class_name):
-                # Annotations typically indicate instances
+            if self._resolve_class_name(class_name):
                 self._track_variable(variable_name, class_name, is_instance=True)
             else:
                 logging.debug(
@@ -341,19 +340,10 @@ class VariableTracker(ast.NodeVisitor):
         """Extract class name from a call node if it's a known class constructor."""
         if isinstance(call_node.func, ast.Name):
             class_name = call_node.func.id
-            if self._is_known_class(class_name):
+            if self._resolve_class_name(class_name):
                 return class_name
         # Could handle Outer.Inner() in the future
         return None
-
-    def _is_known_class(self, class_name: str) -> bool:
-        """Check if a class name exists in the registry."""
-        resolved = resolve_name_in_scope(
-            self._scope_stack,
-            class_name,
-            self._class_registry.classes
-        )
-        return resolved is not None
 
     def _track_variable(
         self,
