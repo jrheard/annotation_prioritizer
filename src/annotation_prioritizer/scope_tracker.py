@@ -36,6 +36,9 @@ def create_initial_stack() -> ScopeStack:
 def add_scope(stack: ScopeStack, scope: Scope) -> ScopeStack:
     """Add a new scope onto the scope state.
 
+    TODO: Keep an eye on perf, strongly consider just making ScopeStack
+    mutable and turning these functions into methods. It's fine.
+
     This is a pure function that returns a new stack rather than
     modifying the input stack.
 
