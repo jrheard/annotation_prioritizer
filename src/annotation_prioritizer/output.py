@@ -75,19 +75,11 @@ def display_unresolvable_summary(console: Console, unresolvable_calls: tuple[Unr
     # Summary
     console.print(f"\n[yellow]Warning: {len(unresolvable_calls)} unresolvable call(s) found[/yellow]")
 
-    # Category breakdown
-    categories: dict[str, int] = {}
-    for call in unresolvable_calls:
-        categories[call.category] = categories.get(call.category, 0) + 1
-
-    console.print("[yellow]Categories:[/yellow]")
-    for category, count in sorted(categories.items()):
-        console.print(f"  {category}: {count} call(s)")
-
     # Show first 5 examples
     console.print("\n[yellow]Examples:[/yellow]")
     for call in unresolvable_calls[:5]:
-        console.print(f"  Line {call.line_number}: {call.call_text[:50]}... [{call.category}]")
+        # call_text is already limited to 50 chars in call_counter.py
+        console.print(f"  Line {call.line_number}: {call.call_text}...")
 
     if len(unresolvable_calls) > 5:
         console.print(f"  ... and {len(unresolvable_calls) - 5} more")
