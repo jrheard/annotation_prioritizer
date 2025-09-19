@@ -174,27 +174,37 @@ class CallCountVisitor(ast.NodeVisitor):
         if call_name and call_name in self.call_counts:
             self.call_counts[call_name] += 1
         elif call_name is None:
-            # Track unresolvable calls
-            line_idx = node.lineno - 1  # Convert to 0-indexed
-            if 0 <= line_idx < len(self._source_lines):
-                line = self._source_lines[line_idx]
-                # Find the call in the line (approximate)
-                call_start = node.col_offset
-                call_text = line[call_start : call_start + 50].strip()
-            else:
-                call_text = "<unable to extract call text>"
-
-            unresolvable = UnresolvableCall(
-                line_number=node.lineno,
-                call_text=call_text,
-            )
-            self._unresolvable_calls.append(unresolvable)
+            self._track_unresolvable_call(node)
 
         self.generic_visit(node)
 
     def get_unresolvable_calls(self) -> tuple[UnresolvableCall, ...]:
         """Get all unresolvable calls found during traversal."""
         return tuple(self._unresolvable_calls)
+
+    def _track_unresolvable_call(self, node: ast.Call) -> None:
+        """Track a call that cannot be resolved to a known function.
+
+        Extracts the call text from source lines and creates an UnresolvableCall
+        record for reporting purposes.
+
+        Args:
+            node: The AST Call node that couldn't be resolved
+        """
+        line_idx = node.lineno - 1  # Convert to 0-indexed
+        if 0 <= line_idx < len(self._source_lines):
+            line = self._source_lines[line_idx]
+            # Find the call in the line (approximate)
+            call_start = node.col_offset
+            call_text = line[call_start : call_start + 50].strip()
+        else:
+            call_text = "<unable to extract call text>"
+
+        unresolvable = UnresolvableCall(
+            line_number=node.lineno,
+            call_text=call_text,
+        )
+        self._unresolvable_calls.append(unresolvable)
 
     def _resolve_call_name(self, node: ast.Call) -> QualifiedName | None:
         """Resolve the qualified name of the called function.
