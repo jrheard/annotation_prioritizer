@@ -4,7 +4,7 @@ import ast
 
 import pytest
 
-from annotation_prioritizer.class_discovery import (
+from annotation_prioritizer.ast_visitors.class_discovery import (
     ClassDiscoveryVisitor,
     ClassRegistry,
     build_class_registry,

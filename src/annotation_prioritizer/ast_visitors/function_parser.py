@@ -37,8 +37,15 @@ import ast
 from pathlib import Path
 from typing import override
 
-from .models import FunctionInfo, ParameterInfo, QualifiedName, Scope, ScopeKind, make_qualified_name
-from .scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
+from annotation_prioritizer.models import (
+    FunctionInfo,
+    ParameterInfo,
+    QualifiedName,
+    Scope,
+    ScopeKind,
+    make_qualified_name,
+)
+from annotation_prioritizer.scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
 
 
 def _extract_parameters(args: ast.arguments) -> tuple[ParameterInfo, ...]:

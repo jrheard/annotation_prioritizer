@@ -1,7 +1,7 @@
 """Main analysis orchestrator for type annotation prioritization."""
 
-from .call_counter import count_function_calls
-from .function_parser import parse_function_definitions
+from .ast_visitors.call_counter import count_function_calls
+from .ast_visitors.function_parser import parse_function_definitions
 from .models import AnalysisResult, AnnotationScore, FunctionPriority, QualifiedName
 from .scoring import calculate_annotation_score
 
