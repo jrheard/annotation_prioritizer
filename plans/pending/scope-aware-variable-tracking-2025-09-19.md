@@ -29,7 +29,43 @@ The solution tracks variables from three sources:
 
 ## Implementation Steps
 
-### Commit 0: Reorganize AST visitors into dedicated directory
+### Commit 0: Extract shared name resolution utility
+
+**Files to modify:**
+- `src/annotation_prioritizer/scope_tracker.py` - Add public resolve_name_in_scope function
+- `src/annotation_prioritizer/call_counter.py` - Update to use public function
+
+**Implementation:**
+Move `CallCountVisitor._resolve_name_in_scope()` to `scope_tracker.py` as a public function:
+```python
+def resolve_name_in_scope(
+    scope_stack: ScopeStack,
+    name: str,
+    registry: Iterable[QualifiedName]
+) -> QualifiedName | None:
+    """Resolve a name to its qualified form by checking scope levels.
+
+    Generates candidates from innermost to outermost scope and returns the first match.
+
+    Args:
+        scope_stack: Current scope context
+        name: The name to resolve (e.g., "Calculator", "add")
+        registry: Set of qualified names to check against
+
+    Returns:
+        Qualified name if found in registry, None otherwise
+    """
+    candidates = generate_name_candidates(scope_stack, name)
+    return find_first_match(candidates, registry)
+```
+
+Update `CallCountVisitor` to use the public function:
+- Replace `self._resolve_name_in_scope(name, registry)` with `resolve_name_in_scope(self._scope_stack, name, registry)`
+- Remove the private `_resolve_name_in_scope` method
+
+This refactoring enables code reuse between CallCountVisitor and VariableTracker.
+
+### Commit 1: Reorganize AST visitors into dedicated directory
 
 **Files to move:**
 - `src/annotation_prioritizer/call_counter.py` → `src/annotation_prioritizer/ast_visitors/call_counter.py`
@@ -44,7 +80,7 @@ The solution tracks variables from three sources:
 
 This reorganization creates a clear separation between AST traversal logic and other components.
 
-### Commit 1: Add variable tracking data models and utilities
+### Commit 2: Add variable tracking data models and utilities
 
 **Files to create:**
 - `src/annotation_prioritizer/variable_registry.py` - Data models and pure functions
@@ -130,7 +166,7 @@ def lookup_variable(
 
 These data models and utilities maintain functional purity and immutability throughout.
 
-### Commit 2: Create variable discovery AST visitor
+### Commit 3: Create variable discovery AST visitor
 
 **Files to create:**
 - `src/annotation_prioritizer/ast_visitors/variable_discovery.py` - AST visitor for variable discovery
@@ -149,6 +185,7 @@ from annotation_prioritizer.scope_tracker import (
     add_scope,
     create_initial_stack,
     drop_last_scope,
+    resolve_name_in_scope,
     ScopeStack,
 )
 from annotation_prioritizer.variable_registry import (
@@ -209,21 +246,7 @@ class VariableTracker(ast.NodeVisitor):
         self.generic_visit(node)
         self._scope_stack = drop_last_scope(self._scope_stack)
 
-    @override
-    def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        """Track async function scope and parameter annotations."""
-        # Similar to visit_FunctionDef
-        self._scope_stack = add_scope(
-            self._scope_stack,
-            Scope(kind=ScopeKind.FUNCTION, name=node.name)
-        )
-
-        for arg in node.args.args:
-            if arg.annotation:
-                self._process_annotation(arg.arg, arg.annotation)
-
-        self.generic_visit(node)
-        self._scope_stack = drop_last_scope(self._scope_stack)
+    visit_AsyncFunctionDef = visit_FunctionDef # add pyright: ignore comment to silence pyright on this line
 
     @override
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
@@ -248,17 +271,17 @@ class VariableTracker(ast.NodeVisitor):
             # Check if it's a direct instantiation
             if isinstance(node.value, ast.Call):
                 class_name = self._extract_class_from_call(node.value)
-                if class_name and self._is_known_class(class_name):
+                if class_name:
                     self._track_variable(
                         variable_name,
                         class_name,
                         is_instance=True
                     )
-                elif class_name:
+                else:
                     # Log when we can't resolve a call to a known class
                     logging.debug(
                         f"Cannot track assignment to '{variable_name}': "
-                        f"'{class_name}' is not a known class"
+                        f"call is not to a known class constructor"
                     )
             # Check if it's a class reference (calc = Calculator)
             elif isinstance(node.value, ast.Name):
@@ -315,21 +338,22 @@ class VariableTracker(ast.NodeVisitor):
         # Could extend to handle Optional, Union, etc. in the future
 
     def _extract_class_from_call(self, call_node: ast.Call) -> str | None:
-        """Extract class name from a call node if it's a constructor."""
+        """Extract class name from a call node if it's a known class constructor."""
         if isinstance(call_node.func, ast.Name):
-            return call_node.func.id
+            class_name = call_node.func.id
+            if self._is_known_class(class_name):
+                return class_name
         # Could handle Outer.Inner() in the future
         return None
 
     def _is_known_class(self, class_name: str) -> bool:
         """Check if a class name exists in the registry."""
-        # Build candidates from current scope and check registry
-        # Implementation would use similar logic to CallCountVisitor._resolve_class_name
-        # For MVP, we'll check simple names against the registry
-        for qualified in self._class_registry.classes:
-            if qualified.endswith(f".{class_name}"):
-                return True
-        return False
+        resolved = resolve_name_in_scope(
+            self._scope_stack,
+            class_name,
+            self._class_registry.classes
+        )
+        return resolved is not None
 
     def _track_variable(
         self,
@@ -350,15 +374,14 @@ class VariableTracker(ast.NodeVisitor):
 
     def _resolve_class_name(self, class_name: str) -> QualifiedName | None:
         """Resolve a class name to its qualified form."""
-        # Similar logic to CallCountVisitor._resolve_class_name
-        # Would reuse the name resolution utilities
-        for qualified in self._class_registry.classes:
-            if qualified.endswith(f".{class_name}"):
-                return qualified
-        return None
+        return resolve_name_in_scope(
+            self._scope_stack,
+            class_name,
+            self._class_registry.classes
+        )
 ```
 
-### Commit 3: Add build_variable_registry orchestration function
+### Commit 4: Add build_variable_registry orchestration function
 
 **Files to modify:**
 - `src/annotation_prioritizer/ast_visitors/variable_discovery.py` - Add orchestration function
@@ -382,7 +405,7 @@ def build_variable_registry(tree: ast.AST, class_registry: ClassRegistry) -> Var
     return tracker.get_registry()
 ```
 
-### Commit 4: Enhance CallCountVisitor to use VariableRegistry
+### Commit 5: Enhance CallCountVisitor to use VariableRegistry
 
 **Files to modify:**
 - `src/annotation_prioritizer/ast_visitors/call_counter.py` - Add variable resolution
@@ -395,7 +418,15 @@ from annotation_prioritizer.ast_visitors.variable_discovery import build_variabl
 from annotation_prioritizer.variable_registry import lookup_variable
 ```
 
-2. Modify `CallCountVisitor.__init__` to accept the registry:
+2. Update imports to include the public function:
+```python
+from annotation_prioritizer.scope_tracker import (
+    # ... existing imports ...
+    resolve_name_in_scope,
+)
+```
+
+3. Modify `CallCountVisitor.__init__` to accept the registry:
 ```python
 def __init__(
     self,
@@ -416,7 +447,7 @@ def __init__(
     self._variable_registry = variable_registry
 ```
 
-3. Enhance `_resolve_method_call` to handle variable method calls:
+4. Enhance `_resolve_method_call` to handle variable method calls:
 ```python
 def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
     """Resolve qualified name from a method call (attribute access).
@@ -445,7 +476,7 @@ def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
     # ... rest of existing logic for class method calls ...
 ```
 
-### Commit 5: Update count_function_calls to perform two-pass analysis
+### Commit 6: Update count_function_calls to perform two-pass analysis
 
 **Files to modify:**
 - `src/annotation_prioritizer/ast_visitors/call_counter.py` - Implement two-pass approach
@@ -491,7 +522,7 @@ def count_function_calls(
     return (resolved, visitor.get_unresolvable_calls())
 ```
 
-### Commit 6: Add comprehensive unit tests for variable tracking
+### Commit 7: Add comprehensive unit tests for variable tracking
 
 **Files to create:**
 - `tests/unit/test_variable_registry.py` - Test data models and utility functions
@@ -514,7 +545,7 @@ For `test_variable_discovery.py`:
 - Test module-level variable tracking
 - Test class references vs instances
 
-### Commit 7: Add unit tests for enhanced CallCountVisitor
+### Commit 8: Add unit tests for enhanced CallCountVisitor
 
 **Files to modify:**
 - `tests/unit/test_call_counter.py` - Add variable resolution tests
@@ -586,7 +617,7 @@ def outer():
     # Assert inner function's use of calc.add() is counted
 ```
 
-### Commit 8: Add integration tests for end-to-end variable tracking
+### Commit 9: Add integration tests for end-to-end variable tracking
 
 **Files to modify:**
 - `tests/integration/test_end_to_end.py` - Add variable tracking scenarios
@@ -598,7 +629,7 @@ def outer():
 - Verify that the call counts match expectations
 - Ensure unresolvable calls are reduced
 
-### Commit 9: Update project documentation
+### Commit 10: Update project documentation
 
 **Files to modify:**
 - `docs/project_status.md` - Mark variable tracking as complete
@@ -647,12 +678,13 @@ These limitations are acceptable for an MVP. The infrastructure built here provi
 ## Testing Strategy
 
 Each commit should include its associated tests to ensure atomic, working commits:
-- Commit 0: Update all imports and ensure tests pass
-- Commit 1: Basic model and utility function tests
-- Commit 2-3: Variable discovery tests
-- Commits 4-5: Enhanced call counter tests
-- Commits 6-8: Comprehensive test coverage
-- Commit 9: Documentation only
+- Commit 0: Extract shared utility and ensure all tests pass
+- Commit 1: Reorganize files and update all imports
+- Commit 2: Basic model and utility function tests
+- Commits 3-4: Variable discovery tests
+- Commits 5-6: Enhanced call counter tests
+- Commits 7-9: Comprehensive test coverage
+- Commit 10: Documentation only
 
 Run the test suite after each commit to ensure nothing breaks:
 ```bash
