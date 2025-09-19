@@ -2,7 +2,7 @@
 
 import pytest
 
-from annotation_prioritizer.function_parser import parse_function_definitions
+from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.models import ParameterInfo, make_qualified_name
 from tests.helpers.temp_files import temp_python_file
 

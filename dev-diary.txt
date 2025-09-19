@@ -875,7 +875,7 @@ very interesting - looks like there's some simlar logic shared across call_count
 
 DONE rename VariableTracker to VariableTrackingVisitor
 
-TODO review-plan
+DONE review-plan
 
 TODO keep an eye on "explicitly deferred features" section in scope-tracking
 
