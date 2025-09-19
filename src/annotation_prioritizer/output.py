@@ -78,7 +78,6 @@ def display_unresolvable_summary(console: Console, unresolvable_calls: tuple[Unr
     # Show first 5 examples
     console.print("\n[yellow]Examples:[/yellow]")
     for call in unresolvable_calls[:5]:
-        # call_text is already limited to 50 chars in call_counter.py
         console.print(f"  Line {call.line_number}: {call.call_text}...")
 
     if len(unresolvable_calls) > 5:
