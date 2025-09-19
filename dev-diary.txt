@@ -873,4 +873,8 @@ added /update-project-status
 ok, looking through v3 of the scope-tracking doc
 very interesting - looks like there's some simlar logic shared across call_counter and variabletracker
 
-TODO rename VariableTracker to VariableTrackingVisitor
+DONE rename VariableTracker to VariableTrackingVisitor
+
+TODO review-plan
+
+TODO keep an eye on "explicitly deferred features" section in scope-tracking

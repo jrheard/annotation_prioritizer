@@ -19,9 +19,13 @@ IMPORTANT: Before presenting the outline, PROACTIVELY ASK QUESTIONS if:
 Present a structured outline for the implementation plan that includes:
 
 1. **Implementation Steps** (as numbered list)
-   - Each step should represent a logical commit
+   - Each step should represent a logical atomic commit
    - Include brief description of what each step accomplishes
    - Order steps by dependencies and logical progression
+   - **IMPORTANT**: This project enforces 100% test coverage. Each commit must:
+     - Include both implementation AND tests (except for pure refactoring)
+     - Pass all pre-commit hooks (ruff, pyright, pytest with 100% coverage)
+     - Leave the codebase in a working state
 
 2. **Key Architectural Decisions**
    - File structure changes or new files needed
@@ -67,6 +71,9 @@ Then:
 
 The full plan should expand the outline into a detailed document following this format:
 - Full implementation steps with detailed context for each. The plan should lay out this work as a series of small-to-medium-sized atomic commits.
+  - Each commit must include both implementation AND tests (except for pure refactoring)
+  - Each commit must maintain 100% test coverage
+  - Each commit must pass all pre-commit hooks
 - Recommended file structures with explanations
 - Example code snippets where helpful
 - Comprehensive list of assumptions and dependencies

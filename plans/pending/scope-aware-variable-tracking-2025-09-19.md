@@ -29,6 +29,8 @@ The solution tracks variables from three sources:
 
 ## Implementation Steps
 
+**IMPORTANT**: This project enforces 100% test coverage. Each commit must include both implementation AND tests (except for pure refactoring commits). All commits must pass pre-commit hooks including ruff, pyright, and pytest with 100% coverage.
+
 ### Commit 0: Extract shared name resolution utility
 
 **Files to modify:**
@@ -63,7 +65,7 @@ Update `CallCountVisitor` to use the public function:
 - Replace `self._resolve_name_in_scope(name, registry)` with `resolve_name_in_scope(self._scope_stack, name, registry)`
 - Remove the private `_resolve_name_in_scope` method
 
-This refactoring enables code reuse between CallCountVisitor and VariableTracker.
+This refactoring enables code reuse between CallCountVisitor and VariableDiscoveryVisitor.
 
 ### Commit 1: Reorganize AST visitors into dedicated directory
 
@@ -78,12 +80,13 @@ This refactoring enables code reuse between CallCountVisitor and VariableTracker
 - `src/annotation_prioritizer/cli.py` - Update imports
 - All test files that import these modules
 
-This reorganization creates a clear separation between AST traversal logic and other components.
+**Note**: This is a pure refactoring commit. Existing tests should continue to pass with only import path updates. No new tests needed.
 
-### Commit 2: Add variable tracking data models and utilities
+### Commit 2: Add variable tracking data models and utilities with tests
 
 **Files to create:**
 - `src/annotation_prioritizer/variable_registry.py` - Data models and pure functions
+- `tests/unit/test_variable_registry.py` - Unit tests for the new module
 
 **Implementation:**
 ```python
@@ -166,10 +169,17 @@ def lookup_variable(
 
 These data models and utilities maintain functional purity and immutability throughout.
 
-### Commit 3: Create variable discovery AST visitor
+**Test coverage for this commit (tests/unit/test_variable_registry.py):**
+- Test `build_variable_key` with various scope depths
+- Test `lookup_variable` with parent scope resolution
+- Test frozen dataclass immutability
+- Test edge cases (empty scope stack, non-existent variables)
+
+### Commit 3: Create variable discovery AST visitor with comprehensive tests
 
 **Files to create:**
 - `src/annotation_prioritizer/ast_visitors/variable_discovery.py` - AST visitor for variable discovery
+- `tests/unit/test_variable_discovery.py` - Comprehensive unit tests
 
 **Implementation structure:**
 ```python
@@ -195,7 +205,7 @@ from annotation_prioritizer.variable_registry import (
 )
 
 
-class VariableTracker(ast.NodeVisitor):
+class VariableDiscoveryVisitor(ast.NodeVisitor):
     """AST visitor that builds a registry of variable-to-type mappings.
 
     First pass of the two-pass analysis. Discovers variables through:
@@ -369,15 +379,8 @@ class VariableTracker(ast.NodeVisitor):
             class_name,
             self._class_registry.classes
         )
-```
 
-### Commit 4: Add build_variable_registry orchestration function
 
-**Files to modify:**
-- `src/annotation_prioritizer/ast_visitors/variable_discovery.py` - Add orchestration function
-
-**Add to the end of the file:**
-```python
 def build_variable_registry(tree: ast.AST, class_registry: ClassRegistry) -> VariableRegistry:
     """Build a registry of variable-to-type mappings from an AST.
 
@@ -390,17 +393,29 @@ def build_variable_registry(tree: ast.AST, class_registry: ClassRegistry) -> Var
     Returns:
         Registry mapping scope-qualified variable names to their types
     """
-    tracker = VariableTracker(class_registry)
-    tracker.visit(tree)
-    return tracker.get_registry()
+    visitor = VariableDiscoveryVisitor(class_registry)
+    visitor.visit(tree)
+    return visitor.get_registry()
 ```
 
-### Commit 5: Enhance CallCountVisitor to use VariableRegistry
+**Test coverage for this commit (tests/unit/test_variable_discovery.py):**
+- Test direct instantiation: `calc = Calculator()`
+- Test parameter annotations: `def foo(calc: Calculator)`
+- Test variable annotations: `calc: Calculator = ...`
+- Test reassignment tracking
+- Test scope isolation (same name in different scopes)
+- Test nested function parent scope access
+- Test module-level variable tracking
+- Test class references vs instances
+- Test the `build_variable_registry` orchestration function
+
+### Commit 4: Enhance CallCountVisitor to use VariableRegistry with tests
 
 **Files to modify:**
 - `src/annotation_prioritizer/ast_visitors/call_counter.py` - Add variable resolution
+- `tests/unit/test_call_counter.py` - Add tests for variable resolution
 
-**Changes to make:**
+**Implementation changes:**
 
 1. Update imports to include variable tracking:
 ```python
@@ -466,12 +481,7 @@ def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
     # ... rest of existing logic for class method calls ...
 ```
 
-### Commit 6: Update count_function_calls to perform two-pass analysis
-
-**Files to modify:**
-- `src/annotation_prioritizer/ast_visitors/call_counter.py` - Implement two-pass approach
-
-**Update the main function:**
+5. Update count_function_calls to perform two-pass analysis:
 ```python
 def count_function_calls(
     file_path: str, known_functions: tuple[FunctionInfo, ...]
@@ -512,35 +522,7 @@ def count_function_calls(
     return (resolved, visitor.get_unresolvable_calls())
 ```
 
-### Commit 7: Add comprehensive unit tests for variable tracking
-
-**Files to create:**
-- `tests/unit/test_variable_registry.py` - Test data models and utility functions
-- `tests/unit/test_variable_discovery.py` - Test the tracker visitor
-
-**Test coverage needed:**
-
-For `test_variable_registry.py`:
-- Test `build_variable_key` with various scope depths
-- Test variable tracking for both new and reassignment
-- Test `lookup_variable` with parent scope resolution
-
-For `test_variable_discovery.py`:
-- Test direct instantiation: `calc = Calculator()`
-- Test parameter annotations: `def foo(calc: Calculator)`
-- Test variable annotations: `calc: Calculator = ...`
-- Test reassignment tracking
-- Test scope isolation (same name in different scopes)
-- Test nested function parent scope access
-- Test module-level variable tracking
-- Test class references vs instances
-
-### Commit 8: Add unit tests for enhanced CallCountVisitor
-
-**Files to modify:**
-- `tests/unit/test_call_counter.py` - Add variable resolution tests
-
-**New test cases:**
+**Test coverage for this commit (tests/unit/test_call_counter.py):**
 ```python
 def test_count_instance_method_calls_via_variables() -> None:
     """Test that instance method calls through variables are counted."""
@@ -607,7 +589,7 @@ def outer():
     # Assert inner function's use of calc.add() is counted
 ```
 
-### Commit 9: Add integration tests for end-to-end variable tracking
+### Commit 5: Add integration tests for end-to-end variable tracking
 
 **Files to modify:**
 - `tests/integration/test_end_to_end.py` - Add variable tracking scenarios
@@ -619,7 +601,7 @@ def outer():
 - Verify that the call counts match expectations
 - Ensure unresolvable calls are reduced
 
-### Commit 10: Update project documentation
+### Commit 6: Update project documentation
 
 **Files to modify:**
 - `docs/project_status.md` - Mark variable tracking as complete
@@ -667,18 +649,18 @@ These limitations are acceptable for an MVP. The infrastructure built here provi
 
 ## Testing Strategy
 
-Each commit should include its associated tests to ensure atomic, working commits:
-- Commit 0: Extract shared utility and ensure all tests pass
-- Commit 1: Reorganize files and update all imports
-- Commit 2: Basic model and utility function tests
-- Commits 3-4: Variable discovery tests
-- Commits 5-6: Enhanced call counter tests
-- Commits 7-9: Comprehensive test coverage
-- Commit 10: Documentation only
+Each commit includes both implementation and tests to maintain 100% coverage:
+- Commit 0: Extract shared utility (refactoring, existing tests should pass)
+- Commit 1: Reorganize files (refactoring, update imports in existing tests)
+- Commit 2: Variable registry models WITH unit tests
+- Commit 3: Variable discovery visitor WITH comprehensive tests
+- Commit 4: Enhanced call counter WITH tests for new functionality
+- Commit 5: Integration tests for complete flow
+- Commit 6: Documentation only
 
-Run the test suite after each commit to ensure nothing breaks:
+Run pre-commit hooks after each commit to ensure compliance:
 ```bash
-pytest
+pytest --cov=src --cov-report=term-missing --cov-fail-under=100
 ruff check --fix
 ruff format
 pyright

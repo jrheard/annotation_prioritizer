@@ -1,5 +1,9 @@
 Write a detailed implementation plan to a markdown file in plans/pending/ (descriptive-name-YYYY-MM-DD.md). Include:
-- Full implementation steps (broken down into individual small-to-medium-sized commits) with context
+- Full implementation steps (broken down into individual small-to-medium-sized atomic commits) with context
+  - **IMPORTANT**: This project enforces 100% test coverage
+  - Each commit must include both implementation AND tests (except for pure refactoring)
+  - Each commit must maintain 100% test coverage and pass all pre-commit hooks
+  - After each commit, the codebase must be in a working state
 - Recommended file structures
 - Example code snippets where helpful
 - Any assumptions or dependencies
