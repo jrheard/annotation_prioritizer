@@ -888,9 +888,12 @@ TODO pick up scope-tracking doc
 
 TODO we sure say that we do a "two-pass analysis" a bunch of times. tbh i think we do like four passes. which is fine but we should be more clear in docs
 
-TODO in visit_FunctionDef is `node.args.args` sufficient? if not, get failing test written
-    TODO can we get a utility function for this? returns an iterable of (name, type)?
+DONE in visit_FunctionDef is `node.args.args` sufficient?
+    no
+    DONE can we get a utility function for this? returns an iterable of (name, type)?
     i could swear that we need to iterate over .args and friends in multiple places - eg functionparser?
+
+    DONE write a test that would have failed if we had only done `node.args.args`
 
 TODO isn't there a ruff rule that prohibits bare `# pyright: ignore` comments with no associated error code? doesn't seem enabled?
 

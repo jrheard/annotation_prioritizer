@@ -37,6 +37,7 @@ import ast
 from pathlib import Path
 from typing import override
 
+from annotation_prioritizer.ast_arguments import ArgumentKind, iter_all_arguments
 from annotation_prioritizer.models import (
     FunctionInfo,
     ParameterInfo,
@@ -51,11 +52,6 @@ from annotation_prioritizer.scope_tracker import ScopeStack, add_scope, create_i
 def _extract_parameters(args: ast.arguments) -> tuple[ParameterInfo, ...]:
     """Extract comprehensive parameter information from a function's arguments.
 
-    Processes all parameter types supported by Python: regular positional arguments,
-    positional-only arguments (Python 3.8+), keyword-only arguments, *args, and
-    **kwargs. For each parameter, captures its name and whether it has a type
-    annotation, plus special flags for variadic parameters.
-
     Args:
         args: AST arguments node containing all parameter information from a
               function definition.
@@ -67,64 +63,13 @@ def _extract_parameters(args: ast.arguments) -> tuple[ParameterInfo, ...]:
     """
     parameters: list[ParameterInfo] = []
 
-    # Regular positional arguments
-    parameters.extend(
-        [
-            ParameterInfo(
-                name=arg.arg,
-                has_annotation=arg.annotation is not None,
-                is_variadic=False,
-                is_keyword=False,
-            )
-            for arg in args.args
-        ]
-    )
-
-    # Positional-only arguments (Python 3.8+)
-    parameters.extend(
-        [
-            ParameterInfo(
-                name=arg.arg,
-                has_annotation=arg.annotation is not None,
-                is_variadic=False,
-                is_keyword=False,
-            )
-            for arg in args.posonlyargs
-        ]
-    )
-
-    # Keyword-only arguments
-    parameters.extend(
-        [
-            ParameterInfo(
-                name=arg.arg,
-                has_annotation=arg.annotation is not None,
-                is_variadic=False,
-                is_keyword=False,
-            )
-            for arg in args.kwonlyargs
-        ]
-    )
-
-    # *args parameter
-    if args.vararg is not None:
+    for arg, kind in iter_all_arguments(args):
         parameters.append(
             ParameterInfo(
-                name=args.vararg.arg,
-                has_annotation=args.vararg.annotation is not None,
-                is_variadic=True,
-                is_keyword=False,
-            )
-        )
-
-    # **kwargs parameter
-    if args.kwarg is not None:
-        parameters.append(
-            ParameterInfo(
-                name=args.kwarg.arg,
-                has_annotation=args.kwarg.annotation is not None,
-                is_variadic=False,
-                is_keyword=True,
+                name=arg.arg,
+                has_annotation=arg.annotation is not None,
+                is_variadic=kind == ArgumentKind.VAR_POSITIONAL,
+                is_keyword=kind == ArgumentKind.VAR_KEYWORD,
             )
         )
 
