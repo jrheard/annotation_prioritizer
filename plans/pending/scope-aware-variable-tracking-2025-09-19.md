@@ -181,7 +181,7 @@ These data models and utilities maintain functional purity and immutability thro
 - All tests pass with 100% coverage maintained
 - Ruff formatting applied automatically
 
-### Commit 3: Create variable discovery AST visitor with comprehensive tests
+### Commit 3: Create variable discovery AST visitor with comprehensive tests ✅ COMPLETED
 
 **Files to create:**
 - `src/annotation_prioritizer/ast_visitors/variable_discovery.py` - AST visitor for variable discovery
@@ -415,6 +415,25 @@ def build_variable_registry(tree: ast.AST, class_registry: ClassRegistry) -> Var
 - Test module-level variable tracking
 - Test class references vs instances
 - Test the `build_variable_registry` orchestration function
+
+**Completion notes:**
+- Successfully created VariableDiscoveryVisitor AST visitor that tracks variables from:
+  - Direct instantiation: `calc = Calculator()`
+  - Parameter annotations: `def foo(calc: Calculator)`
+  - Variable annotations: `calc: Calculator = ...`
+- Implemented proper scope tracking for module, class, and function levels
+- Added comprehensive unit tests with 21 test cases covering:
+  - All main tracking patterns
+  - Scope isolation and shadowing
+  - Class references vs instances
+  - Edge cases and unsupported patterns
+- Fixed all linting issues:
+  - Used module logger instead of root logger
+  - Converted f-strings to lazy % formatting in logging
+  - Fixed async function visitor naming convention
+  - Made is_instance parameter keyword-only to avoid boolean positional argument
+- All tests pass with 100% coverage maintained
+- Ruff and pyright checks all pass
 
 ### Commit 4: Enhance CallCountVisitor to use VariableRegistry with tests
 
