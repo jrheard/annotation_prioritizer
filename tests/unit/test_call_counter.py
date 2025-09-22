@@ -1067,7 +1067,7 @@ def use_calculator():
 def test_variable_reassignment_uses_final_type() -> None:
     """Test that reassigned variables use their final type for all calls.
 
-    Note: This is a limitation of the two-pass approach - the variable registry
+    Note: This is a limitation of the two-stage approach - the variable registry
     only tracks the final assignment, so all calls use that type.
     """
     code = """

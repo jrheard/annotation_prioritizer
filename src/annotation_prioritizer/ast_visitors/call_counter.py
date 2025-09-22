@@ -12,7 +12,7 @@ Key Design Decisions:
     - Conservative attribution: Only count calls we're confident about
     - Qualified name matching: Uses full qualified names (e.g., "__module__.Calculator.add")
       to distinguish methods from module-level functions
-    - Two-pass analysis: First pass discovers variable types, second counts calls
+    - Two-stage analysis: Stage 1 builds registries (classes, variables), Stage 2 counts calls
 
 Relationship to Other Modules:
     - function_parser.py: Provides the FunctionInfo definitions to count calls for
@@ -60,10 +60,10 @@ MAX_UNRESOLVABLE_CALL_LENGTH = 200
 def count_function_calls(
     file_path: str, known_functions: tuple[FunctionInfo, ...]
 ) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
-    """Count calls to known functions using two-pass analysis.
+    """Count calls to known functions using two-stage analysis.
 
-    First pass: Build variable registry for type discovery
-    Second pass: Count function calls using type information
+    Stage 1: Build registries (class discovery then variable discovery)
+    Stage 2: Count function calls using type information
 
     Parses the Python source file and identifies calls to functions from the
     known_functions list. Handles direct function calls, method calls on self,
@@ -88,11 +88,11 @@ def count_function_calls(
     except (OSError, SyntaxError):
         return ((), ())
 
-    # First pass: Build registries
+    # Stage 1: Build registries
     class_registry = build_class_registry(tree)
     variable_registry = build_variable_registry(tree, class_registry)
 
-    # Second pass: Count calls with type information
+    # Stage 2: Count calls with type information
     visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
     visitor.visit(tree)
 

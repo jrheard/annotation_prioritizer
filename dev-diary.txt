@@ -886,8 +886,8 @@ also someday i'll definitely have to make this be a list that gets mutated in-pl
 
 TODO pick up scope-tracking doc
 
-TODO we sure say that we do a "two-pass analysis" a bunch of times. tbh i think we do like four passes. which is fine but we should be more clear in docs
-    TODO update count_function_calls() and variable_discovery.py to be more clear about this
+DONE we sure say that we do a "two-pass analysis" a bunch of times. tbh i think we do like four passes. which is fine but we should be more clear in docs
+    DONE update count_function_calls() and variable_discovery.py to be more clear about this
 
 DONE in visit_FunctionDef is `node.args.args` sufficient?
     no
