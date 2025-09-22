@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 class VariableDiscoveryVisitor(ast.NodeVisitor):
     """AST visitor that builds a registry of variable-to-type mappings.
 
-    First pass of the two-pass analysis. Discovers variables through:
+    Part of Stage 1 (discovery stage) of the two-stage analysis. Discovers variables through:
     1. Direct instantiation: calc = Calculator()
     2. Parameter annotations: def foo(calc: Calculator)
     3. Variable annotations: calc: Calculator = ...
@@ -183,7 +183,7 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
 def build_variable_registry(tree: ast.AST, class_registry: ClassRegistry) -> VariableRegistry:
     """Build a registry of variable-to-type mappings from an AST.
 
-    This is the entry point for the first pass of the two-pass analysis.
+    This is the entry point for variable discovery (part of Stage 1).
 
     Args:
         tree: Parsed AST of the Python source
