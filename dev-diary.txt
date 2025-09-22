@@ -887,3 +887,11 @@ also someday i'll definitely have to make this be a list that gets mutated in-pl
 TODO pick up scope-tracking doc
 
 TODO we sure say that we do a "two-pass analysis" a bunch of times. tbh i think we do like four passes. which is fine but we should be more clear in docs
+
+TODO in visit_FunctionDef is `node.args.args` sufficient? if not, get failing test written
+    TODO can we get a utility function for this? returns an iterable of (name, type)?
+    i could swear that we need to iterate over .args and friends in multiple places - eg functionparser?
+
+TODO isn't there a ruff rule that prohibits bare `# pyright: ignore` comments with no associated error code? doesn't seem enabled?
+
+DONE update docstring to make it clear that you're supposed to call .get_registry() on the visitor after it visits
