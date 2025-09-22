@@ -13,6 +13,7 @@ from annotation_prioritizer.ast_visitors.call_counter import (
 )
 from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
 from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
+from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
 from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
@@ -114,10 +115,10 @@ def use_calculator():
         result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        # self.add() called twice in calculate method + once in use_calculator = 3 times
-        # But we can't track the external call to calc.add() because it's not self.add()
-        # So we should only count self.add() calls = 2 times
-        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 2
+        # self.add() called twice in calculate method = 2 times
+        # calc.add() in use_calculator resolves to Calculator.add() = 1 time
+        # Total: 3 times
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 3
         assert call_counts[make_qualified_name("__module__.Calculator.multiply")] == 1
 
 
@@ -319,9 +320,8 @@ def test_self_without_class():
         result, _ = count_function_calls(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        # The obj.method_in_class() call won't match our known function because
-        # it's not self.method_in_class(), so count should be 0
-        assert call_counts[make_qualified_name("__module__.MyClass.method_in_class")] == 0
+        # The obj.method_in_class() call resolves to MyClass.method_in_class through variable tracking
+        assert call_counts[make_qualified_name("__module__.MyClass.method_in_class")] == 1
         assert call_counts[make_qualified_name("__module__.standalone_method")] == 0
 
 
@@ -367,7 +367,8 @@ self.method()
     )
 
     class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor(known_functions, class_registry, edge_case_code)
+    variable_registry = build_variable_registry(ast.parse(edge_case_code), class_registry)
+    visitor = CallCountVisitor(known_functions, class_registry, edge_case_code, variable_registry)
 
     # Test by visiting the call - this should increment the count
     visitor.visit_Call(call_node)
@@ -415,7 +416,8 @@ outer.inner.method()
     )
 
     class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor(known_functions, class_registry, complex_call_code)
+    variable_registry = build_variable_registry(ast.parse(complex_call_code), class_registry)
+    visitor = CallCountVisitor(known_functions, class_registry, complex_call_code, variable_registry)
 
     # Test by visiting the call - unresolved references should not be counted
     visitor.visit_Call(call_node)
@@ -673,7 +675,8 @@ getattr(obj, 'method')()
 
     # Create a visitor with an empty class registry
     class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor((), class_registry, dynamic_call_code)
+    variable_registry = build_variable_registry(ast.parse(dynamic_call_code), class_registry)
+    visitor = CallCountVisitor((), class_registry, dynamic_call_code, variable_registry)
 
     # Test that resolve_call_name returns None for dynamic calls
     result = visitor._resolve_call_name(call_node)
@@ -691,7 +694,8 @@ class Outer:
     tree = ast.parse(source)
     class_registry = build_class_registry(tree)
 
-    visitor = CallCountVisitor((), class_registry, source)
+    variable_registry = build_variable_registry(tree, class_registry)
+    visitor = CallCountVisitor((), class_registry, source, variable_registry)
 
     # Try to resolve a compound name that doesn't exist
     result = visitor._resolve_class_name("NonExistent.Inner")
@@ -741,7 +745,8 @@ def my_function():
         ),
     )
 
-    visitor = CallCountVisitor(known_functions, class_registry, source)
+    variable_registry = build_variable_registry(tree, class_registry)
+    visitor = CallCountVisitor(known_functions, class_registry, source, variable_registry)
     visitor.visit(tree)
 
     assert visitor.call_counts[make_qualified_name("__module__.my_function.Outer.Inner.method")] == 1
@@ -981,8 +986,10 @@ def _create_visitor_and_visit_call(
     code: str, call_node: ast.Call
 ) -> tuple[CallCountVisitor, tuple[UnresolvableCall, ...]]:
     """Create a visitor and visit a call node, returning visitor and unresolvable calls."""
-    class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor((), class_registry, code)
+    tree = ast.parse(code)
+    class_registry = build_class_registry(tree)
+    variable_registry = build_variable_registry(tree, class_registry)
+    visitor = CallCountVisitor((), class_registry, code, variable_registry)
     visitor.visit_Call(call_node)
     return visitor, visitor.get_unresolvable_calls()
 
@@ -1010,8 +1017,10 @@ def test_unresolvable_call_when_source_segment_fails(return_value: str | None) -
     simple_code = "unknown_func()"
     call_node = _get_first_call_node(simple_code)
 
-    class_registry = build_class_registry(ast.parse(""))
-    visitor = CallCountVisitor((), class_registry, simple_code)
+    tree = ast.parse(simple_code)
+    class_registry = build_class_registry(tree)
+    variable_registry = build_variable_registry(tree, class_registry)
+    visitor = CallCountVisitor((), class_registry, simple_code, variable_registry)
 
     with patch.object(ast, "get_source_segment", return_value=return_value):
         visitor.visit_Call(call_node)
@@ -1019,3 +1028,164 @@ def test_unresolvable_call_when_source_segment_fails(return_value: str | None) -
 
         assert len(unresolvable_calls) == 1
         assert unresolvable_calls[0].call_text == "<unable to extract call text>"
+
+
+def test_count_instance_method_calls_via_variables() -> None:
+    """Test that instance method calls through variables are counted."""
+    code = """
+class Calculator:
+    def add(self, a, b):
+        return a + b
+
+def use_calculator():
+    calc = Calculator()
+    return calc.add(5, 6)  # Should be counted
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            make_function_info(
+                "add",
+                qualified_name=make_qualified_name("__module__.Calculator.add"),
+                parameters=(
+                    make_parameter("self"),
+                    make_parameter("a"),
+                    make_parameter("b"),
+                ),
+                line_number=3,
+                file_path=temp_path,
+            ),
+        )
+
+        result, _ = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # calc.add() should be counted once
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 1
+
+
+def test_variable_reassignment_uses_final_type() -> None:
+    """Test that reassigned variables use their final type for all calls.
+
+    Note: This is a limitation of the two-pass approach - the variable registry
+    only tracks the final assignment, so all calls use that type.
+    """
+    code = """
+class Calculator:
+    def add(self, a, b):
+        return a + b
+
+class Helper:
+    def add(self, x, y):
+        return x + y
+
+def test():
+    obj = Calculator()
+    obj.add(1, 2)  # Registry will have obj as Helper (final type)
+    obj = Helper()
+    obj.add(3, 4)  # Registry will have obj as Helper (final type)
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            make_function_info(
+                "add",
+                qualified_name=make_qualified_name("__module__.Calculator.add"),
+                parameters=(
+                    make_parameter("self"),
+                    make_parameter("a"),
+                    make_parameter("b"),
+                ),
+                line_number=3,
+                file_path=temp_path,
+            ),
+            make_function_info(
+                "add",
+                qualified_name=make_qualified_name("__module__.Helper.add"),
+                parameters=(
+                    make_parameter("self"),
+                    make_parameter("x"),
+                    make_parameter("y"),
+                ),
+                line_number=7,
+                file_path=temp_path,
+            ),
+        )
+
+        result, _ = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # Both obj.add() calls resolve to Helper.add (final type in registry)
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 0
+        assert call_counts[make_qualified_name("__module__.Helper.add")] == 2
+
+
+def test_parameter_type_annotations_enable_resolution() -> None:
+    """Test that parameter type annotations enable method resolution."""
+    code = """
+class Calculator:
+    def add(self, a, b):
+        return a + b
+
+def process(calc: Calculator):
+    return calc.add(10, 20)
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            make_function_info(
+                "add",
+                qualified_name=make_qualified_name("__module__.Calculator.add"),
+                parameters=(
+                    make_parameter("self"),
+                    make_parameter("a"),
+                    make_parameter("b"),
+                ),
+                line_number=3,
+                file_path=temp_path,
+            ),
+        )
+
+        result, _ = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # calc.add() should be counted
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 1
+
+
+def test_parent_scope_variable_access_in_nested_functions() -> None:
+    """Test that nested functions can access parent scope variables."""
+    code = """
+class Calculator:
+    def add(self, a, b):
+        return a + b
+
+def outer():
+    calc = Calculator()
+
+    def inner():
+        return calc.add(1, 2)  # Should be counted
+
+    return inner()
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            make_function_info(
+                "add",
+                qualified_name=make_qualified_name("__module__.Calculator.add"),
+                parameters=(
+                    make_parameter("self"),
+                    make_parameter("a"),
+                    make_parameter("b"),
+                ),
+                line_number=3,
+                file_path=temp_path,
+            ),
+        )
+
+        result, _ = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # Inner function's use of calc.add() should be counted
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 1

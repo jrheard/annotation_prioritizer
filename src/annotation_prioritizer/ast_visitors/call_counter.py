@@ -12,17 +12,19 @@ Key Design Decisions:
     - Conservative attribution: Only count calls we're confident about
     - Qualified name matching: Uses full qualified names (e.g., "__module__.Calculator.add")
       to distinguish methods from module-level functions
+    - Two-pass analysis: First pass discovers variable types, second counts calls
 
 Relationship to Other Modules:
     - function_parser.py: Provides the FunctionInfo definitions to count calls for
     - analyzer.py: Combines call counts with function definitions for prioritization
     - models.py: Defines CallCount data structure
+    - variable_discovery.py: Builds variable-to-type mappings for resolution
+    - variable_registry.py: Provides utilities for variable type lookup
 
 Limitations:
     - Intentional: No support for star imports (from module import *)
     - Intentional: No support for dynamic method calls (getattr, exec, etc.)
     - Not Yet Implemented: Cross-module call tracking (import resolution)
-    - Not Yet Implemented: Instance method calls via variables (e.g., calc.add())
     - Not Yet Implemented: Inheritance resolution for method calls
 """
 
@@ -31,6 +33,7 @@ from pathlib import Path
 from typing import override
 
 from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry, build_class_registry
+from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
 from annotation_prioritizer.models import (
     CallCount,
     FunctionInfo,
@@ -48,6 +51,7 @@ from annotation_prioritizer.scope_tracker import (
     extract_attribute_chain,
     resolve_name_in_scope,
 )
+from annotation_prioritizer.variable_registry import VariableRegistry, lookup_variable
 
 # Maximum length for unresolvable call text before truncation
 MAX_UNRESOLVABLE_CALL_LENGTH = 200
@@ -56,11 +60,14 @@ MAX_UNRESOLVABLE_CALL_LENGTH = 200
 def count_function_calls(
     file_path: str, known_functions: tuple[FunctionInfo, ...]
 ) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
-    """Count calls to known functions within the same file using AST parsing.
+    """Count calls to known functions using two-pass analysis.
+
+    First pass: Build variable registry for type discovery
+    Second pass: Count function calls using type information
 
     Parses the Python source file and identifies calls to functions from the
     known_functions list. Handles direct function calls, method calls on self,
-    and class method calls. Also tracks calls that cannot be resolved statically.
+    class method calls, and instance method calls via variables.
 
     Args:
         file_path: Path to the Python source file to analyze
@@ -81,8 +88,12 @@ def count_function_calls(
     except (OSError, SyntaxError):
         return ((), ())
 
+    # First pass: Build registries
     class_registry = build_class_registry(tree)
-    visitor = CallCountVisitor(known_functions, class_registry, source_code)
+    variable_registry = build_variable_registry(tree, class_registry)
+
+    # Second pass: Count calls with type information
+    visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
     visitor.visit(tree)
 
     resolved = tuple(
@@ -130,13 +141,15 @@ class CallCountVisitor(ast.NodeVisitor):
         known_functions: tuple[FunctionInfo, ...],
         class_registry: ClassRegistry,
         source_code: str,
+        variable_registry: VariableRegistry,
     ) -> None:
-        """Initialize visitor with functions to track and class registry.
+        """Initialize visitor with functions to track and registries.
 
         Args:
             known_functions: Functions to count calls for
             class_registry: Registry of known classes for definitive identification
             source_code: Source code for extracting unresolvable call text
+            variable_registry: Registry of variable types for resolution
         """
         super().__init__()
         # Create internal call count tracking from known functions
@@ -144,6 +157,7 @@ class CallCountVisitor(ast.NodeVisitor):
         self._class_registry = class_registry
         self._scope_stack = create_initial_stack()
         self._source_code = source_code
+        self._variable_registry = variable_registry
         self._unresolvable_calls: list[UnresolvableCall] = []
 
     @override
@@ -263,7 +277,8 @@ class CallCountVisitor(ast.NodeVisitor):
     def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
         """Resolve qualified name from a method call (attribute access).
 
-        Handles self.method(), ClassName.method(), and Outer.Inner.method() calls.
+        Handles self.method(), ClassName.method(), variable.method(), and
+        Outer.Inner.method() calls.
 
         Args:
             func: The ast.Attribute node representing the method call
@@ -284,6 +299,19 @@ class CallCountVisitor(ast.NodeVisitor):
                 self._scope_stack, func.attr, exclude_kinds=frozenset({ScopeKind.FUNCTION})
             )
 
+        # Check if it's a call on a variable (calc.add())
+        if isinstance(func.value, ast.Name):
+            variable_name = func.value.id
+
+            # Skip self/cls (already handled above)
+            if variable_name not in ("self", "cls"):
+                # Look up the variable's type
+                variable_type = lookup_variable(self._variable_registry, self._scope_stack, variable_name)
+
+                if variable_type and variable_type.is_instance:
+                    # Build the qualified method name
+                    return make_qualified_name(f"{variable_type.class_name}.{func.attr}")
+
         # All other class method calls: extract class name and resolve
         class_name = self._extract_class_name_from_value(func.value)
         if not class_name:
@@ -296,9 +324,6 @@ class CallCountVisitor(ast.NodeVisitor):
             return make_qualified_name(f"{resolved_class}.{func.attr}")
 
         # Class name couldn't be resolved in any scope or registry
-        # TODO: Instance method calls (calc = Calculator(); calc.add()) require
-        # variable tracking to associate variables with their class types.
-        # This is planned as a separate feature (commits 4-5 in the original plan).
         return None
 
     def _resolve_function_call(self, function_name: str) -> QualifiedName | None:
