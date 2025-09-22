@@ -5,3 +5,25 @@
 - No pytest fixtures: Prefer normal helper functions over pytest fixtures for test setup
 - Test structure: Tests should be bare functions, not methods in test classes. Don't use wrapper classes like `TestSomething` - pytest doesn't need them
 - Use `@pytest.mark.parametrize` to test multiple scenarios efficiently instead of writing repetitive test functions
+
+## Writing Timeless Test Comments
+
+Test comments should describe the current behavior without referencing historical changes or implementation evolution. Future maintainers don't need to know what used to work differently - they need to understand what the code does now.
+
+**Bad examples (avoid these):**
+```python
+# This is now tracked with variable resolution
+# This used to fail but now works
+# After the refactor, this is supported
+# With the new implementation, this resolves correctly
+```
+
+**Good examples (use these instead):**
+```python
+# calc.add() resolves to Calculator.add through variable tracking
+# Instance method calls are tracked when variables have known types
+# Variable reassignment uses the final type for all references
+# Parameter type annotations enable method resolution
+```
+
+The test comments should explain **what** the test verifies and **how** the functionality works, not the history of **when** or **why** it changed.

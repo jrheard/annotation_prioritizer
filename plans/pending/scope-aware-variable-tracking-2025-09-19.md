@@ -435,7 +435,7 @@ def build_variable_registry(tree: ast.AST, class_registry: ClassRegistry) -> Var
 - All tests pass with 100% coverage maintained
 - Ruff and pyright checks all pass
 
-### Commit 4: Enhance CallCountVisitor to use VariableRegistry with tests
+### Commit 4: Enhance CallCountVisitor to use VariableRegistry with tests ✅ COMPLETED
 
 **Files to modify:**
 - `src/annotation_prioritizer/ast_visitors/call_counter.py` - Add variable resolution
@@ -614,6 +614,20 @@ def outer():
 """
     # Assert inner function's use of calc.add() is counted
 ```
+
+**Completion notes:**
+- Successfully enhanced CallCountVisitor to use the VariableRegistry for resolving instance method calls
+- Added variable_registry parameter to CallCountVisitor.__init__
+- Modified _resolve_method_call to handle variable method calls by looking up variables in the registry
+- Updated count_function_calls to perform two-pass analysis (first build registries, then count calls)
+- Added comprehensive tests for variable resolution including:
+  - Basic instance method calls via variables
+  - Parameter type annotation resolution
+  - Parent scope variable access in nested functions
+  - Variable reassignment behavior (uses final type for all calls due to two-pass limitation)
+- Fixed existing tests that expected instance method calls not to be tracked
+- All tests pass with 100% coverage maintained
+- Ruff formatting and pyright type checking pass
 
 ### Commit 5: Add integration tests for end-to-end variable tracking
 

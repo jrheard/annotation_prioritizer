@@ -166,8 +166,8 @@ def use_local():
         assert call_counts.get(make_qualified_name("__module__.use_local"), 0) == 0
 
 
-def test_instance_method_calls_not_tracked() -> None:
-    """Test that instance method calls via variables are not tracked yet."""
+def test_instance_method_calls_tracked() -> None:
+    """Test that instance method calls via variables are tracked."""
     code = """
 class Calculator:
     def add(self, a, b):
@@ -178,10 +178,10 @@ class Calculator:
 
 def main():
     calc = Calculator()  # Instance creation
-    result1 = calc.add(5, 7)  # Instance method call - NOT tracked
-    result2 = calc.multiply(3, 4)  # Instance method call - NOT tracked
+    result1 = calc.add(5, 7)  # Instance method call
+    result2 = calc.multiply(3, 4)  # Instance method call
 
-    # Class method calls - SHOULD be tracked
+    # Class method calls
     result3 = Calculator.add(None, 1, 2)
     result4 = Calculator.multiply(None, 3, 4)
 
@@ -194,9 +194,11 @@ def main():
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
 
-        # Only direct class method calls should be counted
-        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 1
-        assert call_counts[make_qualified_name("__module__.Calculator.multiply")] == 1
+        # Both instance and direct class method calls should be counted
+        # calc.add() + Calculator.add() = 2
+        assert call_counts[make_qualified_name("__module__.Calculator.add")] == 2
+        # calc.multiply() + Calculator.multiply() = 2
+        assert call_counts[make_qualified_name("__module__.Calculator.multiply")] == 2
 
 
 def test_forward_reference_class() -> None:

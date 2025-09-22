@@ -23,10 +23,11 @@ def main():
     # Resolvable calls
     utility_function("hello")  # Direct function call - resolvable
 
-    # Unresolvable calls
+    # Resolvable calls
     processor = DataProcessor()
-    processor.process_data("test")  # Instance method - unresolvable
+    processor.process_data("test")  # Instance method - resolvable
 
+    # Unresolvable calls
     getattr(processor, 'process_data')("dynamic")  # getattr - unresolvable
 
     handlers = {'process': processor.process_data}
@@ -43,10 +44,14 @@ def main():
         # Check that we have functions
         assert len(result.priorities) == 3  # DataProcessor.process_data, utility_function, main
 
-        # Check call counts (only the direct call to utility_function is resolvable)
+        # Check call counts
         priorities_by_name = {p.function_info.qualified_name: p for p in result.priorities}
         utility = priorities_by_name[make_qualified_name("__module__.utility_function")]
-        assert utility.call_count == 1  # Only the direct call is counted
+        assert utility.call_count == 1  # Direct call is counted
+
+        # processor.process_data is resolvable
+        processor_method = priorities_by_name[make_qualified_name("__module__.DataProcessor.process_data")]
+        assert processor_method.call_count == 1  # Instance method call is tracked
 
         # Check unresolvable calls
         assert len(result.unresolvable_calls) > 0
@@ -55,7 +60,6 @@ def main():
         call_texts = [call.call_text for call in result.unresolvable_calls]
 
         # We should have captured different kinds of unresolvable calls
-        assert any("processor.process_data" in text for text in call_texts)  # Instance method
         assert any("getattr" in text for text in call_texts)  # getattr call
         assert any("handlers" in text for text in call_texts)  # Subscript call
         assert any("eval" in text for text in call_texts)  # eval call
