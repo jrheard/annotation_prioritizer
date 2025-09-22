@@ -487,3 +487,52 @@ obj = unknown_name  # Should not be tracked
 
     # Non-class assignments should not be tracked
     assert len(registry.variables) == 0
+
+
+def test_all_parameter_types_tracked() -> None:
+    """Test that all Python parameter types are tracked correctly."""
+    code = """
+class A:
+    pass
+
+class B:
+    pass
+
+class C:
+    pass
+
+def process_all_types(
+    pos_only: A, /, regular: B, *args: C, keyword_only: A, **kwargs: B
+):
+    pass
+"""
+    tree = ast.parse(code)
+    class_registry = build_class_registry(tree)
+    visitor = VariableDiscoveryVisitor(class_registry)
+    visitor.visit(tree)
+    registry = visitor.get_registry()
+
+    # Verify all parameter types are tracked
+    prefix = "__module__.process_all_types."
+    assert registry.variables.get(make_qualified_name(f"{prefix}pos_only")) is not None
+    assert registry.variables.get(make_qualified_name(f"{prefix}regular")) is not None
+    assert registry.variables.get(make_qualified_name(f"{prefix}args")) is not None
+    assert registry.variables.get(make_qualified_name(f"{prefix}keyword_only")) is not None
+    assert registry.variables.get(make_qualified_name(f"{prefix}kwargs")) is not None
+
+    # Verify correct class names are tracked
+    assert registry.variables[make_qualified_name(f"{prefix}pos_only")].class_name == make_qualified_name(
+        "__module__.A"
+    )
+    assert registry.variables[make_qualified_name(f"{prefix}regular")].class_name == make_qualified_name(
+        "__module__.B"
+    )
+    assert registry.variables[make_qualified_name(f"{prefix}args")].class_name == make_qualified_name(
+        "__module__.C"
+    )
+    assert registry.variables[make_qualified_name(f"{prefix}keyword_only")].class_name == make_qualified_name(
+        "__module__.A"
+    )
+    assert registry.variables[make_qualified_name(f"{prefix}kwargs")].class_name == make_qualified_name(
+        "__module__.B"
+    )

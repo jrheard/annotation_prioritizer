@@ -4,6 +4,7 @@ import ast
 import logging
 from typing import override
 
+from annotation_prioritizer.ast_arguments import iter_all_arguments
 from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
 from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind
 from annotation_prioritizer.scope_tracker import (
@@ -60,8 +61,8 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
         """Track function scope and parameter annotations."""
         self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
 
-        # Process parameter annotations
-        for arg in node.args.args:
+        # Process all parameter annotations (including kwargs, *args, etc.)
+        for arg, _ in iter_all_arguments(node.args):
             if arg.annotation:
                 self._process_annotation(arg.arg, arg.annotation)
 
