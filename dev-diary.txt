@@ -925,4 +925,4 @@ having claude add some hooks
 
 oh fun - note that hooks don't get run for subagents
 
-TODO anything else in claude.md that should be moved to hooks?
+DONE anything else in claude.md that should be moved to hooks?

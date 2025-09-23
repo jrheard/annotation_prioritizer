@@ -1,6 +1,6 @@
 # Project Overview
 
-This is a Python type annotation priority analyzer that identifies high-impact functions needing type annotations. The project uses modern Python tooling with uv for dependency management.
+This is a Python type annotation priority analyzer that identifies high-impact functions needing type annotations. Uses uv for dependency management.
 
 # Development Environment
 
@@ -16,13 +16,13 @@ This project runs in a VS Code dev container with restricted network access. Onl
 annotation-prioritizer filename.py
 
 # Testing
-pytest                     # Run all tests
+pytest
 pytest tests/unit/         # Run unit tests only
 pytest tests/integration/  # Run integration tests only
-pytest --cov=src --cov-report=term-missing --cov-fail-under=100  # Run tests with 100% coverage enforcement
+pytest --cov=src --cov-report=term-missing --cov-fail-under=100
 
 # Type Checking
-pyright                    # Run type checker (strict mode enabled)
+pyright
 
 # Linting and Formatting
 ruff check --fix           # Lint and auto-fix issues
@@ -33,7 +33,7 @@ pre-commit run --all-files # Run all hooks manually
 ```
 
 When you encounter Python linting issues, run `ruff check --fix` and `ruff format` first before trying to fix those issues yourself.
-If pre-commit fails with multiple pyright errors or test failures, immediately use the python-lint-fixer subagent instead of fixing manually.
+If you encounter many pyright errors or test failures, immediately use the python-lint-fixer subagent instead of fixing manually.
 When fixing linting/formatting issues while satisfying pre-commit, ALWAYS `git add` the fixed files before attempting to commit again.
 
 # Architecture
@@ -41,13 +41,12 @@ When fixing linting/formatting issues while satisfying pre-commit, ALWAYS `git a
 - Entry point: `src/annotation_prioritizer/cli.py:main` - Simple CLI using Rich console
 - Package structure: Standard src-layout with `src/annotation_prioritizer/`
 - Testing: pytest with unit and integration test separation
-- Dependencies: Minimal runtime dependencies (only Rich), comprehensive dev dependencies
 
 # Configuration
 
-- Python version: 3.13+ (specified in pyproject.toml and pyrightconfig.json)
-- Type checking: Strict mode enabled for pyright
-- Linting: Ruff with ALL rules enabled, no current ignores
+- Python version: 3.13+
+- Type checking: Pyright on strict mode + extra rules
+- Linting: Ruff with ALL rules enabled, some ignores
 - Coverage: 100% coverage requirement
 - Pre-commit hooks: ruff (lint + format)
 
@@ -55,26 +54,26 @@ When fixing linting/formatting issues while satisfying pre-commit, ALWAYS `git a
 
 This project follows functional programming principles:
 
-- Pure functions: Write pure functions wherever possible - functions that don't have side effects and return the same output for the same input
-- Frozen dataclasses: Always use `@dataclass(frozen=True)` for structured data. Never use namedtuples or regular classes for data
-- Enums: Enums are great. Literal["foo", "bar", "baz"] is OK too in the simplest cases, otherwise prefer enums.
+- Write pure functions wherever possible.
+- Always use `@dataclass(frozen=True)` for structured data. Never use namedtuples or regular classes for data
+- Prefer enums when representing closed sets of known values. Literal["foo", "bar", "baz"] is OK too in the simplest cases.
 - Immutability: Where possible, functions/methods/classes should take tuples, frozensets, etc. as input rather than lists, sets, etc.
-- No inheritance: Avoid inheritance unless absolutely necessary (e.g., when integrating with libraries like Python's AST module). Use bare functions instead
-- Code reuse: Look for existing implementations before writing new code. Extract and reuse nontrivial logic (>10 lines or complex business rules) rather than duplicating it
-- Always use absolute imports. Never use relative imports.
+- Avoid inheritance unless absolutely necessary (e.g., when integrating with libraries like Python's AST module). Use bare functions instead
+- Look for existing implementations before writing new code. Extract and reuse nontrivial logic (>10 lines or complex business rules) rather than duplicating it
+- Always use absolute imports.
 
 # Documentation Updates
 
 - Keep project_status.md updated: When adding, removing, or changing features, always update `docs/project_status.md` to reflect the current state. This document serves as the authoritative source of truth for what functionality is implemented, planned, or out of scope.
 - When completing tasks from a plan document in `plans/`, update that plan to mark completed tasks and record any implementation changes or discoveries.
-- Always include changes to `dev-diary.txt` in commits (user edits this file during work)
+- Always add `dev-diary.txt` when making commits (user edits this file during work)
 
 # Commit Messages
 
 Use conventional commits format with precise types:
-- `feat:` - New user-facing functionality only (core app features)
+- `feat:` - New user-facing functionality only
 - `fix:` - Bug fixes
-- `docs:` - Documentation changes (docstrings, comments, README, planning docs, Claude-related markdown files, etc.)
+- `docs:` - Documentation changes (docstrings, comments, markdown files, etc)
 - `refactor:` - Code restructuring without behavior changes
 - `test:` - Test changes
 - `chore:` - Tooling, dependencies, build config, CI/CD
