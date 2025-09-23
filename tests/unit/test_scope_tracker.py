@@ -8,19 +8,15 @@ import ast
 
 import pytest
 
-from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
+from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import (
+    _generate_name_candidates,  # pyright: ignore[reportPrivateUsage]
     add_scope,
     build_qualified_name,
     create_initial_stack,
     drop_last_scope,
     extract_attribute_chain,
-    find_first_match,
-    generate_name_candidates,
-    get_containing_class,
-    get_current_scope,
-    in_class,
-    in_function,
+    resolve_name_in_scope,
 )
 
 
@@ -39,23 +35,23 @@ def test_add_drop_scope() -> None:
     class_scope = Scope(kind=ScopeKind.CLASS, name="MyClass")
     stack = add_scope(stack, class_scope)
     assert len(stack) == 2
-    assert get_current_scope(stack) == class_scope
+    assert stack[-1] == class_scope
 
     # Push a function scope
     func_scope = Scope(kind=ScopeKind.FUNCTION, name="my_method")
     stack = add_scope(stack, func_scope)
     assert len(stack) == 3
-    assert get_current_scope(stack) == func_scope
+    assert stack[-1] == func_scope
 
     # Pop function scope
     stack = drop_last_scope(stack)
     assert len(stack) == 2
-    assert get_current_scope(stack) == class_scope
+    assert stack[-1] == class_scope
 
     # Pop class scope
     stack = drop_last_scope(stack)
     assert len(stack) == 1
-    assert get_current_scope(stack) == Scope(kind=ScopeKind.MODULE, name="__module__")
+    assert stack[-1] == Scope(kind=ScopeKind.MODULE, name="__module__")
 
 
 def test_cannot_drop_module_scope() -> None:
@@ -76,96 +72,6 @@ def test_stack_is_immutable() -> None:
     assert len(new_stack) == 2
 
 
-def test_get_containing_class_no_class() -> None:
-    """Test get_containing_class when not inside any class."""
-    stack = create_initial_stack()
-    # Just module scope
-    assert get_containing_class(stack) is None
-
-    # Module + function scope
-    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="standalone_func"))
-    assert get_containing_class(stack) is None
-
-
-def test_get_containing_class_single_class() -> None:
-    """Test get_containing_class with a single class in the stack."""
-    stack = create_initial_stack()
-    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="MyClass"))
-    assert get_containing_class(stack) == "__module__.MyClass"
-
-    # Add a function inside the class
-    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="method"))
-    assert get_containing_class(stack) == "__module__.MyClass"
-
-
-def test_get_containing_class_nested_classes() -> None:
-    """Test get_containing_class with nested classes."""
-    stack = create_initial_stack()
-    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="Outer"))
-    assert get_containing_class(stack) == "__module__.Outer"
-
-    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="Inner"))
-    assert get_containing_class(stack) == "__module__.Outer.Inner"
-
-    # Add a method in the inner class
-    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="inner_method"))
-    assert get_containing_class(stack) == "__module__.Outer.Inner"
-
-
-def test_get_containing_class_function_then_class() -> None:
-    """Test get_containing_class when class is defined inside a function."""
-    stack = create_initial_stack()
-    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="factory"))
-    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="LocalClass"))
-    assert get_containing_class(stack) == "__module__.factory.LocalClass"
-
-
-def test_in_class() -> None:
-    """Test in_class function for checking if inside a class."""
-    stack = create_initial_stack()
-    # Initially not in class
-    assert in_class(stack) is False
-
-    # Add a class
-    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="MyClass"))
-    assert in_class(stack) is True
-
-    # Add a function inside the class
-    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="method"))
-    assert in_class(stack) is True
-
-    # Pop the function, still in class
-    stack = drop_last_scope(stack)
-    assert in_class(stack) is True
-
-    # Pop the class, no longer in class
-    stack = drop_last_scope(stack)
-    assert in_class(stack) is False
-
-
-def test_in_function() -> None:
-    """Test in_function function for checking if inside a function."""
-    stack = create_initial_stack()
-    # Initially not in function
-    assert in_function(stack) is False
-
-    # Add a function
-    stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="my_func"))
-    assert in_function(stack) is True
-
-    # Add a class inside the function
-    stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="LocalClass"))
-    assert in_function(stack) is True
-
-    # Pop the class, still in function
-    stack = drop_last_scope(stack)
-    assert in_function(stack) is True
-
-    # Pop the function, no longer in function
-    stack = drop_last_scope(stack)
-    assert in_function(stack) is False
-
-
 def test_complex_nesting() -> None:
     """Test complex nesting scenarios with all scope types."""
     stack = create_initial_stack()
@@ -176,11 +82,13 @@ def test_complex_nesting() -> None:
     stack = add_scope(stack, Scope(kind=ScopeKind.CLASS, name="LocalClass"))
     stack = add_scope(stack, Scope(kind=ScopeKind.FUNCTION, name="local_method"))
 
-    # Check state
-    assert in_class(stack) is True
-    assert in_function(stack) is True
-    assert get_containing_class(stack) == "__module__.OuterClass.outer_method.LocalClass"
+    # Check that the stack has all expected scopes
     assert len(stack) == 5
+    assert stack[0].name == "__module__"
+    assert stack[1].name == "OuterClass"
+    assert stack[2].name == "outer_method"
+    assert stack[3].name == "LocalClass"
+    assert stack[4].name == "local_method"
 
 
 @pytest.mark.parametrize(
@@ -230,7 +138,7 @@ def test_generate_name_candidates(
     scope_stack: tuple[Scope, ...], name: str, expected: tuple[str, ...]
 ) -> None:
     """Test generation of qualified name candidates from scope stack."""
-    result = generate_name_candidates(scope_stack, name)
+    result = _generate_name_candidates(scope_stack, name)
     assert result == expected
 
 
@@ -267,50 +175,39 @@ def test_build_qualified_name_exclude_classes() -> None:
     assert result == "__module__.compute.helper"
 
 
-def test_find_first_match_found() -> None:
-    """Test find_first_match when a match is found."""
-    candidates = (
-        make_qualified_name("__module__.Outer.Inner.method"),
-        make_qualified_name("__module__.Outer.method"),
-        make_qualified_name("__module__.method"),
+def test_resolve_name_in_scope() -> None:
+    """Test resolving names to qualified forms by checking scope levels."""
+    scope_stack = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.CLASS, name="Outer"),
+        Scope(kind=ScopeKind.FUNCTION, name="method"),
     )
     registry = frozenset(
         {
-            make_qualified_name("__module__.Outer.method"),
+            make_qualified_name("__module__.Outer.method.Helper"),
+            make_qualified_name("__module__.Outer.Helper"),
+            make_qualified_name("__module__.Helper"),
             make_qualified_name("__module__.other_func"),
         }
     )
-    result = find_first_match(candidates, registry)
-    assert result == make_qualified_name("__module__.Outer.method")
 
+    # Test resolution finds innermost match first
+    result = resolve_name_in_scope(scope_stack, "Helper", registry)
+    assert result == make_qualified_name("__module__.Outer.method.Helper")
 
-def test_find_first_match_not_found() -> None:
-    """Test find_first_match when no match is found."""
-    candidates = (make_qualified_name("__module__.unknown"), make_qualified_name("__module__.missing"))
-    registry = frozenset(
+    # Test resolution with name not in registry
+    result = resolve_name_in_scope(scope_stack, "NotFound", registry)
+    assert result is None
+
+    # Test resolution with compound name
+    registry_with_compound = frozenset(
         {
-            make_qualified_name("__module__.existing"),
-            make_qualified_name("__module__.other"),
+            make_qualified_name("__module__.Outer.Inner.method"),
+            make_qualified_name("__module__.Inner.method"),
         }
     )
-    result = find_first_match(candidates, registry)
-    assert result is None
-
-
-def test_find_first_match_empty_candidates() -> None:
-    """Test find_first_match with empty candidates."""
-    candidates = ()
-    registry = frozenset({make_qualified_name("__module__.func")})
-    result = find_first_match(candidates, registry)
-    assert result is None
-
-
-def test_find_first_match_empty_registry() -> None:
-    """Test find_first_match with empty registry."""
-    candidates = (make_qualified_name("__module__.func"),)
-    registry: frozenset[QualifiedName] = frozenset()
-    result = find_first_match(candidates, registry)
-    assert result is None
+    result = resolve_name_in_scope(scope_stack, "Inner.method", registry_with_compound)
+    assert result == make_qualified_name("__module__.Outer.Inner.method")
 
 
 def test_extract_attribute_chain_simple_attribute() -> None:

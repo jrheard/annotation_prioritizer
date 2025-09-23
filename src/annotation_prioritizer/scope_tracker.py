@@ -6,8 +6,7 @@ All functions are pure and work with immutable data structures.
 
 Key Components:
     - Pure scope stack functions: add_scope, drop_last_scope, create_initial_stack
-    - Name resolution functions: generate_name_candidates, build_qualified_name
-    - Helper functions: get_containing_class, in_class, in_function
+    - Name resolution functions: _generate_name_candidates, build_qualified_name
 
 The scope tracking is used by multiple AST visitors throughout the codebase to
 consistently build qualified names like "__module__.ClassName.method_name".
@@ -68,58 +67,7 @@ def drop_last_scope(stack: ScopeStack) -> ScopeStack:
     return stack[:-1]
 
 
-def get_current_scope(stack: ScopeStack) -> Scope:
-    """Get the current (innermost) scope.
-
-    Args:
-        stack: Current scope stack
-
-    Returns:
-        The scope at the top of the stack
-    """
-    return stack[-1]
-
-
-def get_containing_class(stack: ScopeStack) -> QualifiedName | None:
-    """Get the qualified name of the containing class, if any.
-
-    Args:
-        stack: Current scope stack
-
-    Returns:
-        Qualified class name if inside a class, None otherwise
-    """
-    for i in range(len(stack) - 1, -1, -1):
-        if stack[i].kind == ScopeKind.CLASS:
-            return make_qualified_name(".".join(s.name for s in stack[: i + 1]))
-    return None
-
-
-def in_class(stack: ScopeStack) -> bool:
-    """Check if currently inside a class definition.
-
-    Args:
-        stack: Current scope stack
-
-    Returns:
-        True if any scope in the stack is a class
-    """
-    return any(s.kind == ScopeKind.CLASS for s in stack)
-
-
-def in_function(stack: ScopeStack) -> bool:
-    """Check if currently inside a function definition.
-
-    Args:
-        stack: Current scope stack
-
-    Returns:
-        True if any scope in the stack is a function
-    """
-    return any(s.kind == ScopeKind.FUNCTION for s in stack)
-
-
-def generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[QualifiedName, ...]:
+def _generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[QualifiedName, ...]:
     """Generate all possible qualified names from innermost to outermost scope.
 
     Matches Python's name resolution order where inner scopes shadow outer scopes.
@@ -134,7 +82,7 @@ def generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[Qualif
 
     Example:
         With scope stack [MODULE("__module__"), CLASS("Outer"), FUNCTION("method")]:
-        generate_name_candidates(stack, "Helper") returns:
+        _generate_name_candidates(stack, "Helper") returns:
         ("__module__.Outer.method.Helper",
          "__module__.Outer.Helper",
          "__module__.Helper")
@@ -175,21 +123,6 @@ def build_qualified_name(
     return make_qualified_name(".".join([*filtered, name]))
 
 
-def find_first_match(
-    candidates: tuple[QualifiedName, ...], registry: Iterable[QualifiedName]
-) -> QualifiedName | None:
-    """Check candidates against a registry and return first match.
-
-    Args:
-        candidates: Qualified name candidates to check
-        registry: Set of known names to match against
-
-    Returns:
-        First matching candidate or None if no matches
-    """
-    return first(candidates, lambda c: c in registry)
-
-
 def resolve_name_in_scope(
     scope_stack: ScopeStack, name: str, registry: Iterable[QualifiedName]
 ) -> QualifiedName | None:
@@ -212,8 +145,8 @@ def resolve_name_in_scope(
         - Generates candidates: "__module__.Outer.Inner", "__module__.Inner"
         - Returns the first candidate that exists in the registry
     """
-    candidates = generate_name_candidates(scope_stack, name)
-    return find_first_match(candidates, registry)
+    candidates = _generate_name_candidates(scope_stack, name)
+    return first(candidates, lambda c: c in registry)
 
 
 def extract_attribute_chain(node: ast.Attribute) -> tuple[str, ...]:
