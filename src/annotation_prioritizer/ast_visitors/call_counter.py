@@ -46,7 +46,6 @@ from annotation_prioritizer.models import (
 )
 from annotation_prioritizer.scope_tracker import (
     add_scope,
-    build_qualified_name,
     create_initial_stack,
     drop_last_scope,
     extract_attribute_chain,
@@ -306,31 +305,16 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified method name if resolvable, None otherwise
         """
-        # Self/cls method calls: self.method_name() or cls.method_name() - use current scope context
-        # Both 'self' (instance methods) and 'cls' (class methods) refer to the containing class
-        #
-        # Known limitation: Incorrectly resolves self/cls when classes are nested inside
-        # methods (e.g., self in OuterClass.method.InnerClass resolves to InnerClass,
-        # not OuterClass). Code like that should be extremely rare in practice, so this is OK.
-        if isinstance(func.value, ast.Name) and func.value.id in ("self", "cls"):
-            # Build qualified name from current scope, excluding function scopes since
-            # self.method() and cls.method() calls should resolve to the class method
-            return build_qualified_name(
-                self._scope_stack, func.attr, exclude_kinds=frozenset({ScopeKind.FUNCTION})
-            )
-
-        # Check if it's a call on a variable (calc.add())
+        # Check if it's a call on a variable (now includes self/cls!)
         if isinstance(func.value, ast.Name):
             variable_name = func.value.id
 
-            # Skip self/cls (already handled above)
-            if variable_name not in ("self", "cls"):
-                # Look up the variable's type
-                variable_type = lookup_variable(self._variable_registry, self._scope_stack, variable_name)
+            # Look up the variable's type - handles ALL variables uniformly
+            variable_type = lookup_variable(self._variable_registry, self._scope_stack, variable_name)
 
-                if variable_type and variable_type.is_instance:
-                    # Build the qualified method name
-                    return make_qualified_name(f"{variable_type.class_name}.{func.attr}")
+            if variable_type:
+                # Build the qualified method name for both instances and class refs
+                return make_qualified_name(f"{variable_type.class_name}.{func.attr}")
 
         # All other class method calls: extract class name and resolve
         class_name = self._extract_class_name_from_value(func.value)
