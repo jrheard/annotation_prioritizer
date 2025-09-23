@@ -56,6 +56,22 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
         self.generic_visit(node)
         self._scope_stack = drop_last_scope(self._scope_stack)
 
+    def _get_enclosing_class(self) -> QualifiedName | None:
+        """Get the qualified name of the immediately enclosing class.
+
+        Walks backwards through the scope stack to find the nearest
+        class scope, returning its qualified name built from the
+        scope stack up to that point.
+
+        Returns None if not currently inside a class.
+        """
+        for i in range(len(self._scope_stack) - 1, -1, -1):
+            if self._scope_stack[i].kind == ScopeKind.CLASS:
+                # Build qualified name up to and including this class
+                parts = [scope.name for scope in self._scope_stack[: i + 1]]
+                return make_qualified_name(".".join(parts))
+        return None
+
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         """Track function scope and parameter annotations."""
@@ -65,6 +81,23 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
         for arg, _ in iter_all_arguments(node.args):
             if arg.annotation:
                 self._process_annotation(arg.arg, arg.annotation)
+
+        # Register self/cls parameters
+        if node.args.args:
+            first_param = node.args.args[0]
+            param_name = first_param.arg
+
+            if param_name in ("self", "cls"):
+                # Find the immediately enclosing class
+                enclosing_class = self._get_enclosing_class()
+                if enclosing_class:  # Only register if we're actually in a class
+                    # Register self as instance, cls as class reference
+                    is_instance = param_name == "self"
+                    # Pass the qualified name directly since we already have it
+                    parts = [scope.name for scope in self._scope_stack]
+                    key = make_qualified_name(".".join([*parts, param_name]))
+                    variable_type = VariableType(class_name=enclosing_class, is_instance=is_instance)
+                    self._variables[key] = variable_type
 
         self.generic_visit(node)
         self._scope_stack = drop_last_scope(self._scope_stack)

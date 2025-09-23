@@ -370,9 +370,9 @@ self.method()
     variable_registry = build_variable_registry(ast.parse(edge_case_code), class_registry)
     visitor = CallCountVisitor(known_functions, class_registry, edge_case_code, variable_registry)
 
-    # Test by visiting the call - this should increment the count
+    # Test by visiting the call - self.method() outside a class should not resolve
     visitor.visit_Call(call_node)
-    assert visitor.call_counts[make_qualified_name("__module__.method")] == 1  # This covers line 70
+    assert visitor.call_counts[make_qualified_name("__module__.method")] == 0  # Should not resolve
 
 
 def test_complex_qualified_calls() -> None:
