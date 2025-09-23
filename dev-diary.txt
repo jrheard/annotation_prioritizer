@@ -918,3 +918,5 @@ TODO update propose-plan to be aggressive about looking for ways to reuse pre-ex
 TODO tell code review prompt to ignore dev-diary.txt
 
 TODO see if we can deduplicate the places where we make qualified names from a scope
+
+TODO decide whether or not to actually implement https://github.com/jrheard/annotation_prioritizer/issues/21 - maybe it's fine as-is?

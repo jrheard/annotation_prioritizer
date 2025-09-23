@@ -6,7 +6,7 @@ from typing import override
 
 from annotation_prioritizer.ast_arguments import iter_all_arguments
 from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
-from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind
+from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import (
     add_scope,
     create_initial_stack,
@@ -168,7 +168,7 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
         """Add or update a variable in the registry."""
         # Build key using the same format as generate_name_candidates
         parts = [scope.name for scope in self._scope_stack]
-        key = QualifiedName(".".join([*parts, variable_name]))
+        key = make_qualified_name(".".join([*parts, variable_name]))
         # Resolve class name to qualified form
         qualified_class = self._resolve_class_name(class_name)
         if qualified_class:
