@@ -884,7 +884,7 @@ TODO update call_counter to ignore builtin functions
 TODO see if anything in scope_tracker.py can be cleaned up / simplified / refactored
 also someday i'll definitely have to make this be a list that gets mutated in-place :p but can save that for after profiling
 
-TODO pick up scope-tracking doc
+DONE pick up scope-tracking doc
 
 DONE we sure say that we do a "two-pass analysis" a bunch of times. tbh i think we do like four passes. which is fine but we should be more clear in docs
     DONE update count_function_calls() and variable_discovery.py to be more clear about this
@@ -899,3 +899,11 @@ DONE in visit_FunctionDef is `node.args.args` sufficient?
 TODO isn't there a ruff rule that prohibits bare `# pyright: ignore` comments with no associated error code? doesn't seem enabled?
 
 DONE update docstring to make it clear that you're supposed to call .get_registry() on the visitor after it visits
+
+DONE look into this (make a github issue for it to investigate someday?):
+    - Discovered limitation: Class reference pattern (`CalcClass = Calculator; calc = CalcClass()`)
+    doesn't work - the instantiation via variable holding a class reference is not tracked
+
+    had claude make an issue for it!
+
+also gonna have claude make an issue for our unit vs integration tests - doesn't seem like we're being consistent about this

@@ -655,7 +655,7 @@ def outer():
   doesn't work - the instantiation via variable holding a class reference is not tracked
 - All tests pass with 100% coverage maintained
 
-### Commit 6: Update project documentation
+### Commit 6: Update project documentation ✅ COMPLETED
 
 **Files to modify:**
 - `docs/project_status.md` - Mark variable tracking as complete
@@ -666,6 +666,13 @@ Remove the TODO comment and update the "Limitations" section to reflect that bas
 
 **Update project_status.md:**
 Move "Instance method calls via variables" from "Not Implemented" to "Implemented" with a note about what patterns are still deferred.
+
+**Completion notes:**
+- Successfully updated docs/project_status.md to move variable tracking from "In Progress" to "Completed Improvements"
+- Added comprehensive documentation of supported patterns and patterns still deferred for future work
+- Removed the critical bug section about instance method calls not being counted
+- call_counter.py module docstring was already appropriate and didn't require changes
+- The documentation now accurately reflects the current state of the variable tracking implementation
 
 ## Explicitly Deferred Features
 
