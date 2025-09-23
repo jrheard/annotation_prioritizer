@@ -1,6 +1,7 @@
 """CLI entry point for annotation prioritizer."""
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from rich.console import Console
 
 from .analyzer import analyze_file
 from .output import display_results, display_unresolvable_summary
+
+logger = logging.getLogger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -26,6 +29,11 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="Filter functions with fewer than N calls (default: 0)",
     )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Enable debug logging output",
+    )
     return parser.parse_args()
 
 
@@ -33,6 +41,14 @@ def main() -> None:
     """Run the CLI application."""
     console = Console()
     args = parse_args()
+
+    # Configure logging
+    if args.debug:
+        logging.basicConfig(
+            level=logging.DEBUG,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        )
+        logger.debug("Debug logging enabled")
 
     # Validate target file
     if not args.target.exists():

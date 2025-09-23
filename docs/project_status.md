@@ -182,6 +182,10 @@ None currently.
 
 ## Maybe Someday 🤔
 
+### Performance
+
+- **Parallelism** - Scan multiple files in parallel
+
 ### Advanced Analysis
 - **Inheritance Resolution**: Method Resolution Order (MRO) support
 - **Class Attribute Tracking**: Instance and class variable types (already noted in limitations as `self.calc.add()`)

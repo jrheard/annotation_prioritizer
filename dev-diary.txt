@@ -907,3 +907,14 @@ DONE look into this (make a github issue for it to investigate someday?):
     had claude make an issue for it!
 
 also gonna have claude make an issue for our unit vs integration tests - doesn't seem like we're being consistent about this
+
+===
+
+9/23
+
+TODO update propose-plan to be aggressive about looking for ways to reuse pre-existing helper code
+  also have it recommend any relevant prerequisite refactors that should be done up-front to make the proposed changes easier to implement
+
+TODO tell code review prompt to ignore dev-diary.txt
+
+TODO see if we can deduplicate the places where we make qualified names from a scope
