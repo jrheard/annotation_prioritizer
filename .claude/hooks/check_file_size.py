@@ -83,6 +83,10 @@ def main() -> None:
     if "demo_files/" in file_path:
         sys.exit(0)
 
+    # Skip test files
+    if Path(file_path).name.startswith("test_"):
+        sys.exit(0)
+
     # Check the file size
     if Path(file_path).exists():
         logic_lines = count_logic_lines(file_path)
