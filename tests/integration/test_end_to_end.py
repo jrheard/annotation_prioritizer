@@ -187,6 +187,140 @@ def test_analyze_empty_file() -> None:
         assert priorities == ()
 
 
+def test_variable_tracking_comprehensive() -> None:
+    """Test comprehensive variable tracking scenarios for instance method resolution."""
+    test_code = '''class Calculator:
+    def add(self, x: int, y: int) -> int:
+        """Add two numbers."""
+        return x + y
+
+    def multiply(self, x: int, y: int) -> int:
+        """Multiply two numbers."""
+        return x * y
+
+class Helper:
+    def add(self, a: int, b: int) -> int:
+        """Add two numbers with different params."""
+        return a + b
+
+    def assist(self) -> str:
+        """Provide assistance."""
+        return "helping"
+
+# Module-level variable tracking
+module_calc = Calculator()
+module_result = module_calc.add(1, 2)  # Should be tracked
+
+def use_direct_instantiation():
+    """Test direct instantiation tracking."""
+    calc = Calculator()
+    return calc.add(5, 6)  # Should be tracked
+
+def use_parameter_annotation(calc: Calculator):
+    """Test parameter type annotation tracking."""
+    return calc.multiply(3, 4)  # Should be tracked
+
+def use_variable_annotation():
+    """Test variable type annotation tracking."""
+    calc: Calculator = Calculator()
+    return calc.add(7, 8)  # Should be tracked
+
+def use_reassignment():
+    """Test variable reassignment - uses final type for all references."""
+    obj = Calculator()
+    result1 = obj.add(1, 2)  # Will be attributed to Helper.add due to two-pass limitation
+    obj = Helper()
+    result2 = obj.add(3, 4)  # Will be attributed to Helper.add
+    return result1 + result2
+
+def use_nested_scope():
+    """Test parent scope variable access in nested functions."""
+    calc = Calculator()
+
+    def inner():
+        # Access parent scope variable
+        return calc.multiply(2, 3)  # Should be tracked
+
+    return inner()
+
+def use_class_reference():
+    """Test class reference vs instance."""
+    CalcClass = Calculator  # Class reference, not instance
+    calc = CalcClass()  # Now it's an instance
+    return calc.add(9, 10)  # Should be tracked
+
+def mixed_patterns():
+    """Test multiple patterns together."""
+    # Direct instantiation
+    c1 = Calculator()
+    r1 = c1.add(1, 1)
+
+    # Variable annotation
+    c2: Helper = Helper()
+    r2 = c2.assist()
+
+    # Nested function with parent scope
+    def nested():
+        return c1.multiply(2, 2) + len(c2.assist())
+
+    return r1 + nested()
+'''
+
+    with temp_python_file(test_code) as path:
+        result = analyze_file(path)
+
+        # Get priorities indexed by qualified name
+        priorities_by_name = {p.function_info.qualified_name: p for p in result.priorities}
+
+        # Test that Calculator.add is tracked from multiple sources
+        calc_add = priorities_by_name.get(make_qualified_name("__module__.Calculator.add"))
+        assert calc_add is not None
+        # Should be called from: module level, use_direct_instantiation,
+        # use_variable_annotation, mixed_patterns
+        # Note: use_reassignment calls are attributed to Helper.add due to two-pass limitation
+        # Note: use_class_reference is unresolvable (CalcClass() instantiation not tracked)
+        assert calc_add.call_count == 4
+
+        # Test that Calculator.multiply is tracked from parameter annotations and nested scope
+        calc_multiply = priorities_by_name.get(make_qualified_name("__module__.Calculator.multiply"))
+        assert calc_multiply is not None
+        # Should be called from: use_parameter_annotation, use_nested_scope, mixed_patterns
+        assert calc_multiply.call_count == 3
+
+        # Test that Helper.add is tracked (including reassignment calls)
+        helper_add = priorities_by_name.get(make_qualified_name("__module__.Helper.add"))
+        assert helper_add is not None
+        # Gets both calls from use_reassignment due to two-pass limitation
+        assert helper_add.call_count == 2
+
+        # Test that Helper.assist is tracked
+        helper_assist = priorities_by_name.get(make_qualified_name("__module__.Helper.assist"))
+        assert helper_assist is not None
+        assert helper_assist.call_count == 2  # Called in mixed_patterns twice
+
+        # Verify that most variable-based calls are now resolvable
+        unresolvable_texts = [call.call_text for call in result.unresolvable_calls]
+
+        # Most calc.add and calc.multiply calls should be resolved
+        # Exception: use_class_reference's calc.add(9, 10) is unresolvable
+        # because CalcClass() instantiation is not tracked
+        calc_add_unresolved = [t for t in unresolvable_texts if "calc.add" in t]
+        assert len(calc_add_unresolved) <= 1  # Only use_class_reference's call
+
+        # No calc.multiply should be unresolvable
+        assert not any("calc.multiply" in text for text in unresolvable_texts)
+
+        # No obj.add should be unresolvable (they're attributed to Helper.add)
+        assert not any("obj.add" in text for text in unresolvable_texts)
+
+        # Module-level calls should be tracked
+        assert not any("module_calc.add" in text for text in unresolvable_texts)
+
+        # Constructor calls and built-ins are expected to be unresolvable
+        assert any("Calculator()" in text for text in unresolvable_texts)  # Constructor calls
+        assert any("len" in text for text in unresolvable_texts)  # Built-in function
+
+
 def test_analyze_file_with_classes() -> None:
     """Test analyzing a file with class methods."""
     test_code = '''class Calculator:
