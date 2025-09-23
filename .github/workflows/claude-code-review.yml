@@ -51,6 +51,8 @@ jobs:
 
             Use the repository's CLAUDE.md for guidance on style and conventions.
 
+            Ignore the `dev-diary.txt` file, this file contains the user's internal notes that aren't intended for your review and might confuse you.
+
             Use `gh pr comment` with your Bash tool to leave your review as a comment on the PR.
 
           # See https://github.com/anthropics/claude-code-action/blob/main/docs/usage.md

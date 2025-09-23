@@ -912,11 +912,11 @@ also gonna have claude make an issue for our unit vs integration tests - doesn't
 
 9/23
 
-TODO update propose-plan to be aggressive about looking for ways to reuse pre-existing helper code
+DONE update propose-plan to be aggressive about looking for ways to reuse pre-existing helper code
   also have it recommend any relevant prerequisite refactors that should be done up-front to make the proposed changes easier to implement
 
-TODO tell code review prompt to ignore dev-diary.txt
+DONE tell code review prompt to ignore dev-diary.txt
 
-TODO see if we can deduplicate the places where we make qualified names from a scope
+TICKETED see if we can deduplicate the places where we make qualified names from a scope
 
-TODO decide whether or not to actually implement https://github.com/jrheard/annotation_prioritizer/issues/21 - maybe it's fine as-is?
+DONE decide whether or not to actually implement https://github.com/jrheard/annotation_prioritizer/issues/21 - maybe it's fine as-is?

@@ -18,7 +18,21 @@ IMPORTANT: Before presenting the outline, PROACTIVELY ASK QUESTIONS if:
 
 Present a structured outline for the implementation plan that includes:
 
-1. **Implementation Steps** (as numbered list)
+1. **Code Reuse Investigation** (REQUIRED before proposing implementation)
+   - Search for existing helper functions, utilities, or patterns that can be reused
+   - Identify common logic that should be extracted rather than duplicated
+   - List specific modules/functions from the codebase to leverage
+   - Note any patterns that appear multiple times and could be consolidated
+   - **It's perfectly fine to conclude "None found" after thorough investigation**
+
+2. **Prerequisite Refactoring Assessment**
+   - Identify foundational improvements that would simplify the implementation
+   - Propose extractions or abstractions that multiple features would benefit from
+   - Note any architectural changes that would make the code more maintainable
+   - List refactors that should be done FIRST to make subsequent steps cleaner
+   - **"No refactoring needed" is a valid conclusion - don't force unnecessary changes**
+
+3. **Implementation Steps** (as numbered list)
    - Each step should represent a logical atomic commit
    - Include brief description of what each step accomplishes
    - Order steps by dependencies and logical progression
@@ -27,12 +41,12 @@ Present a structured outline for the implementation plan that includes:
      - Pass all pre-commit hooks (ruff, pyright, pytest with 100% coverage)
      - Leave the codebase in a working state
 
-2. **Key Architectural Decisions**
+4. **Key Architectural Decisions**
    - File structure changes or new files needed
    - Major design choices or patterns to use
    - Integration points with existing code
 
-3. **Assumptions and Dependencies**
+5. **Assumptions and Dependencies**
    - What existing functionality you're building on
    - External libraries or tools required
    - Any constraints or requirements
@@ -89,6 +103,17 @@ Here's what an outline would look like for adding unresolvable call reporting (a
 
 ```markdown
 # Unresolvable Call Reporting - Outline
+
+## Code Reuse Investigation
+- Leverage existing AST visitor pattern from call_counter.py
+- Reuse priority calculation logic from analyzer.py
+- Use existing display utilities from output.py for consistent formatting
+- Extract common AST node inspection patterns into helper functions
+
+## Prerequisite Refactoring Assessment
+- Extract AST node type checking into reusable predicates (is_method_call, is_function_call)
+- Create shared pattern for visitor result accumulation
+- Consider abstracting visitor state management for reuse in future visitors
 
 ## Implementation Steps
 
