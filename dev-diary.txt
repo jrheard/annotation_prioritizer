@@ -896,7 +896,7 @@ DONE in visit_FunctionDef is `node.args.args` sufficient?
 
     DONE write a test that would have failed if we had only done `node.args.args`
 
-TODO isn't there a ruff rule that prohibits bare `# pyright: ignore` comments with no associated error code? doesn't seem enabled?
+DONE isn't there a ruff rule that prohibits bare `# pyright: ignore` comments with no associated error code? doesn't seem enabled?
 
 DONE update docstring to make it clear that you're supposed to call .get_registry() on the visitor after it visits
 
@@ -920,3 +920,9 @@ DONE tell code review prompt to ignore dev-diary.txt
 TICKETED see if we can deduplicate the places where we make qualified names from a scope
 
 DONE decide whether or not to actually implement https://github.com/jrheard/annotation_prioritizer/issues/21 - maybe it's fine as-is?
+
+having claude add some hooks
+
+oh fun - note that hooks don't get run for subagents
+
+TODO anything else in claude.md that should be moved to hooks?
