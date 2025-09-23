@@ -43,23 +43,22 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
 
 ## Known Issues & Bugs 🐛
 
-### Critical Bug: Instance Method Calls Not Counted
-```python
-class Calculator:
-    def add(self, a, b):  # Shows 0 calls instead of 1
-        return a + b
+### Current Limitations
 
-def process():
-    calc = Calculator()
-    return calc.add(5, 7)  # This call is NOT being counted!
-```
-
-### Other Limitations
+#### Analysis Scope
 - **Single File Only**: No directory or project-wide analysis (temporary limitation)
 - **No Import Support**: Imported classes and functions not tracked
-- **No Unresolvable Call Reporting**: Missing calls aren't tracked or reported
+
+#### Call Tracking Limitations
+The following patterns are not yet supported for call counting:
+- **Method chaining from returns**: `get_calculator().add()` - requires return type inference
+- **Indexing operations**: `calculators[0].add()` - requires collection content tracking
+- **Attribute access chains**: `self.calc.add()` - requires object attribute type tracking
+- **Collection type annotations**: `calculators: list[Calculator]` - generics not handled
+- **Cross-module types**: `from module import Calculator` - import resolution not implemented
 
 ### Fixed Issues
+- ✅ **Instance Method Calls Not Counted**: Previously `calc = Calculator(); calc.add()` showed 0 calls (FIXED via variable tracking)
 - ✅ **False Positives with Constants**: Previously treated constants like `MAX_SIZE` as classes (FIXED via ClassRegistry)
 
 ### Import and Multi-File Support Status
@@ -86,6 +85,39 @@ def process():
    - This is the ultimate goal for maximum value
 
 ## Completed Improvements ✅
+
+### Scope-Aware Variable Tracking (Completed 2025-09-22)
+**What was implemented:** Two-pass analysis system for tracking variable-to-type mappings and resolving instance method calls.
+
+**Completed:**
+- ✅ **Variable Registry**: Data models and utilities for tracking variable types
+- ✅ **Variable Discovery Visitor**: AST visitor that builds registry of variable-to-type mappings
+- ✅ **Two-Pass Analysis**: First pass discovers variables, second pass counts calls
+- ✅ **Instance Method Resolution**: `calc = Calculator(); calc.add()` now correctly counted
+- ✅ **Parameter Type Annotations**: `def foo(calc: Calculator)` enables method resolution
+- ✅ **Variable Type Annotations**: `calc: Calculator = get_calculator()` tracked
+- ✅ **Scope Isolation**: Variables in different scopes tracked separately
+- ✅ **Parent Scope Access**: Nested functions can access parent scope variables
+- ✅ **Module-Level Variables**: Top-level variables accessible in all functions
+
+**Patterns Now Supported:**
+- Direct instantiation: `calc = Calculator(); calc.add()`
+- Parameter annotations: `def foo(calc: Calculator): calc.add()`
+- Variable annotations: `calc: Calculator = ...`
+- Class references: `CalcClass = Calculator` (tracked but not for instantiation)
+- Variable reassignment: Tracks the most recent type assignment
+
+**Patterns Still Deferred (Future Work):**
+- Method chaining from returns: `get_calculator().add()` (no return type tracking)
+- Indexing operations: `calculators[0].add()` (no collection content tracking)
+- Attribute access chains: `self.calc.add()` (no object attribute tracking)
+- Collection type annotations: `calculators: list[Calculator]` (generics not handled)
+- Import tracking: `from module import Calculator` (cross-module not supported)
+
+### Scope Infrastructure (Completed Foundation)
+- ✅ **Scope Stack Foundation**: Replaced `_class_stack` with typed `_scope_stack` using `Scope` dataclass
+- ✅ **Function Scope Tracking**: Both parsers now track function scopes in addition to classes
+- ✅ **Nested Function Support**: Calls within nested functions can now be resolved
 
 ### Unresolvable Call Reporting (Completed 2025-09-19)
 **What was implemented:** Full transparency system for tracking calls that cannot be resolved statically.
@@ -119,21 +151,11 @@ def process():
 - ✅ **Integration into CallCountVisitor**: Now uses ClassRegistry for definitive class identification
 - ✅ **Full test coverage**: Comprehensive tests for all class detection scenarios
 
-**Note:** The instance method bug (`calc = Calculator(); calc.add()` shows 0 calls) is NOT a class detection issue - it requires variable tracking which is a separate feature.
+**Note:** Class detection now works correctly for all class patterns including nested classes.
 
 ## In Progress 🚧
 
-### Scope-Aware Variable Tracking [NOT STARTED]
-- Fix critical instance method call counting bug (`calc = Calculator(); calc.add()`)
-- Track variable assignments to resolve method calls on instances
-- Track type-annotated parameters and variables
-- Maintain scope isolation between functions
-
-### Scope Infrastructure (Completed Foundation)
-- ✅ **Scope Stack Foundation**: Replaced `_class_stack` with typed `_scope_stack` using `Scope` dataclass
-- ✅ **Function Scope Tracking**: Both parsers now track function scopes in addition to classes
-- ✅ **Nested Function Support**: Calls within nested functions can now be resolved
-- 🚧 **Variable Tracking**: Next step is to implement scope-aware variable tracking on top of this foundation
+None currently.
 
 ## Planned Features 📋
 
@@ -147,49 +169,29 @@ def process():
      - `import pandas as pd` → `pd.DataFrame()`
    - Still single-file analysis, but much more effective
 
-2. **Scope-Aware Variable Tracking**
-   - Fix instance method call counting bug
-   - Track variable assignments (`calc = Calculator()`)
-   - Resolve method calls on variables (`calc.add()`)
-   - Maintain scope isolation between functions
-
-   **What We Will Track:**
-   - Direct instantiation: `calc = Calculator(); calc.add()`
-   - Simple parameter annotations: `def foo(calc: Calculator): calc.add()`
-   - Annotated variables: `calc: Calculator = get_calculator(); calc.add()`
-   - Module-level variables accessible in functions
-
-   **What We Won't Track:**
-   - Nested function parent scope variables (currently not implemented, marked for future reconsideration)
-   - Unannotated parameters (no type information available)
-   - Complex types (Optional, Union, generics - too complex for static analysis)
-   - Return values without annotation (can't determine type)
-   - Complex expressions (`x if condition else y`, `list[0]`)
-   - Dynamic imports and star imports (too complex for reliable static analysis)
-   - Decorators (too complex for static analysis)
-
 ### Medium Priority
 
 3. **@property Support**
    - Distinguish properties from regular attributes
    - Count property access as method calls
 
-4. **Enhanced Call Attribution**
-   - Support chained calls (`get_calc().add()`)
-   - Handle module.function patterns
-   - Improve qualified name resolution
+4. **Return Type Inference**
+   - Track function return types to enable method chaining
+   - Support patterns like `get_calc().add()`
+   - Would require significant type inference infrastructure
 
 ## Maybe Someday 🤔
 
 ### Advanced Analysis
 - **Inheritance Resolution**: Method Resolution Order (MRO) support
-- **Class Attribute Tracking**: Instance and class variable types (e.g., `self.calc.add()`)
+- **Class Attribute Tracking**: Instance and class variable types (already noted in limitations as `self.calc.add()`)
 - **@dataclass Support**: Currently not supported - dataclass fields and methods are not properly tracked
   - Dataclass fields (class variables with type annotations) are not recognized
   - Methods generated by @dataclass decorator (e.g., __init__, __eq__) are not counted
   - Instance attribute access on dataclasses not tracked
   - This is a known limitation to be addressed in future iterations
-- **Complex Type Annotations**: Optional, Union, generics support
+- **Complex Type Annotations**: Optional, Union, generics (already noted in limitations for collections like `list[Calculator]`)
+- **Collection Content Tracking**: Track types within lists, dicts, etc. to support `calculators[0].add()`
 - **Complexity-Based Weighting**: Cyclomatic complexity in priority scores
 
 ### Usability Enhancements
