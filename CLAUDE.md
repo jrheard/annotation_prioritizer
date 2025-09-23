@@ -63,6 +63,7 @@ This project follows functional programming principles:
 - No inheritance: Avoid inheritance unless absolutely necessary (e.g., when integrating with libraries like Python's AST module). Use bare functions instead
 - File organization: Keep non-test Python files focused and split them into smaller modules if they exceed ~400-500 lines of non-documentation code (actual logic, not counting docstrings/comments)
 - File naming: Use specific, focused names for modules. Avoid generic suffixes like `_utils.py` or `_helpers.py` that tend to become dumping grounds for miscellaneous functions. Prefer names that describe the specific functionality (e.g., `ast_arguments.py` for AST argument handling, not `ast_utils.py`)
+- Code reuse: Look for existing implementations before writing new code. Extract and reuse nontrivial logic (>10 lines or complex business rules) rather than duplicating it
 - Always use absolute imports. Never use relative imports.
 
 # Documentation Updates
