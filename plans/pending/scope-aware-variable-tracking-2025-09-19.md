@@ -629,7 +629,7 @@ def outer():
 - All tests pass with 100% coverage maintained
 - Ruff formatting and pyright type checking pass
 
-### Commit 5: Add integration tests for end-to-end variable tracking
+### Commit 5: Add integration tests for end-to-end variable tracking ✅ COMPLETED
 
 **Files to modify:**
 - `tests/integration/test_end_to_end.py` - Add variable tracking scenarios
@@ -640,6 +640,20 @@ def outer():
 - Verify that previously uncounted calls are now counted
 - Verify that the call counts match expectations
 - Ensure unresolvable calls are reduced
+
+**Completion notes:**
+- Successfully added comprehensive integration test `test_variable_tracking_comprehensive()`
+- Test covers all major variable tracking patterns:
+  - Direct instantiation: `calc = Calculator()`
+  - Parameter type annotations: `def foo(calc: Calculator)`
+  - Variable type annotations: `calc: Calculator = ...`
+  - Parent scope variable access in nested functions
+  - Variable reassignment (with documented two-pass limitation)
+  - Module-level variable tracking
+  - Mixed patterns in complex scenarios
+- Discovered limitation: Class reference pattern (`CalcClass = Calculator; calc = CalcClass()`)
+  doesn't work - the instantiation via variable holding a class reference is not tracked
+- All tests pass with 100% coverage maintained
 
 ### Commit 6: Update project documentation
 
