@@ -71,7 +71,9 @@ def _is_builtin_call(node: ast.Call) -> bool:
         True if this is a call to a built-in function, False otherwise
     """
     if isinstance(node.func, ast.Name):
-        return node.func.id in dir(builtins)
+        # Only consider callable attributes of builtins module
+        name = node.func.id
+        return hasattr(builtins, name) and callable(getattr(builtins, name))
     return False
 
 
