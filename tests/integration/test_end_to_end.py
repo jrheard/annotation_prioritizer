@@ -62,7 +62,7 @@ def main():
         # We should have captured different kinds of unresolvable calls
         assert any("getattr" in text for text in call_texts)  # getattr call
         assert any("handlers" in text for text in call_texts)  # Subscript call
-        assert any("eval" in text for text in call_texts)  # eval call
+        # eval is a built-in function and not reported as unresolvable
         assert any("json.dumps" in text for text in call_texts)  # Imported function
 
 
@@ -316,9 +316,9 @@ def mixed_patterns():
         # Module-level calls should be tracked
         assert not any("module_calc.add" in text for text in unresolvable_texts)
 
-        # Constructor calls and built-ins are expected to be unresolvable
+        # Constructor calls are expected to be unresolvable
         assert any("Calculator()" in text for text in unresolvable_texts)  # Constructor calls
-        assert any("len" in text for text in unresolvable_texts)  # Built-in function
+        # Built-in functions like len() are not reported as unresolvable
 
 
 def test_analyze_file_with_classes() -> None:

@@ -879,9 +879,9 @@ DONE review-plan
 
 TODO keep an eye on "explicitly deferred features" section in scope-tracking
 
-TODO update call_counter to ignore builtin functions
+DONE update call_counter to ignore builtin functions
 
-TODO see if anything in scope_tracker.py can be cleaned up / simplified / refactored
+DONE see if anything in scope_tracker.py can be cleaned up / simplified / refactored
 also someday i'll definitely have to make this be a list that gets mutated in-place :p but can save that for after profiling
 
 DONE pick up scope-tracking doc

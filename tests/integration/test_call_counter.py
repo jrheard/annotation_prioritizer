@@ -919,6 +919,60 @@ def test():
         assert call_counts[make_qualified_name("__module__.KnownClass.method")] == 0
 
 
+def test_builtin_functions_not_reported_as_unresolvable() -> None:
+    """Test that built-in function calls are not reported as unresolvable."""
+    code = """
+def process_data(data):
+    # Built-in functions - should NOT be unresolvable
+    print("Processing...")
+    length = len(data)
+    total = sum(data)
+    sorted_data = sorted(data)
+    max_val = max(data)
+    min_val = min(data)
+
+    # User-defined function call
+    result = custom_function(data)
+
+    # Method call on unknown object - should be unresolvable
+    unknown_obj.method()
+
+    return result
+
+def custom_function(x):
+    return x * 2
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            make_function_info(
+                "process_data",
+                qualified_name=make_qualified_name("__module__.process_data"),
+                parameters=(make_parameter("data"),),
+                line_number=1,
+                file_path=temp_path,
+            ),
+            make_function_info(
+                "custom_function",
+                qualified_name=make_qualified_name("__module__.custom_function"),
+                parameters=(make_parameter("x"),),
+                line_number=18,
+                file_path=temp_path,
+            ),
+        )
+
+        result, unresolvable_calls = count_function_calls(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # custom_function should be counted
+        assert call_counts[make_qualified_name("__module__.custom_function")] == 1
+
+        # Only unknown_obj.method() should be unresolvable
+        # Built-in functions (print, len, sum, sorted, max, min) should NOT be unresolvable
+        assert len(unresolvable_calls) == 1
+        assert "unknown_obj.method()" in unresolvable_calls[0].call_text
+
+
 def test_classmethod_cls_calls() -> None:
     """Test that cls.method() calls in @classmethod are properly counted."""
     source = """

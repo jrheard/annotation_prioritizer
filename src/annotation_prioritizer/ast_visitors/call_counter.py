@@ -29,6 +29,7 @@ Limitations:
 """
 
 import ast
+import builtins
 from pathlib import Path
 from typing import override
 
@@ -55,6 +56,23 @@ from annotation_prioritizer.variable_registry import VariableRegistry, lookup_va
 
 # Maximum length for unresolvable call text before truncation
 MAX_UNRESOLVABLE_CALL_LENGTH = 200
+
+
+def _is_builtin_call(node: ast.Call) -> bool:
+    """Check if a call is to a Python built-in function.
+
+    Only checks direct calls to built-ins (e.g., print(), len()).
+    Does not check method calls on built-in types (e.g., list.append()).
+
+    Args:
+        node: The AST Call node to check
+
+    Returns:
+        True if this is a call to a built-in function, False otherwise
+    """
+    if isinstance(node.func, ast.Name):
+        return node.func.id in dir(builtins)
+    return False
 
 
 def count_function_calls(
@@ -187,7 +205,7 @@ class CallCountVisitor(ast.NodeVisitor):
         call_name = self._resolve_call_name(node)
         if call_name and call_name in self.call_counts:
             self.call_counts[call_name] += 1
-        elif call_name is None:
+        elif call_name is None and not _is_builtin_call(node):
             self._track_unresolvable_call(node)
 
         self.generic_visit(node)
