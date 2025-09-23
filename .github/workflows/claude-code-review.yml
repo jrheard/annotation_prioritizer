@@ -43,6 +43,11 @@ jobs:
               - Gaps between what the PR does and what it claims to do
               - Bugs
               - Cases where the PR is adding unnecessary complexity. If there's a simpler way to solve this problem than what the PR is doing, say so.
+              - Code duplication: Flag when nontrivial logic (>10 lines or complex business rules) is being duplicated instead of reused. Look for:
+                * Functions/methods that duplicate existing implementations with minor variations
+                * Core business logic repeated across multiple modules that should be extracted
+                * Complex validation or calculation logic that already exists elsewhere
+                Note: Don't flag trivial duplication like simple getters, basic loops, or boilerplate code. Focus on duplicated business logic that could lead to maintenance issues or inconsistencies.
 
             Use the repository's CLAUDE.md for guidance on style and conventions.
 
