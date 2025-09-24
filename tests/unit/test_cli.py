@@ -88,7 +88,7 @@ def test_main_successful_analysis() -> None:
             return_score=0.0,
             call_count=3,
             line_number=1,
-            file_path=tmp.name,
+            file_path=Path(tmp.name),
         )
 
         with (
@@ -120,7 +120,7 @@ def test_main_with_min_calls_filter() -> None:
             return_score=0.0,
             call_count=1,  # Low call count
             line_number=1,
-            file_path=tmp.name,
+            file_path=Path(tmp.name),
         )
 
         with (
@@ -153,7 +153,7 @@ def test_main_with_unresolvable_calls() -> None:
             return_score=0.0,
             call_count=3,
             line_number=1,
-            file_path=tmp.name,
+            file_path=Path(tmp.name),
         )
 
         mock_unresolvable = UnresolvableCall(line_number=5, call_text="processor.process()")
@@ -225,7 +225,7 @@ def test_main_with_debug_logging() -> None:
             return_score=0.0,
             call_count=3,
             line_number=1,
-            file_path=tmp.name,
+            file_path=Path(tmp.name),
         )
 
         with (

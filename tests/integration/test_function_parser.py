@@ -1,5 +1,7 @@
 """Tests for the AST parser module."""
 
+from pathlib import Path
+
 import pytest
 
 from annotation_prioritizer.models import ParameterInfo, make_qualified_name
@@ -18,7 +20,7 @@ from tests.helpers.temp_files import temp_python_file
 def test_parse_invalid_inputs_return_empty(test_case: str, file_content: str | None) -> None:
     """Test that parser returns empty tuple for various invalid inputs."""
     if test_case == "nonexistent_file":
-        result = parse_functions_from_file("/nonexistent/file.py")
+        result = parse_functions_from_file(Path("/nonexistent/file.py"))
     else:
         assert file_content is not None  # Type narrowing for pyright
         with temp_python_file(file_content) as path:

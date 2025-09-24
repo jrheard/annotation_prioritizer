@@ -39,7 +39,7 @@ def main():
 '''
 
     with temp_python_file(test_code) as path:
-        result = analyze_file(path)
+        result = analyze_file(str(path))
 
         # Check that we have functions
         assert len(result.priorities) == 3  # DataProcessor.process_data, utility_function, main
@@ -81,7 +81,7 @@ def test():
 """
 
     with temp_python_file(test_code) as path:
-        result = analyze_file(path)
+        result = analyze_file(str(path))
 
         # Should have unresolvable calls
         assert len(result.unresolvable_calls) > 0
@@ -120,7 +120,7 @@ def caller():
 '''
 
     with temp_python_file(test_code) as path:
-        result = analyze_file(path)
+        result = analyze_file(str(path))
         priorities = result.priorities
 
         # Should find 4 functions
@@ -182,7 +182,7 @@ def caller():
 def test_analyze_empty_file() -> None:
     """Test analyzing an empty Python file."""
     with temp_python_file("# Empty file\n") as path:
-        result = analyze_file(path)
+        result = analyze_file(str(path))
         priorities = result.priorities
         assert priorities == ()
 
@@ -274,7 +274,7 @@ def mixed_patterns():
 '''
 
     with temp_python_file(test_code) as path:
-        result = analyze_file(path)
+        result = analyze_file(str(path))
 
         # Get priorities indexed by qualified name
         priorities_by_name = {p.function_info.qualified_name: p for p in result.priorities}
@@ -357,7 +357,7 @@ def use_calculator():
 '''
 
     with temp_python_file(test_code) as path:
-        result = analyze_file(path)
+        result = analyze_file(str(path))
         priorities = result.priorities
 
         # Should find 5 functions (4 methods + 1 function)

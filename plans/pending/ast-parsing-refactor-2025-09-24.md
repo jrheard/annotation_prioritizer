@@ -258,17 +258,26 @@ This includes updating tests in:
 - Updated all test files to use the new helper function instead of calling count_function_calls directly
 - All tests pass with 100% coverage, all linting and type checking passes
 
-### Step 4: Update file path types throughout (OPTIONAL - DEFER IF COMPLEX)
+### Step 4: Update file path types throughout ✅ COMPLETED
 
-**Note**: Initial investigation shows that `FunctionInfo.file_path` is used throughout the codebase (65+ occurrences in tests alone). The Path standardization can be deferred to a separate refactor if it proves too complex or risky. The current refactor works fine with `str` file paths - just convert Path to str when passing to `FunctionDefinitionVisitor`.
+**Note**: Initial investigation showed that `FunctionInfo.file_path` was used throughout the codebase (65+ occurrences in tests alone). Despite the complexity, the Path standardization was successfully implemented.
 
-If proceeding with Path standardization:
-1. Update `FunctionDefinitionVisitor` constructor to accept `Path`
-2. Update `FunctionInfo.file_path` from `str` to `Path`
-3. Update all test files that construct `FunctionInfo` objects
-4. Verify CLI and output formatting still work correctly
+Completed Path standardization:
+1. Updated `FunctionDefinitionVisitor` constructor to accept `Path` ✅
+2. Updated `FunctionInfo.file_path` from `str` to `Path` ✅
+3. Updated all test files that construct `FunctionInfo` objects ✅
+4. Verified CLI and output formatting still work correctly ✅
 
-**Commit**: `refactor: standardize on Path objects for file paths` (if implemented)
+**Commit**: `refactor: standardize on Path objects for file paths` ✅ COMPLETED
+
+**Implementation notes**:
+- Updated FunctionInfo model to use Path type for file_path field
+- Modified FunctionDefinitionVisitor to accept and store Path objects
+- Updated test factories to accept Path objects (with None default to avoid pyright issues)
+- Modified temp_python_file helper to yield Path objects instead of strings
+- Updated parse_functions_from_file and count_calls_from_file helpers to accept Path
+- Fixed all test files to use Path objects when calling factory functions
+- All tests pass with 100% coverage, all linting and type checking passes
 
 ### Step 5: Update documentation and remove obsolete comments
 

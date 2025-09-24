@@ -2,6 +2,7 @@
 """Tests for call counting functionality."""
 
 import ast
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -214,7 +215,7 @@ def caller():
 
 def test_count_calls_nonexistent_file() -> None:
     """Test handling of nonexistent files."""
-    result, _ = count_calls_from_file("/nonexistent/file.py", ())
+    result, _ = count_calls_from_file(Path("/nonexistent/file.py"), ())
     assert result == ()
 
 
@@ -361,7 +362,7 @@ self.method()
         make_function_info(
             "method",
             line_number=1,
-            file_path="dummy.py",
+            file_path=Path("dummy.py"),
         ),
     )
 
@@ -410,7 +411,7 @@ outer.inner.method()
         make_function_info(
             "method",
             line_number=1,
-            file_path="dummy.py",
+            file_path=Path("dummy.py"),
         ),
     )
 
@@ -740,7 +741,7 @@ def my_function():
             "method",
             qualified_name=make_qualified_name("__module__.my_function.Outer.Inner.method"),
             line_number=5,
-            file_path="test.py",
+            file_path=Path("test.py"),
         ),
     )
 

@@ -4,6 +4,8 @@ This module provides factory functions to simplify the creation of model
 objects in tests, reducing duplication and improving readability.
 """
 
+from pathlib import Path
+
 from annotation_prioritizer.models import (
     AnnotationScore,
     FunctionInfo,
@@ -47,7 +49,7 @@ def make_function_info(  # noqa: PLR0913
     parameters: tuple[ParameterInfo, ...] | None = None,
     has_return_annotation: bool = False,
     line_number: int = 1,
-    file_path: str = "/test.py",
+    file_path: Path | None = None,
 ) -> FunctionInfo:
     """Create FunctionInfo with sensible defaults.
 
@@ -70,6 +72,8 @@ def make_function_info(  # noqa: PLR0913
         qualified_name = make_qualified_name(f"__module__.{name}")
     if parameters is None:
         parameters = ()
+    if file_path is None:
+        file_path = Path("/test.py")
 
     return FunctionInfo(
         name=name,
@@ -88,7 +92,7 @@ def make_priority(  # noqa: PLR0913
     return_score: float = 0.0,
     call_count: int = 0,
     parameters: tuple[ParameterInfo, ...] | None = None,
-    file_path: str = "/test.py",
+    file_path: Path | None = None,
     line_number: int = 1,
     has_return_annotation: bool = False,
     total_score: float | None = None,
@@ -130,6 +134,8 @@ def make_priority(  # noqa: PLR0913
         total_score = 0.0
     if priority_score is None:
         priority_score = 0.0
+    if file_path is None:
+        file_path = Path("/test.py")
 
     # Create nested objects
     function_info = FunctionInfo(
