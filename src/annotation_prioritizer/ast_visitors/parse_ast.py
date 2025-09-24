@@ -1,4 +1,14 @@
-"""File-to-AST parsing."""
+"""Common AST parsing utilities for file analysis.
+
+This module provides centralized file parsing functionality to ensure consistent
+AST generation and single-read semantics across the annotation prioritizer.
+By parsing files once and passing the AST and source code to downstream functions,
+we eliminate duplicate I/O operations and parsing overhead.
+
+The parse_ast_from_file function handles common error cases (missing files,
+syntax errors) gracefully, returning None to allow callers to handle failures
+appropriately.
+"""
 
 import ast
 from pathlib import Path
