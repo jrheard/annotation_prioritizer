@@ -7,9 +7,9 @@ import pytest
 from annotation_prioritizer.ast_visitors.class_discovery import (
     ClassDiscoveryVisitor,
     ClassRegistry,
-    build_class_registry,
 )
 from annotation_prioritizer.models import make_qualified_name
+from tests.helpers import build_registries_from_source
 
 
 @pytest.mark.parametrize(
@@ -130,8 +130,7 @@ class AnotherClass:
     class Nested:
         pass
 """
-    tree = ast.parse(source)
-    registry = build_class_registry(tree)
+    _, registry, _ = build_registries_from_source(source)
 
     # Check user-defined classes
     assert "__module__.MyClass" in registry.classes
@@ -231,8 +230,7 @@ class list:
     def append(item):
         pass
 """
-    tree = ast.parse(source)
-    registry = build_class_registry(tree)
+    _, registry, _ = build_registries_from_source(source)
 
     # User-defined classes are tracked
     assert registry.is_known_class(make_qualified_name("__module__.int")) is True
