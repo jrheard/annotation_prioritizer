@@ -1,5 +1,7 @@
 """Unit tests for the scoring module."""
 
+from pathlib import Path
+
 import pytest
 
 from annotation_prioritizer.models import ParameterInfo, make_qualified_name
@@ -106,7 +108,7 @@ def test_fully_annotated_function() -> None:
         ),
         has_return_annotation=True,
         line_number=10,
-        file_path="/test/file.py",
+        file_path=Path("/test/file.py"),
     )
 
     score = calculate_annotation_score(function_info)
@@ -127,7 +129,7 @@ def test_no_annotations_function() -> None:
         ),
         has_return_annotation=False,
         line_number=10,
-        file_path="/test/file.py",
+        file_path=Path("/test/file.py"),
     )
 
     score = calculate_annotation_score(function_info)
@@ -143,7 +145,7 @@ def test_no_parameters_with_return_annotation() -> None:
         "test_func",
         has_return_annotation=True,
         line_number=10,
-        file_path="/test/file.py",
+        file_path=Path("/test/file.py"),
     )
 
     score = calculate_annotation_score(function_info)
@@ -159,7 +161,7 @@ def test_no_parameters_without_return_annotation() -> None:
         "test_func",
         has_return_annotation=False,
         line_number=10,
-        file_path="/test/file.py",
+        file_path=Path("/test/file.py"),
     )
 
     score = calculate_annotation_score(function_info)
@@ -180,7 +182,7 @@ def test_partial_parameters_with_return_annotation() -> None:
         ),
         has_return_annotation=True,
         line_number=10,
-        file_path="/test/file.py",
+        file_path=Path("/test/file.py"),
     )
 
     score = calculate_annotation_score(function_info)
@@ -202,7 +204,7 @@ def test_partial_parameters_without_return_annotation() -> None:
         ),
         has_return_annotation=False,
         line_number=10,
-        file_path="/test/file.py",
+        file_path=Path("/test/file.py"),
     )
 
     score = calculate_annotation_score(function_info)
@@ -232,7 +234,7 @@ def test_complex_parameter_mix() -> None:
         ),
         has_return_annotation=False,
         line_number=25,
-        file_path="/test/complex.py",
+        file_path=Path("/test/complex.py"),
     )
 
     score = calculate_annotation_score(function_info)

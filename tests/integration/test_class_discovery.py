@@ -365,7 +365,7 @@ def main():
 
     with temp_python_file(code) as temp_path:
         # Full analysis pipeline
-        result = analyze_file(temp_path)
+        result = analyze_file(str(temp_path))
         results = result.priorities
 
         # Check that the right methods were analyzed

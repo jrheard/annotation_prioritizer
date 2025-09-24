@@ -118,11 +118,11 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         - Tracks both class and function scopes for accurate qualified naming
     """
 
-    def __init__(self, file_path: str) -> None:
+    def __init__(self, file_path: Path) -> None:
         """Initialize the visitor with source file context.
 
         Args:
-            file_path: Absolute or relative path to the Python source file being analyzed.
+            file_path: Path to the Python source file being analyzed.
                       This path is stored with each FunctionInfo for traceability.
         """
         super().__init__()
@@ -246,6 +246,6 @@ def parse_function_definitions(
         Tuple of FunctionInfo objects containing function metadata including
         name, qualified name, parameters, and return annotation status.
     """
-    visitor = FunctionDefinitionVisitor(str(file_path))  # Convert Path to str for now
+    visitor = FunctionDefinitionVisitor(file_path)
     visitor.visit(tree)
     return tuple(visitor.functions)

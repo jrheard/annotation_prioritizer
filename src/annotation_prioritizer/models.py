@@ -11,6 +11,7 @@ Data Flow Through Models:
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import NewType
 
 # Define the new type for qualified names like "__module__.ClassName.method"
@@ -91,7 +92,7 @@ class FunctionInfo:
     parameters: tuple[ParameterInfo, ...]  # All parameters in definition order
     has_return_annotation: bool  # Whether return type is annotated
     line_number: int  # Line where function is defined (1-indexed)
-    file_path: str  # Path to source file (as provided, can be absolute or relative)
+    file_path: Path  # Path to source file (as provided, can be absolute or relative)
 
 
 @dataclass(frozen=True)

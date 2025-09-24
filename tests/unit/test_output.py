@@ -1,5 +1,7 @@
 """Tests for output module."""
 
+from pathlib import Path
+
 from annotation_prioritizer.models import UnresolvableCall
 from annotation_prioritizer.output import (
     display_results,
@@ -29,7 +31,7 @@ def test_format_results_table_with_data() -> None:
         call_count=10,
         parameters=(make_parameter("x"),),
         line_number=1,
-        file_path="test.py",
+        file_path=Path("test.py"),
     )
 
     # This priority will have 60% annotation to test yellow styling
@@ -40,7 +42,7 @@ def test_format_results_table_with_data() -> None:
         call_count=5,
         parameters=(make_parameter("x", annotated=True),),
         line_number=2,
-        file_path="test.py",
+        file_path=Path("test.py"),
         # Explicitly set total score to 60%
         total_score=0.6,
         priority_score=2.0,  # 5 * (1 - 0.6)
@@ -62,7 +64,7 @@ def test_format_results_table_color_styling() -> None:
         return_score=1.0,
         call_count=1,
         line_number=1,
-        file_path="test.py",
+        file_path=Path("test.py"),
         has_return_annotation=True,
         # Explicitly set total score to 90%
         total_score=0.9,
@@ -76,7 +78,7 @@ def test_format_results_table_color_styling() -> None:
         return_score=0.0,
         call_count=10,
         line_number=2,
-        file_path="test.py",
+        file_path=Path("test.py"),
         total_score=0.0,
         priority_score=10.0,  # Very high priority
     )
@@ -104,7 +106,7 @@ def test_print_summary_stats_all_annotated() -> None:
         call_count=5,
         parameters=(make_parameter("x", annotated=True),),
         line_number=1,
-        file_path="test.py",
+        file_path=Path("test.py"),
         has_return_annotation=True,
         total_score=1.0,
         priority_score=0.0,  # 5 * (1 - 1.0)
@@ -129,7 +131,7 @@ def test_print_summary_stats_with_high_priority() -> None:
         return_score=0.0,
         call_count=10,
         line_number=1,
-        file_path="test.py",
+        file_path=Path("test.py"),
         # Explicitly set total score to 0.25 and priority to 7.5
         total_score=0.25,
         priority_score=7.5,  # 10 * (1 - 0.25)
@@ -141,7 +143,7 @@ def test_print_summary_stats_with_high_priority() -> None:
         return_score=1.0,
         call_count=1,
         line_number=2,
-        file_path="test.py",
+        file_path=Path("test.py"),
         has_return_annotation=True,
         total_score=1.0,
         priority_score=0.0,  # 1 * (1 - 1.0)
@@ -173,7 +175,7 @@ def test_display_results_with_data() -> None:
         return_score=0.0,
         call_count=5,
         line_number=1,
-        file_path="test.py",
+        file_path=Path("test.py"),
         # Explicitly set total score to 0.25 and priority to 3.75
         total_score=0.25,
         priority_score=3.75,  # 5 * (1 - 0.25)

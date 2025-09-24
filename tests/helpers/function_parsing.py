@@ -10,24 +10,22 @@ from annotation_prioritizer.ast_visitors.variable_discovery import build_variabl
 from annotation_prioritizer.models import CallCount, FunctionInfo, UnresolvableCall
 
 
-def parse_functions_from_file(file_path: str) -> tuple[FunctionInfo, ...]:
+def parse_functions_from_file(file_path: Path) -> tuple[FunctionInfo, ...]:
     """Parse functions from a file with full AST and registry context."""
-    path = Path(file_path)
-    parse_result = parse_ast_from_file(path)
+    parse_result = parse_ast_from_file(file_path)
     if not parse_result:
         return ()
 
     tree, _ = parse_result
     class_registry = build_class_registry(tree)
-    return parse_function_definitions(tree, path, class_registry)
+    return parse_function_definitions(tree, file_path, class_registry)
 
 
 def count_calls_from_file(
-    file_path: str, known_functions: tuple[FunctionInfo, ...]
+    file_path: Path, known_functions: tuple[FunctionInfo, ...]
 ) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
     """Count function calls from a file with full AST and registry context."""
-    path = Path(file_path)
-    parse_result = parse_ast_from_file(path)
+    parse_result = parse_ast_from_file(file_path)
     if not parse_result:
         return ((), ())
 
