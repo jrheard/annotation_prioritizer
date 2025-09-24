@@ -7,9 +7,9 @@ from annotation_prioritizer.ast_visitors.class_discovery import build_class_regi
 from annotation_prioritizer.ast_visitors.function_parser import (
     FunctionDefinitionVisitor,
     generate_synthetic_init_methods,
-    parse_function_definitions,
 )
 from annotation_prioritizer.models import make_qualified_name
+from tests.helpers.function_parsing import parse_functions_from_source
 
 
 def test_class_with_explicit_init() -> None:
@@ -19,12 +19,8 @@ class Calculator:
     def __init__(self, x: int) -> None:
         self.x = x
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
-    file_path = Path("test.py")
-
-    # Parse functions normally
-    functions = parse_function_definitions(tree, file_path, class_registry)
+    # Parse functions using helper
+    functions = parse_functions_from_source(source)
 
     # Should have exactly one __init__ (the explicit one)
     init_funcs = [f for f in functions if f.name == "__init__"]
@@ -44,12 +40,8 @@ def test_class_without_init() -> None:
 class SimpleClass:
     pass
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
-    file_path = Path("test.py")
-
     # Parse functions (should create synthetic __init__)
-    functions = parse_function_definitions(tree, file_path, class_registry)
+    functions = parse_functions_from_source(source)
 
     # Should have exactly one function (the synthetic __init__)
     assert len(functions) == 1
@@ -78,11 +70,7 @@ class AlsoWithInit:
     def __init__(self, x: int):
         self.x = x
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
-    file_path = Path("test.py")
-
-    functions = parse_function_definitions(tree, file_path, class_registry)
+    functions = parse_functions_from_source(source)
 
     # Should have 3 __init__ methods total
     init_funcs = [f for f in functions if f.name == "__init__"]
@@ -117,11 +105,7 @@ class Outer:
         def __init__(self):
             pass
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
-    file_path = Path("test.py")
-
-    functions = parse_function_definitions(tree, file_path, class_registry)
+    functions = parse_functions_from_source(source)
 
     init_funcs = [f for f in functions if f.name == "__init__"]
     init_names = {str(f.qualified_name) for f in init_funcs}
@@ -147,11 +131,7 @@ def factory():
         pass
     return LocalClass
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
-    file_path = Path("test.py")
-
-    functions = parse_function_definitions(tree, file_path, class_registry)
+    functions = parse_functions_from_source(source)
 
     # Should have factory function and synthetic __init__
     func_names = [f.name for f in functions]
@@ -198,11 +178,7 @@ def test_synthetic_init_parameters() -> None:
 class TestClass:
     pass
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
-    file_path = Path("test.py")
-
-    functions = parse_function_definitions(tree, file_path, class_registry)
+    functions = parse_functions_from_source(source)
 
     # Get the synthetic __init__
     init_func = functions[0]
@@ -226,11 +202,7 @@ def test_empty_file() -> None:
 def some_function():
     pass
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
-    file_path = Path("test.py")
-
-    functions = parse_function_definitions(tree, file_path, class_registry)
+    functions = parse_functions_from_source(source)
 
     # Should only have some_function, no __init__
     assert len(functions) == 1

@@ -1,11 +1,12 @@
 """Main analysis orchestrator for type annotation prioritization."""
 
+import ast
 from pathlib import Path
 
 from annotation_prioritizer.ast_visitors.call_counter import count_function_calls
 from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
 from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
-from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file
+from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file, parse_ast_from_source
 from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
 from annotation_prioritizer.models import AnalysisResult, AnnotationScore, FunctionPriority, QualifiedName
 from annotation_prioritizer.scoring import calculate_annotation_score
@@ -20,19 +21,19 @@ def calculate_priority_score(annotation_score: AnnotationScore, call_count: int)
     return call_count * (1.0 - annotation_score.total_score)
 
 
-def analyze_file(file_path: str) -> AnalysisResult:
-    """Complete analysis pipeline for a single Python file.
+def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -> AnalysisResult:
+    """Complete analysis pipeline for a parsed AST.
 
-    Returns AnalysisResult with function priorities sorted by priority score
-    (highest first) and all unresolvable calls.
+    Args:
+        tree: Parsed AST module
+        source_code: Python source code as a string
+        filename: Filename to use for the analysis (affects qualified names)
+
+    Returns:
+        AnalysisResult with function priorities sorted by priority score
+        (highest first) and all unresolvable calls.
     """
-    file_path_obj = Path(file_path)
-
-    parse_result = parse_ast_from_file(file_path_obj)
-    if not parse_result:
-        return AnalysisResult(priorities=(), unresolvable_calls=())
-
-    tree, source_code = parse_result
+    file_path_obj = Path(filename)
 
     # Build all registries upfront
     class_registry = build_class_registry(tree)
@@ -70,3 +71,38 @@ def analyze_file(file_path: str) -> AnalysisResult:
     # 4. Sort by priority score (highest first) and return complete result
     sorted_priorities = tuple(sorted(priorities, key=lambda p: p.priority_score, reverse=True))
     return AnalysisResult(priorities=sorted_priorities, unresolvable_calls=unresolvable_calls)
+
+
+def analyze_source(source_code: str, filename: str = "test.py") -> AnalysisResult:
+    """Complete analysis pipeline for Python source code.
+
+    Args:
+        source_code: Python source code as a string
+        filename: Filename to use for the analysis (affects qualified names)
+
+    Returns:
+        AnalysisResult with function priorities sorted by priority score
+        (highest first) and all unresolvable calls.
+    """
+    parse_result = parse_ast_from_source(source_code, filename)
+    if not parse_result:
+        return AnalysisResult(priorities=(), unresolvable_calls=())
+
+    tree, _ = parse_result
+    return analyze_ast(tree, source_code, filename)
+
+
+def analyze_file(file_path: str) -> AnalysisResult:
+    """Complete analysis pipeline for a single Python file.
+
+    Returns AnalysisResult with function priorities sorted by priority score
+    (highest first) and all unresolvable calls.
+    """
+    file_path_obj = Path(file_path)
+
+    parse_result = parse_ast_from_file(file_path_obj)
+    if not parse_result:
+        return AnalysisResult(priorities=(), unresolvable_calls=())
+
+    tree, source_code = parse_result
+    return analyze_ast(tree, source_code, str(file_path_obj))
