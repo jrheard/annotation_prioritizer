@@ -236,7 +236,11 @@ class CallCountVisitor(ast.NodeVisitor):
             return self._resolve_direct_call(func)
 
         if isinstance(func, ast.Attribute):
-            return self._resolve_method_call(func)
+            resolved = self._resolve_method_call(func)
+            if resolved and self._class_registry.is_known_class(resolved):
+                # It's actually a nested class instantiation like Outer.Inner()
+                return make_qualified_name(f"{resolved}.__init__")
+            return resolved
 
         # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
         # Cannot be resolved statically

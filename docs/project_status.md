@@ -108,6 +108,7 @@ The following patterns are not yet supported for call counting:
 - Variable reassignment: Tracks the most recent type assignment
 
 **Patterns Still Deferred (Future Work):**
+- Nested class instantiation variable tracking: `inner = Outer.Inner(); inner.method()` (variable type not tracked)
 - Method chaining from returns: `get_calculator().add()` (no return type tracking)
 - Indexing operations: `calculators[0].add()` (no collection content tracking)
 - Attribute access chains: `self.calc.add()` (no object attribute tracking)
@@ -164,7 +165,8 @@ None currently.
    - ✅ Track direct `ClassName()` calls as calls to `__init__` methods
    - ✅ Generate synthetic `__init__` for classes without explicit constructors
    - ✅ Count instantiations properly for priority scoring
-   - ⏸️ **Deferred:** Nested class instantiation (`Outer.Inner()`)
+   - ✅ Support nested class instantiation (`Outer.Inner()`, `Outer.Middle.Inner()`)
+     - Note: This counts the call to `Outer.Inner.__init__`, but doesn't track the variable type for subsequent method calls
    - ⏸️ **Deferred:** Class reference assignments (`CalcClass = Calculator; CalcClass()`)
 
 2. **@property Support**
