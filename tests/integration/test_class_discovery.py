@@ -2,8 +2,8 @@
 
 from annotation_prioritizer.analyzer import analyze_file
 from annotation_prioritizer.ast_visitors.call_counter import count_function_calls
-from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.models import make_qualified_name
+from tests.helpers.function_parsing import parse_functions_from_file
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -29,7 +29,7 @@ def use_class():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
@@ -67,7 +67,7 @@ def use_classes():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
@@ -99,7 +99,7 @@ def use_at_module():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
@@ -123,7 +123,7 @@ def use_builtins():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         # Since we don't track built-in methods in known_functions,
@@ -155,7 +155,7 @@ def use_local():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
@@ -189,7 +189,7 @@ def main():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
@@ -217,7 +217,7 @@ def use_calculator():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
@@ -256,7 +256,7 @@ def module_level_use():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
@@ -287,7 +287,7 @@ def use_stuff():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}
@@ -319,7 +319,7 @@ def another_factory():
 """
 
     with temp_python_file(code) as temp_path:
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
         counts, _ = count_function_calls(temp_path, functions)
 
         call_counts = {c.function_qualified_name: c.call_count for c in counts}

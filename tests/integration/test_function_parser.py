@@ -2,8 +2,8 @@
 
 import pytest
 
-from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.models import ParameterInfo, make_qualified_name
+from tests.helpers.function_parsing import parse_functions_from_file
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -18,11 +18,11 @@ from tests.helpers.temp_files import temp_python_file
 def test_parse_invalid_inputs_return_empty(test_case: str, file_content: str | None) -> None:
     """Test that parser returns empty tuple for various invalid inputs."""
     if test_case == "nonexistent_file":
-        result = parse_function_definitions("/nonexistent/file.py")
+        result = parse_functions_from_file("/nonexistent/file.py")
     else:
         assert file_content is not None  # Type narrowing for pyright
         with temp_python_file(file_content) as path:
-            result = parse_function_definitions(path)
+            result = parse_functions_from_file(path)
 
     assert result == ()
 
@@ -35,7 +35,7 @@ def simple_function(a, b):
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 1
 
         func = result[0]
@@ -58,7 +58,7 @@ def annotated_function(a: int, b: str) -> bool:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 1
 
         func = result[0]
@@ -78,7 +78,7 @@ def mixed_function(a: int, b, c: str):
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 1
 
         func = result[0]
@@ -111,7 +111,7 @@ def varargs_function(a, *args, **kwargs):
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 1
 
         func = result[0]
@@ -140,7 +140,7 @@ class TestClass:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 3
 
         # Check qualified names
@@ -173,7 +173,7 @@ class OuterClass:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 2
 
         outer_method = next(f for f in result if f.name == "outer_method")
@@ -197,7 +197,7 @@ class AsyncClass:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 2
 
         async_func = next(f for f in result if f.name == "async_function")
@@ -217,7 +217,7 @@ def keyword_only(a, *, b: int, c) -> None:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 1
 
         func = result[0]
@@ -235,7 +235,7 @@ def no_params() -> int:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 1
 
         func = result[0]
@@ -262,7 +262,7 @@ def func3() -> str:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 4
 
         names = {f.name for f in result}
@@ -291,7 +291,7 @@ def outer_function(x):
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 3
 
         # Check all functions are found
@@ -337,7 +337,7 @@ class Outer:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 4
 
         # Check all functions are found
@@ -371,7 +371,7 @@ def factory_function():
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 4
 
         # Check all functions are found
@@ -414,7 +414,7 @@ class OuterClass:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 5
 
         # Check all functions are found
@@ -454,7 +454,7 @@ class AsyncClass:
 """
 
     with temp_python_file(source) as path:
-        result = parse_function_definitions(path)
+        result = parse_functions_from_file(path)
         assert len(result) == 6
 
         # Check all functions are found

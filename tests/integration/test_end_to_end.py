@@ -187,6 +187,13 @@ def test_analyze_empty_file() -> None:
         assert priorities == ()
 
 
+def test_analyze_nonexistent_file() -> None:
+    """Test analyzing a nonexistent file returns empty result."""
+    result = analyze_file("/nonexistent/file.py")
+    assert result.priorities == ()
+    assert result.unresolvable_calls == ()
+
+
 def test_variable_tracking_comprehensive() -> None:
     """Test comprehensive variable tracking scenarios for instance method resolution."""
     test_code = '''class Calculator:

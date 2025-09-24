@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import override
 
 from annotation_prioritizer.ast_arguments import ArgumentKind, iter_all_arguments
+from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
 from annotation_prioritizer.models import (
     FunctionInfo,
     ParameterInfo,
@@ -229,31 +230,22 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         self.functions.append(function_info)
 
 
-def parse_function_definitions(file_path: str) -> tuple[FunctionInfo, ...]:
-    """Extract all function definitions from a Python file using AST parsing.
-
-    Parses the Python source file and extracts information about all function
-    definitions found, including regular functions, async functions, and methods
-    within classes. Builds qualified names for methods using class context.
-    Returns empty tuple if file doesn't exist or has syntax errors.
+def parse_function_definitions(
+    tree: ast.Module,
+    file_path: Path,
+    class_registry: ClassRegistry,  # noqa: ARG001  # Will be used after refactor completes
+) -> tuple[FunctionInfo, ...]:
+    """Extract all function definitions from a parsed AST.
 
     Args:
-        file_path: Path to the Python source file to analyze
+        tree: Parsed AST module
+        file_path: Path to the source file (for FunctionInfo objects)
+        class_registry: Registry of known classes
 
     Returns:
         Tuple of FunctionInfo objects containing function metadata including
         name, qualified name, parameters, and return annotation status.
     """
-    file_path_obj = Path(file_path)
-    if not file_path_obj.exists():
-        return ()
-
-    try:
-        source_code = file_path_obj.read_text(encoding="utf-8")
-        tree = ast.parse(source_code, filename=file_path)
-    except (OSError, SyntaxError):
-        return ()
-
-    visitor = FunctionDefinitionVisitor(file_path)
+    visitor = FunctionDefinitionVisitor(str(file_path))  # Convert Path to str for now
     visitor.visit(tree)
     return tuple(visitor.functions)

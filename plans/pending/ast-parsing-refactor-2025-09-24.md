@@ -74,7 +74,7 @@ Write tests for this function covering:
 - Used bare test functions instead of test classes per test guidelines
 - Fixed all linting issues including using Path.chmod() instead of os.chmod()
 
-### Step 2: Update parse_function_definitions and its callers
+### Step 2: Update parse_function_definitions and its callers ✅ COMPLETED
 
 First, update the function signature in `src/annotation_prioritizer/ast_visitors/function_parser.py`:
 
@@ -154,7 +154,14 @@ This includes updating tests in:
 - `tests/integration/test_function_parser.py`
 - Any other test files that directly call this function
 
-**Commit**: `refactor: update parse_function_definitions to accept AST and registries`
+**Commit**: `refactor: update parse_function_definitions to accept AST and registries` ✅ COMPLETED
+
+**Implementation notes**:
+- Updated function signature to accept tree, file_path, and class_registry
+- Modified analyzer.py to parse file once and pass AST/registries
+- Created shared test helper `parse_functions_from_file` in tests/helpers/function_parsing.py to avoid duplication
+- Added test for nonexistent file case in analyze_file to maintain 100% coverage
+- Fixed linting issues (unused variables, unused parameters)
 
 ### Step 3: Update count_function_calls and complete analyzer.py
 
