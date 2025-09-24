@@ -1,13 +1,11 @@
 """Unit tests for variable discovery AST visitor."""
 
-import ast
-
-from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
 from annotation_prioritizer.ast_visitors.variable_discovery import (
     VariableDiscoveryVisitor,
     build_variable_registry,
 )
 from annotation_prioritizer.models import make_qualified_name
+from tests.helpers import build_registries_from_source
 
 
 def test_direct_instantiation() -> None:
@@ -18,8 +16,7 @@ class Calculator:
 
 calc = Calculator()
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -40,8 +37,7 @@ class Calculator:
 def process(calc: Calculator):
     pass
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -61,8 +57,7 @@ class Calculator:
 
 calc: Calculator = get_calculator()
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -86,8 +81,7 @@ class Helper:
 obj = Calculator()
 obj = Helper()  # Reassignment - should track Helper
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -115,8 +109,7 @@ def func2():
     calc = Calculator()  # Different function
     pass
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -148,8 +141,7 @@ def outer():
         nested_calc = Calculator()
         pass
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -175,8 +167,7 @@ calc1 = Calculator()
 calc2: Calculator = get_calculator()
 calc3: Calculator
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -201,8 +192,7 @@ class Calculator:
 calc_instance = Calculator()  # Instance
 calc_class = Calculator  # Class reference
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -229,8 +219,7 @@ def use_calculator(calc: Calculator):
     calc = Calculator()  # Reassignment
     return calc.add(1, 2)
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
 
     # Use the orchestration function
     registry = build_variable_registry(tree, class_registry)
@@ -252,8 +241,7 @@ def create_calculator():
     calc = Calculator()
     return calc
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -274,8 +262,7 @@ class Outer:
 
 inner = Outer.Inner()  # Not supported yet (would need attribute resolution)
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -292,8 +279,7 @@ def test_unknown_class_not_tracked() -> None:
 calc = Calculator()  # Should not be tracked
 obj: UnknownType  # Should not be tracked
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -314,8 +300,7 @@ calc1: Optional[Calculator]  # Not supported
 calc2: List[Calculator]  # Not supported
 calc3: Calculator | None  # Not supported
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -334,8 +319,7 @@ class Calculator:
 calc1, calc2 = Calculator(), Calculator()
 calc3 = calc4 = Calculator()
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -354,8 +338,7 @@ class Calculator:
 class Helper:
     pass
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -382,8 +365,7 @@ class Calculator:
 async def process_async(calc: Calculator):
     pass
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -404,8 +386,7 @@ class Calculator:
 # Comprehension variables - complex scope, not tracked
 calcs = [Calculator() for _ in range(5)]
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -417,8 +398,7 @@ calcs = [Calculator() for _ in range(5)]
 def test_empty_registry() -> None:
     """Test behavior with empty code."""
     code = ""
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -434,8 +414,7 @@ class Calculator:
 
 calc: Calculator  # Annotation without assignment
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -458,8 +437,7 @@ self.calc: Calculator = Calculator()
 obj.attr: Calculator = Calculator()
 items[0]: Calculator = Calculator()
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -481,8 +459,7 @@ def some_function():
 calc = some_function  # Should not be tracked as Calculator type
 obj = unknown_name  # Should not be tracked
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -508,8 +485,7 @@ def process_all_types(
 ):
     pass
 """
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()

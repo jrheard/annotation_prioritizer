@@ -11,11 +11,10 @@ from annotation_prioritizer.ast_visitors.call_counter import (
     CallCountVisitor,
     UnresolvableCall,
 )
-from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
-from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
 from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
+from tests.helpers import build_registries_from_source
 from tests.helpers.factories import make_function_info, make_parameter
 from tests.helpers.function_parsing import count_calls_from_file, parse_functions_from_file
 from tests.helpers.temp_files import temp_python_file
@@ -341,7 +340,7 @@ self.method()
 """
 
     # Parse the code to get real AST nodes
-    tree = ast.parse(edge_case_code)
+    tree, class_registry, variable_registry = build_registries_from_source(edge_case_code)
 
     # Find the self.method() call node in the AST
     def is_self_method_call(node: ast.AST) -> bool:
@@ -366,8 +365,6 @@ self.method()
         ),
     )
 
-    class_registry = build_class_registry(ast.parse(""))
-    variable_registry = build_variable_registry(ast.parse(edge_case_code), class_registry)
     visitor = CallCountVisitor(known_functions, class_registry, edge_case_code, variable_registry)
 
     # Test by visiting the call - self.method() outside a class should not resolve
@@ -388,7 +385,7 @@ outer.inner.method()
 """
 
     # Parse the code to get real AST nodes
-    tree = ast.parse(complex_call_code)
+    tree, class_registry, variable_registry = build_registries_from_source(complex_call_code)
 
     # Find the outer.inner.method() call node in the AST
     def is_outer_inner_method_call(node: ast.AST) -> bool:
@@ -415,8 +412,6 @@ outer.inner.method()
         ),
     )
 
-    class_registry = build_class_registry(ast.parse(""))
-    variable_registry = build_variable_registry(ast.parse(complex_call_code), class_registry)
     visitor = CallCountVisitor(known_functions, class_registry, complex_call_code, variable_registry)
 
     # Test by visiting the call - unresolved references should not be counted
@@ -658,7 +653,7 @@ getattr(obj, 'method')()
 """
 
     # Parse the code to get real AST nodes
-    tree = ast.parse(dynamic_call_code)
+    tree, class_registry, variable_registry = build_registries_from_source(dynamic_call_code)
 
     # Find the getattr(obj, 'method')() call node in the AST
     def is_getattr_dynamic_call(node: ast.AST) -> bool:
@@ -673,9 +668,7 @@ getattr(obj, 'method')()
     assert call_node is not None, "Could not find getattr() dynamic call in parsed AST"
     assert isinstance(call_node, ast.Call)
 
-    # Create a visitor with an empty class registry
-    class_registry = build_class_registry(ast.parse(""))
-    variable_registry = build_variable_registry(ast.parse(dynamic_call_code), class_registry)
+    # Create a visitor with the registries
     visitor = CallCountVisitor((), class_registry, dynamic_call_code, variable_registry)
 
     # Test that resolve_call_name returns None for dynamic calls
@@ -691,10 +684,7 @@ class Outer:
         class Nested:
             pass
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
-
-    variable_registry = build_variable_registry(tree, class_registry)
+    _, class_registry, variable_registry = build_registries_from_source(source)
     visitor = CallCountVisitor((), class_registry, source, variable_registry)
 
     # Try to resolve a compound name that doesn't exist
@@ -732,8 +722,7 @@ def my_function():
     # This compound call should be resolved
     Outer.Inner.method()
 """
-    tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
+    tree, class_registry, variable_registry = build_registries_from_source(source)
 
     # Create a visitor with the Inner.method as a known function
     known_functions = (
@@ -745,7 +734,6 @@ def my_function():
         ),
     )
 
-    variable_registry = build_variable_registry(tree, class_registry)
     visitor = CallCountVisitor(known_functions, class_registry, source, variable_registry)
     visitor.visit(tree)
 
@@ -1040,9 +1028,7 @@ def _create_visitor_and_visit_call(
     code: str, call_node: ast.Call
 ) -> tuple[CallCountVisitor, tuple[UnresolvableCall, ...]]:
     """Create a visitor and visit a call node, returning visitor and unresolvable calls."""
-    tree = ast.parse(code)
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
+    _, class_registry, variable_registry = build_registries_from_source(code)
     visitor = CallCountVisitor((), class_registry, code, variable_registry)
     visitor.visit_Call(call_node)
     return visitor, visitor.get_unresolvable_calls()
@@ -1071,9 +1057,7 @@ def test_unresolvable_call_when_source_segment_fails(return_value: str | None) -
     simple_code = "unknown_func()"
     call_node = _get_first_call_node(simple_code)
 
-    tree = ast.parse(simple_code)
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
+    _, class_registry, variable_registry = build_registries_from_source(simple_code)
     visitor = CallCountVisitor((), class_registry, simple_code, variable_registry)
 
     with patch.object(ast, "get_source_segment", return_value=return_value):

@@ -1,11 +1,8 @@
 """Integration tests for self/cls resolution in nested class contexts."""
 
-import ast
-
 from annotation_prioritizer.ast_visitors.call_counter import CallCountVisitor
-from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
-from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
 from annotation_prioritizer.models import make_qualified_name
+from tests.helpers import build_registries_from_source
 from tests.helpers.factories import make_function_info
 
 
@@ -26,11 +23,8 @@ class Outer:
 
         return Inner
 """
-    tree = ast.parse(source_code)
-
     # Build registries
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
+    tree, class_registry, variable_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -79,11 +73,8 @@ class Outer:
 
         return Inner
 """
-    tree = ast.parse(source_code)
-
     # Build registries
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
+    tree, class_registry, variable_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -126,11 +117,8 @@ class A:
 
         return B
 """
-    tree = ast.parse(source_code)
-
     # Build registries
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
+    tree, class_registry, variable_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -169,11 +157,8 @@ class Outer:
 
         return Inner
 """
-    tree = ast.parse(source_code)
-
     # Build registries
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
+    tree, class_registry, variable_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -213,11 +198,8 @@ class MyClass:
     def method(self):
         self.foo()  # Should resolve to MyClass.foo
 """
-    tree = ast.parse(source_code)
-
     # Build registries
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
+    tree, class_registry, variable_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -259,11 +241,8 @@ class MyClass:
     def static_with_self_param(self):  # 'self' is just a regular param here
         self.helper()  # Currently resolves (detecting @staticmethod is a future enhancement)
 """
-    tree = ast.parse(source_code)
-
     # Build registries
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
+    tree, class_registry, variable_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
