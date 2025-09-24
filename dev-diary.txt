@@ -945,12 +945,15 @@ DONE _build_qualified_name() in function_parser seems pretty verbose now - shoul
 
 DONE /review-plan on the init doc
 
+===
+
+9/24
+
 TODO follow up on these obseravtions - are any of them useful?
 
   3. Missing Edge Cases:
     - Dataclasses auto-generate init - would create duplicates
     - Abstract base classes with abstractmethod
-    - Classes that override new without init
     - The plan doesn't mention how to avoid double-counting
 
 NVM also think about htis:
@@ -973,3 +976,11 @@ NVM also think about htis:
 TODO and this:     - The plan doesn't mention how to avoid double-counting
 
 TODO update the init doc after the refactor
+
+TODO come back and handle this:
+  ### Parameter Inference Limitations
+  **Important**: The current implementation will NOT infer parameters from parent classes. A synthetic `__init__` always has just `(self)` as its parameter, even if the parent class has a different signature. This means:
+  - `Child(42, "hello")` counts as a call to `Child.__init__`
+  - Our synthetic `Child.__init__` only has `(self)` parameter
+  - This parameter mismatch is intentional - we count calls, not validate them
+  - This limitation will be addressed in future inheritance support
