@@ -14,7 +14,7 @@ This plan refactors the AST parsing architecture to eliminate duplicate file rea
 ## Design Decisions
 
 ### File Organization
-We'll create a new `ast_helpers/` directory to house AST-related utilities, keeping them separate from the visitor implementations in `ast_visitors/`. This provides clear separation between utilities and business logic.
+We'll add the new parsing utility directly to the `ast_visitors/` directory alongside the existing visitor implementations. This keeps all AST-related code together in one place.
 
 ### Function Signature Changes
 Functions will receive their dependencies rather than creating them:
@@ -29,21 +29,9 @@ We'll standardize on `Path` objects instead of strings for file paths throughout
 
 ## Implementation Steps
 
-### Step 1: Create ast_helpers directory structure
+### Step 1: Create parse_ast module with parsing function
 
-Create the new directory and empty init file:
-```bash
-mkdir -p src/annotation_prioritizer/ast_helpers
-touch src/annotation_prioritizer/ast_helpers/__init__.py
-```
-
-The `__init__.py` can remain empty or optionally re-export key functions for convenience.
-
-**Commit**: `refactor: create ast_helpers directory for AST utilities`
-
-### Step 2: Create parse_ast module with parsing function
-
-Create `src/annotation_prioritizer/ast_helpers/parse_ast.py`:
+Create `src/annotation_prioritizer/ast_visitors/parse_ast.py`:
 
 ```python
 """Common AST parsing utilities."""
@@ -81,22 +69,7 @@ Write tests for this function covering:
 
 **Commit**: `feat: add parse_ast_from_file utility function`
 
-### Step 3: Move ast_arguments to ast_helpers
-
-Move the file and update imports:
-```bash
-git mv src/annotation_prioritizer/ast_arguments.py src/annotation_prioritizer/ast_helpers/ast_arguments.py
-```
-
-Update imports in:
-- `src/annotation_prioritizer/ast_visitors/function_parser.py`: Change `from annotation_prioritizer.ast_arguments` to `from annotation_prioritizer.ast_helpers.ast_arguments`
-- `src/annotation_prioritizer/ast_visitors/variable_discovery.py`: Same change
-
-Run tests to ensure imports still work.
-
-**Commit**: `refactor: move ast_arguments to ast_helpers directory`
-
-### Step 4: Update parse_function_definitions and its callers
+### Step 2: Update parse_function_definitions and its callers
 
 First, update the function signature in `src/annotation_prioritizer/ast_visitors/function_parser.py`:
 
@@ -108,7 +81,6 @@ def parse_function_definitions(
     tree: ast.Module,
     file_path: Path,
     class_registry: ClassRegistry,
-    source_code: str,  # Currently unused but included for consistency
 ) -> tuple[FunctionInfo, ...]:
     """Extract all function definitions from a parsed AST.
 
@@ -116,7 +88,6 @@ def parse_function_definitions(
         tree: Parsed AST module
         file_path: Path to the source file (for FunctionInfo objects)
         class_registry: Registry of known classes
-        source_code: Source code string (for future use)
 
     Returns:
         Tuple of FunctionInfo objects
@@ -132,7 +103,7 @@ Update `analyzer.py` to use the new signature:
 
 ```python
 from pathlib import Path
-from .ast_helpers.parse_ast import parse_ast_from_file
+from .ast_visitors.parse_ast import parse_ast_from_file
 from .ast_visitors.class_discovery import build_class_registry
 from .ast_visitors.variable_discovery import build_variable_registry
 
@@ -152,7 +123,7 @@ def analyze_file(file_path: str) -> AnalysisResult:
 
     # 1. Parse function definitions with class registry
     function_infos = parse_function_definitions(
-        tree, file_path_obj, class_registry, source_code
+        tree, file_path_obj, class_registry
     )
 
     if not function_infos:
@@ -180,7 +151,7 @@ This includes updating tests in:
 
 **Commit**: `refactor: update parse_function_definitions to accept AST and registries`
 
-### Step 5: Update count_function_calls and complete analyzer.py
+### Step 3: Update count_function_calls and complete analyzer.py
 
 Update `src/annotation_prioritizer/ast_visitors/call_counter.py`:
 
@@ -241,7 +212,7 @@ def analyze_file(file_path: str) -> AnalysisResult:
 
     # 1. Parse function definitions
     function_infos = parse_function_definitions(
-        tree, file_path_obj, class_registry, source_code
+        tree, file_path_obj, class_registry
     )
 
     if not function_infos:
@@ -266,21 +237,19 @@ This includes updating tests in:
 
 **Commit**: `refactor: update count_function_calls to accept AST and registries`
 
-### Step 6: Update file path types throughout
+### Step 4: Update file path types throughout (OPTIONAL - DEFER IF COMPLEX)
 
-Go through the modified functions and ensure all file path parameters use `Path` instead of `str`:
+**Note**: Initial investigation shows that `FunctionInfo.file_path` is used throughout the codebase (65+ occurrences in tests alone). The Path standardization can be deferred to a separate refactor if it proves too complex or risky. The current refactor works fine with `str` file paths - just convert Path to str when passing to `FunctionDefinitionVisitor`.
 
+If proceeding with Path standardization:
 1. Update `FunctionDefinitionVisitor` constructor to accept `Path`
-2. Update any place where `file_path` is stored or passed to use `Path`
-3. Convert to `str` only when needed (e.g., for ast.parse filename parameter)
+2. Update `FunctionInfo.file_path` from `str` to `Path`
+3. Update all test files that construct `FunctionInfo` objects
+4. Verify CLI and output formatting still work correctly
 
-This might require updates in:
-- `FunctionInfo` dataclass if it stores file_path
-- Test files that construct these objects
+**Commit**: `refactor: standardize on Path objects for file paths` (if implemented)
 
-**Commit**: `refactor: standardize on Path objects for file paths`
-
-### Step 7: Update documentation and remove obsolete comments
+### Step 5: Update documentation and remove obsolete comments
 
 Update docstrings and comments:
 1. Remove "two-stage analysis" references from `call_counter.py`
