@@ -12,7 +12,6 @@ Key Design Decisions:
     - Conservative attribution: Only count calls we're confident about
     - Qualified name matching: Uses full qualified names (e.g., "__module__.Calculator.add")
       to distinguish methods from module-level functions
-    - Dependency injection: Receives pre-built AST and registries from orchestrator
 
 Relationship to Other Modules:
     - function_parser.py: Provides the FunctionInfo definitions to count calls for

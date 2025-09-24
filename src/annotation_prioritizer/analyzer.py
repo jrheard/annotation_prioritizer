@@ -28,7 +28,6 @@ def analyze_file(file_path: str) -> AnalysisResult:
     """
     file_path_obj = Path(file_path)
 
-    # Parse once
     parse_result = parse_ast_from_file(file_path_obj)
     if not parse_result:
         return AnalysisResult(priorities=(), unresolvable_calls=())
