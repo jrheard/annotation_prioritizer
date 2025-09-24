@@ -291,7 +291,14 @@ Manually verify the tool output shows:
 
 **Commit**: `docs: add demo file showing class instantiation tracking`
 
-### Step 6: Update documentation
+### Step 6: Update documentation ✅ COMPLETED
+
+**Implementation Notes:**
+- Successfully moved "Class Instantiation Tracking" from "Planned Features" section to "Current Implementation Status" section
+- Added a dedicated subsection under "Analysis Capabilities" documenting the feature
+- Documented all limitations including synthetic __init__ parameter inference and class reference assignments
+- Clarified that all instantiation attempts are counted regardless of validity
+- Updated numbering in "Planned Features" section after removing the completed feature
 
 Update `docs/project_status.md`:
 - Move "Class Instantiation Tracking" from "Planned Features" to "Current Implementation Status"
