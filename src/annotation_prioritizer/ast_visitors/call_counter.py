@@ -305,11 +305,11 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified method name if resolvable, None otherwise
         """
-        # Check if it's a call on a variable (now includes self/cls!)
+        # Check if it's a call on a variable
         if isinstance(func.value, ast.Name):
             variable_name = func.value.id
 
-            # Look up the variable's type - handles ALL variables uniformly
+            # Look up the variable's type
             variable_type = lookup_variable(self._variable_registry, self._scope_stack, variable_name)
 
             if variable_type:
