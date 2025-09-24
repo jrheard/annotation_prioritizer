@@ -44,6 +44,7 @@ from annotation_prioritizer.models import (
     ParameterInfo,
     Scope,
     ScopeKind,
+    make_qualified_name,
 )
 from annotation_prioritizer.scope_tracker import (
     ScopeStack,
@@ -230,12 +231,68 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         self.functions.append(function_info)
 
 
+def generate_synthetic_init_methods(
+    known_functions: tuple[FunctionInfo, ...],
+    class_registry: ClassRegistry,
+    file_path: Path,
+) -> tuple[FunctionInfo, ...]:
+    """Generate synthetic __init__ methods for classes without explicit ones.
+
+    Creates a FunctionInfo with a single 'self' parameter (no annotations) for
+    each class that doesn't already have an __init__ method defined.
+
+    Note: Does not infer parameters from parent classes. This is a limitation
+    that will be addressed when inheritance support is implemented.
+
+    Args:
+        known_functions: Already discovered functions to check for existing __init__
+        class_registry: Registry of all classes found in the AST
+        file_path: Path to the source file for the FunctionInfo objects
+
+    Returns:
+        Tuple of synthetic FunctionInfo objects for missing __init__ methods
+    """
+    # Build a set of existing __init__ qualified names for faster lookup
+    existing_init_names = {func.qualified_name for func in known_functions if func.name == "__init__"}
+
+    # Find classes that need synthetic __init__ methods
+    classes_needing_init = [
+        class_name
+        for class_name in class_registry.classes
+        if make_qualified_name(f"{class_name}.__init__") not in existing_init_names
+    ]
+
+    # Create synthetic __init__ for each class that needs one
+    synthetic_inits: list[FunctionInfo] = []
+    for class_name in classes_needing_init:
+        synthetic_init = FunctionInfo(
+            name="__init__",
+            qualified_name=make_qualified_name(f"{class_name}.__init__"),
+            parameters=(
+                ParameterInfo(
+                    name="self",
+                    has_annotation=False,
+                    is_variadic=False,
+                    is_keyword=False,
+                ),
+            ),
+            has_return_annotation=False,
+            line_number=0,  # Line 0 indicates synthetic
+            file_path=file_path,
+        )
+        synthetic_inits.append(synthetic_init)
+
+    return tuple(synthetic_inits)
+
+
 def parse_function_definitions(
     tree: ast.Module,
     file_path: Path,
-    class_registry: ClassRegistry,  # noqa: ARG001  # Will be used after refactor completes
+    class_registry: ClassRegistry,
 ) -> tuple[FunctionInfo, ...]:
     """Extract all function definitions from a parsed AST.
+
+    Now includes synthetic __init__ methods for classes without explicit constructors.
 
     Args:
         tree: Parsed AST module
@@ -248,4 +305,8 @@ def parse_function_definitions(
     """
     visitor = FunctionDefinitionVisitor(file_path)
     visitor.visit(tree)
-    return tuple(visitor.functions)
+
+    # Generate synthetic __init__ methods for classes without them
+    synthetic_inits = generate_synthetic_init_methods(tuple(visitor.functions), class_registry, file_path)
+
+    return tuple(visitor.functions) + synthetic_inits
