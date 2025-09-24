@@ -160,7 +160,19 @@ None currently.
 ## Planned Features 📋
 
 ### High Priority
-1. **Import Resolution** (Phase 1 - Single File)
+1. **Class Instantiation Tracking**
+   - Track `ClassName()` calls as calls to `__init__` methods
+   - Resolve constructor calls that are currently unresolvable
+   - Count instantiations properly for priority scoring
+   - Example: `Dog()` → counts as call to `Dog.__init__`
+
+2. **@property Support**
+   - Distinguish properties from regular attributes
+   - Count property access as method calls
+   - Properties are already discovered, just need to track access
+   - Example: `person.full_name` → counts as call to `Person.full_name` property
+
+3. **Import Resolution** (Phase 1 - Single File)
    - Parse and track import statements
    - Resolve imported names to their modules
    - Support common import patterns:
@@ -169,13 +181,15 @@ None currently.
      - `import pandas as pd` → `pd.DataFrame()`
    - Still single-file analysis, but much more effective
 
+4. **Inheritance Resolution**
+   - Track class inheritance hierarchies
+   - Resolve method calls on subclasses to parent class methods
+   - Support Method Resolution Order (MRO)
+   - Example: `dog.move()` where `Dog` inherits from `Animal` → counts `Animal.move`
+
 ### Medium Priority
 
-3. **@property Support**
-   - Distinguish properties from regular attributes
-   - Count property access as method calls
-
-4. **Return Type Inference**
+5. **Return Type Inference**
    - Track function return types to enable method chaining
    - Support patterns like `get_calc().add()`
    - Would require significant type inference infrastructure
@@ -187,7 +201,6 @@ None currently.
 - **Parallelism** - Scan multiple files in parallel
 
 ### Advanced Analysis
-- **Inheritance Resolution**: Method Resolution Order (MRO) support
 - **Class Attribute Tracking**: Instance and class variable types (already noted in limitations as `self.calc.add()`)
 - **@dataclass Support**: Currently not supported - dataclass fields and methods are not properly tracked
   - Dataclass fields (class variables with type annotations) are not recognized

@@ -934,11 +934,11 @@ what next?
 
 DONE look into https://github.com/jrheard/annotation_prioritizer/issues/21
 
-and then TODO look into https://github.com/jrheard/annotation_prioritizer/issues/22
+and then DONE look into https://github.com/jrheard/annotation_prioritizer/issues/22
 
 i'm trying wording like "investigate XYZ then present your findings", rather than "do you think X is too Y?" - seems to help?
   might be placebo, no clue
 
-TODO can we make our claude hooks more targeted? at the very least, the commit message one?
+DONE can we make our claude hooks more targeted? at the very least, the commit message one?
 
 DONE _build_qualified_name() in function_parser seems pretty verbose now - should we remove it? are there any other similar functions/methods in other files that are just super verbose with no real value?
