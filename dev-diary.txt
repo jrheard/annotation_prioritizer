@@ -942,3 +942,34 @@ i'm trying wording like "investigate XYZ then present your findings", rather tha
 DONE can we make our claude hooks more targeted? at the very least, the commit message one?
 
 DONE _build_qualified_name() in function_parser seems pretty verbose now - should we remove it? are there any other similar functions/methods in other files that are just super verbose with no real value?
+
+DONE /review-plan on the init doc
+
+TODO follow up on these obseravtions - are any of them useful?
+
+  3. Missing Edge Cases:
+    - Dataclasses auto-generate init - would create duplicates
+    - Abstract base classes with abstractmethod
+    - Classes that override new without init
+    - The plan doesn't mention how to avoid double-counting
+
+NVM also think about htis:
+
+      ALTERNATIVE APPROACHES:
+
+  Simpler Solution: Track class instantiations without synthetic methods:
+  - When encountering Calculator(), check if it's a known class
+  - If yes, check if Calculator.__init__ exists in known functions
+  - Count toward it if exists, track as "implicit constructor call" if not
+  - Avoids the complexity and misleading metrics of synthetic methods
+  - Still achieves the goal of prioritizing constructors for annotation
+
+  This approach would:
+  - Eliminate Step 2 (synthetic generation) entirely
+  - Simplify Step 3 (no need to merge synthetic methods)
+  - Avoid misleading parameter coverage metrics
+  - Reduce code complexity while solving the core problem
+
+TODO and this:     - The plan doesn't mention how to avoid double-counting
+
+TODO update the init doc after the refactor

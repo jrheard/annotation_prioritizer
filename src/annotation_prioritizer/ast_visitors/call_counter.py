@@ -251,10 +251,12 @@ class CallCountVisitor(ast.NodeVisitor):
         func = node.func
 
         # Direct calls to functions: function_name()
+        # TODO: could actually be a class name: Calculator()
         if isinstance(func, ast.Name):
             return self._resolve_function_call(func.id)
 
         # Method calls: obj.method_name()
+        # TODO: once we support imports, this might not always be a method - could be eg `math.random()`
         if isinstance(func, ast.Attribute):
             return self._resolve_method_call(func)
 
