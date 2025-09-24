@@ -926,3 +926,12 @@ having claude add some hooks
 oh fun - note that hooks don't get run for subagents
 
 DONE anything else in claude.md that should be moved to hooks?
+
+ok!
+did a bunch of good stuff
+
+what next?
+
+TODO look into https://github.com/jrheard/annotation_prioritizer/issues/21
+
+and then TODO look into https://github.com/jrheard/annotation_prioritizer/issues/22

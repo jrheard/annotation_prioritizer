@@ -366,7 +366,7 @@ class Helper:
     assert variable.class_name == make_qualified_name("__module__.Helper")
     assert variable.is_instance is True
 
-    # self parameter is now tracked even without annotation (for self/cls resolution)
+    # self parameter is tracked even without annotation
     self_var = registry.variables.get(make_qualified_name("__module__.Calculator.process.self"))
     assert self_var is not None
     assert self_var.class_name == make_qualified_name("__module__.Calculator")

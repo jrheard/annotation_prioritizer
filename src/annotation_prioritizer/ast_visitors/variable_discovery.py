@@ -9,6 +9,7 @@ from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
 from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import (
     add_scope,
+    build_qualified_name,
     create_initial_stack,
     drop_last_scope,
     resolve_name_in_scope,
@@ -93,9 +94,8 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
                 if enclosing_class:  # Only register if we're actually in a class
                     # Register self as instance, cls as class reference
                     is_instance = param_name == "self"
-                    # Pass the qualified name directly since we already have it
-                    parts = [scope.name for scope in self._scope_stack]
-                    key = make_qualified_name(".".join([*parts, param_name]))
+                    # Build qualified key using scope stack and param name
+                    key = build_qualified_name(self._scope_stack, param_name)
                     variable_type = VariableType(class_name=enclosing_class, is_instance=is_instance)
                     self._variables[key] = variable_type
 
@@ -199,9 +199,8 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
 
     def _track_variable(self, variable_name: str, class_name: str, *, is_instance: bool) -> None:
         """Add or update a variable in the registry."""
-        # Build key using the same format as generate_name_candidates
-        parts = [scope.name for scope in self._scope_stack]
-        key = make_qualified_name(".".join([*parts, variable_name]))
+        # Build key using scope stack and variable name
+        key = build_qualified_name(self._scope_stack, variable_name)
         # Resolve class name to qualified form
         qualified_class = self._resolve_class_name(class_name)
         if qualified_class:
