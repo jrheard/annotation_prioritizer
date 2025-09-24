@@ -143,7 +143,7 @@ class TestClass:
 
     with temp_python_file(source) as path:
         result = parse_functions_from_file(path)
-        assert len(result) == 3
+        assert len(result) == 4  # 3 methods + 1 synthetic __init__
 
         # Check qualified names
         instance_method = next(f for f in result if f.name == "instance_method")
@@ -176,7 +176,7 @@ class OuterClass:
 
     with temp_python_file(source) as path:
         result = parse_functions_from_file(path)
-        assert len(result) == 2
+        assert len(result) == 4  # 2 methods + 2 synthetic __init__ for OuterClass and InnerClass
 
         outer_method = next(f for f in result if f.name == "outer_method")
         assert outer_method.qualified_name == make_qualified_name("__module__.OuterClass.outer_method")
@@ -200,7 +200,7 @@ class AsyncClass:
 
     with temp_python_file(source) as path:
         result = parse_functions_from_file(path)
-        assert len(result) == 2
+        assert len(result) == 3  # async_function, async_method, synthetic __init__ for AsyncClass
 
         async_func = next(f for f in result if f.name == "async_function")
         assert async_func.qualified_name == make_qualified_name("__module__.async_function")
@@ -265,12 +265,14 @@ def func3() -> str:
 
     with temp_python_file(source) as path:
         result = parse_functions_from_file(path)
-        assert len(result) == 4
+        assert len(result) == 5  # 4 functions + 1 synthetic __init__ for TestClass
 
-        names = {f.name for f in result}
+        # Filter out synthetic __init__ methods for name checking
+        non_init_funcs = [f for f in result if f.name != "__init__"]
+        names = {f.name for f in non_init_funcs}
         assert names == {"func1", "func2", "method1", "func3"}
 
-        qualified_names = {f.qualified_name for f in result}
+        qualified_names = {f.qualified_name for f in non_init_funcs}
         assert qualified_names == {
             "__module__.func1",
             "__module__.func2",
@@ -340,19 +342,22 @@ class Outer:
 
     with temp_python_file(source) as path:
         result = parse_functions_from_file(path)
-        assert len(result) == 4
+        assert len(result) == 6  # 4 functions/methods + 2 synthetic __init__ for Outer and Inner
 
-        # Check all functions are found
-        names = {f.name for f in result}
+        # Check all functions are found (excluding synthetic __init__)
+        non_init_funcs = [f for f in result if f.name != "__init__"]
+        names = {f.name for f in non_init_funcs}
         assert names == {"outer_method", "nested_func", "inner_method", "deeply_nested"}
 
-        # Check qualified names
+        # Check qualified names (including synthetic __init__)
         qualified_names = {f.qualified_name for f in result}
         assert qualified_names == {
             "__module__.Outer.outer_method",
             "__module__.Outer.outer_method.nested_func",
             "__module__.Outer.Inner.inner_method",
             "__module__.Outer.Inner.inner_method.deeply_nested",
+            "__module__.Outer.__init__",  # Synthetic
+            "__module__.Outer.Inner.__init__",  # Synthetic
         }
 
 
@@ -374,19 +379,21 @@ def factory_function():
 
     with temp_python_file(source) as path:
         result = parse_functions_from_file(path)
-        assert len(result) == 4
+        assert len(result) == 5  # 4 functions/methods + 1 synthetic __init__ for LocalClass
 
-        # Check all functions are found
-        names = {f.name for f in result}
+        # Check all functions are found (excluding synthetic __init__)
+        non_init_funcs = [f for f in result if f.name != "__init__"]
+        names = {f.name for f in non_init_funcs}
         assert names == {"factory_function", "local_method", "another_method", "inner_func"}
 
-        # Check qualified names
+        # Check qualified names (including synthetic __init__)
         qualified_names = {f.qualified_name for f in result}
         assert qualified_names == {
             "__module__.factory_function",
             "__module__.factory_function.LocalClass.local_method",
             "__module__.factory_function.LocalClass.another_method",
             "__module__.factory_function.LocalClass.another_method.inner_func",
+            "__module__.factory_function.LocalClass.__init__",  # Synthetic
         }
 
         # Verify the annotations are preserved
@@ -417,13 +424,16 @@ class OuterClass:
 
     with temp_python_file(source) as path:
         result = parse_functions_from_file(path)
-        assert len(result) == 5
+        assert (
+            len(result) == 8
+        )  # 5 functions/methods + 3 synthetic __init__ for OuterClass, InnerClass, NestedClass
 
-        # Check all functions are found
-        names = {f.name for f in result}
+        # Check all functions are found (excluding synthetic __init__)
+        non_init_funcs = [f for f in result if f.name != "__init__"]
+        names = {f.name for f in non_init_funcs}
         assert names == {"method1", "inner_func", "inner_method", "deeply_nested", "nested_method"}
 
-        # Check qualified names reflect the complete nesting
+        # Check qualified names reflect the complete nesting (including synthetic __init__)
         qualified_names = {f.qualified_name for f in result}
         assert qualified_names == {
             "__module__.OuterClass.method1",
@@ -431,6 +441,9 @@ class OuterClass:
             "__module__.OuterClass.method1.inner_func.InnerClass.inner_method",
             "__module__.OuterClass.method1.inner_func.InnerClass.inner_method.deeply_nested",
             "__module__.OuterClass.NestedClass.nested_method",
+            "__module__.OuterClass.__init__",  # Synthetic
+            "__module__.OuterClass.method1.inner_func.InnerClass.__init__",  # Synthetic
+            "__module__.OuterClass.NestedClass.__init__",  # Synthetic
         }
 
 
@@ -457,10 +470,11 @@ class AsyncClass:
 
     with temp_python_file(source) as path:
         result = parse_functions_from_file(path)
-        assert len(result) == 6
+        assert len(result) == 7  # 6 functions/methods + 1 synthetic __init__ for AsyncClass
 
-        # Check all functions are found
-        names = {f.name for f in result}
+        # Check all functions are found (excluding synthetic __init__)
+        non_init_funcs = [f for f in result if f.name != "__init__"]
+        names = {f.name for f in non_init_funcs}
         assert names == {
             "async_outer",
             "async_inner",
@@ -470,7 +484,7 @@ class AsyncClass:
             "nested_in_async",
         }
 
-        # Check qualified names
+        # Check qualified names (including synthetic __init__)
         qualified_names = {f.qualified_name for f in result}
         assert qualified_names == {
             "__module__.async_outer",
@@ -479,4 +493,5 @@ class AsyncClass:
             "__module__.async_outer.sync_inner.async_deeply_nested",
             "__module__.AsyncClass.async_method",
             "__module__.AsyncClass.async_method.nested_in_async",
+            "__module__.AsyncClass.__init__",  # Synthetic
         }

@@ -41,8 +41,10 @@ def main():
     with temp_python_file(test_code) as path:
         result = analyze_file(str(path))
 
-        # Check that we have functions
-        assert len(result.priorities) == 3  # DataProcessor.process_data, utility_function, main
+        # Check that we have functions (including synthetic __init__)
+        assert (
+            len(result.priorities) == 4
+        )  # DataProcessor.__init__ (synthetic), DataProcessor.process_data, utility_function, main
 
         # Check call counts
         priorities_by_name = {p.function_info.qualified_name: p for p in result.priorities}
@@ -360,10 +362,10 @@ def use_calculator():
         result = analyze_file(str(path))
         priorities = result.priorities
 
-        # Should find 5 functions (4 methods + 1 function)
-        assert len(priorities) == 5
+        # Should find 6 functions (4 methods + 1 synthetic __init__ + 1 function)
+        assert len(priorities) == 6
 
-        # Check qualified names include class prefix
+        # Check qualified names include class prefix (including synthetic __init__)
         qualified_names = {p.function_info.qualified_name for p in priorities}
         expected_names = {
             "__module__.Calculator.add",
@@ -371,6 +373,7 @@ def use_calculator():
             "__module__.Calculator.multiply",
             "__module__.Calculator.calculate_all",
             "__module__.use_calculator",
+            "__module__.Calculator.__init__",  # Synthetic
         }
         assert qualified_names == expected_names
 
