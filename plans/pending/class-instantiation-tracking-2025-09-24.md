@@ -245,7 +245,13 @@ Each test should verify:
 
 **Commit**: `test: add unit tests for class instantiation tracking`
 
-### Step 5: Create demo file showcasing the feature
+### Step 5: Create demo file showcasing the feature ✅ COMPLETED
+
+**Implementation Notes:**
+- Created demo file with various class instantiation patterns
+- Discovered and documented that loops count as single instantiation due to static analysis limitations
+- Verified output shows correct counts for WithInit, WithoutInit, and PartialAnnotations classes
+- Synthetic __init__ methods are properly generated and counted
 
 Create `demo_files/class_instantiation_demo.py`:
 
