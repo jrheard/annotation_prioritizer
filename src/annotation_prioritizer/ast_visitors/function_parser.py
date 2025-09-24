@@ -44,9 +44,14 @@ from annotation_prioritizer.models import (
     QualifiedName,
     Scope,
     ScopeKind,
-    make_qualified_name,
 )
-from annotation_prioritizer.scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
+from annotation_prioritizer.scope_tracker import (
+    ScopeStack,
+    add_scope,
+    build_qualified_name,
+    create_initial_stack,
+    drop_last_scope,
+)
 
 
 def _extract_parameters(args: ast.arguments) -> tuple[ParameterInfo, ...]:
@@ -240,8 +245,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
             Qualified name string that uniquely identifies the function with
             its complete scope hierarchy including the module scope.
         """
-        scope_names = [scope.name for scope in self._scope_stack]
-        return make_qualified_name(".".join([*scope_names, function_name]))
+        return build_qualified_name(self._scope_stack, function_name)
 
 
 def parse_function_definitions(file_path: str) -> tuple[FunctionInfo, ...]:

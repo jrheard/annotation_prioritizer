@@ -164,6 +164,64 @@ def test_build_qualified_name_exclude_functions() -> None:
     assert result == "__module__.Calculator.add"
 
 
+def test_build_qualified_name_with_stop_at_index() -> None:
+    """Test building qualified names with stop_at_index parameter."""
+    scope_stack = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.CLASS, name="Outer"),
+        Scope(kind=ScopeKind.FUNCTION, name="method"),
+        Scope(kind=ScopeKind.CLASS, name="Inner"),
+    )
+
+    # Stop at index 2 (before "method")
+    result = build_qualified_name(scope_stack, "foo", stop_at_index=2)
+    assert result == "__module__.Outer.foo"
+
+    # Stop at index 1 (only module)
+    result = build_qualified_name(scope_stack, "bar", stop_at_index=1)
+    assert result == "__module__.bar"
+
+    # Stop at index 3 (before "Inner")
+    result = build_qualified_name(scope_stack, stop_at_index=3)
+    assert result == "__module__.Outer.method"
+
+
+def test_build_qualified_name_without_name() -> None:
+    """Test building qualified names without appending a name."""
+    scope_stack = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.CLASS, name="Calculator"),
+    )
+
+    # Build name from scope stack only
+    result = build_qualified_name(scope_stack)
+    assert result == "__module__.Calculator"
+
+    # With stop_at_index
+    result = build_qualified_name(scope_stack, stop_at_index=1)
+    assert result == "__module__"
+
+
+def test_build_qualified_name_validation_errors() -> None:
+    """Test validation errors in build_qualified_name."""
+    # Empty scope stack
+    with pytest.raises(ValueError, match="Cannot build qualified name from empty scope stack"):
+        build_qualified_name(())
+
+    # Empty name string
+    scope_stack = (Scope(kind=ScopeKind.MODULE, name="__module__"),)
+    with pytest.raises(ValueError, match="Name to append cannot be empty or whitespace"):
+        build_qualified_name(scope_stack, "  ")
+
+    # Scope with empty name (after filtering)
+    scope_stack_with_empty = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.CLASS, name=""),  # Empty name
+    )
+    with pytest.raises(ValueError, match="Scope stack contains empty names"):
+        build_qualified_name(scope_stack_with_empty, "foo")
+
+
 def test_build_qualified_name_exclude_classes() -> None:
     """Test building qualified names while excluding class scopes."""
     scope_stack = (

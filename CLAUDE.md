@@ -6,6 +6,8 @@ This is a Python type annotation priority analyzer that identifies high-impact f
 
 This project runs in a VS Code dev container with restricted network access. Only traffic to domains configured in `.devcontainer/init-firewall.sh` is allowed.
 
+The `gh` command-line tool is installed. Use it when reading/writing GitHub PRs and issues.
+
 # Development Commands
 
 ## Common Commands
