@@ -232,29 +232,43 @@ class CallCountVisitor(ast.NodeVisitor):
         """
         func = node.func
 
-        # Direct calls to functions or class instantiations: name()
         if isinstance(func, ast.Name):
-            # Try to resolve the name in the current scope
-            resolved = resolve_name_in_scope(
-                self._scope_stack, func.id, self._class_registry.classes | self.call_counts.keys()
-            )
+            return self._resolve_direct_call(func)
 
-            # Check if it's a known class
-            if resolved and self._class_registry.is_known_class(resolved):
-                # It's a class instantiation - resolve to __init__
-                return make_qualified_name(f"{resolved}.__init__")
-
-            # It's a function (or unresolvable)
-            return resolved
-
-        # Method calls: obj.method_name()
-        # TODO: once we support imports, this might not always be a method - could be eg `math.random()`
         if isinstance(func, ast.Attribute):
             return self._resolve_method_call(func)
 
         # Dynamic calls: getattr(obj, 'method')(), obj[key](), etc.
-        # Cannot be resolved statically - return None
+        # Cannot be resolved statically
         return None
+
+    def _resolve_direct_call(self, func: ast.Name) -> QualifiedName | None:
+        """Resolve direct function calls and class instantiations.
+
+        Handles calls like function_name() or ClassName(), where the latter
+        is resolved to ClassName.__init__.
+
+        Args:
+            func: The ast.Name node representing the called name
+
+        Returns:
+            Qualified name if resolvable, None otherwise
+        """
+        # Try to resolve the name in the current scope
+        resolved = resolve_name_in_scope(
+            self._scope_stack, func.id, self._class_registry.classes | self.call_counts.keys()
+        )
+
+        if not resolved:
+            return None
+
+        # Check if it's a class instantiation
+        if self._class_registry.is_known_class(resolved):
+            # It's a class instantiation - resolve to __init__
+            return make_qualified_name(f"{resolved}.__init__")
+
+        # It's a regular function call
+        return resolved
 
     def _extract_class_name_from_value(self, node: ast.expr) -> str | None:
         """Extract a class name from an AST node.
@@ -292,6 +306,8 @@ class CallCountVisitor(ast.NodeVisitor):
 
         Handles self.method(), ClassName.method(), variable.method(), and
         Outer.Inner.method() calls.
+
+        TODO: Once we support imports, this might not always be a method - could be eg `math.random()`
 
         Args:
             func: The ast.Attribute node representing the method call
