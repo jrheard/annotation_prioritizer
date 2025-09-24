@@ -19,8 +19,14 @@ import ast
 from dataclasses import dataclass
 from typing import override
 
-from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
-from annotation_prioritizer.scope_tracker import ScopeStack, add_scope, create_initial_stack, drop_last_scope
+from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind
+from annotation_prioritizer.scope_tracker import (
+    ScopeStack,
+    add_scope,
+    build_qualified_name,
+    create_initial_stack,
+    drop_last_scope,
+)
 
 
 @dataclass(frozen=True)
@@ -59,8 +65,7 @@ class ClassDiscoveryVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Record class definition with full qualified name."""
         # Build qualified name from current scope
-        scope_names = [scope.name for scope in self._scope_stack]
-        qualified_name = make_qualified_name(".".join([*scope_names, node.name]))
+        qualified_name = build_qualified_name(self._scope_stack, node.name)
         self.class_names.append(qualified_name)
 
         # Push class scope and continue traversal for nested classes

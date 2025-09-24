@@ -932,6 +932,9 @@ did a bunch of good stuff
 
 what next?
 
-TODO look into https://github.com/jrheard/annotation_prioritizer/issues/21
+DONE look into https://github.com/jrheard/annotation_prioritizer/issues/21
 
 and then TODO look into https://github.com/jrheard/annotation_prioritizer/issues/22
+
+i'm trying wording like "investigate XYZ then present your findings", rather than "do you think X is too Y?" - seems to help?
+  might be placebo, no clue

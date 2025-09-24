@@ -6,7 +6,7 @@ from typing import override
 
 from annotation_prioritizer.ast_arguments import iter_all_arguments
 from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
-from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
+from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind
 from annotation_prioritizer.scope_tracker import (
     add_scope,
     build_qualified_name,
@@ -69,8 +69,7 @@ class VariableDiscoveryVisitor(ast.NodeVisitor):
         for i in range(len(self._scope_stack) - 1, -1, -1):
             if self._scope_stack[i].kind == ScopeKind.CLASS:
                 # Build qualified name up to and including this class
-                parts = [scope.name for scope in self._scope_stack[: i + 1]]
-                return make_qualified_name(".".join(parts))
+                return build_qualified_name(self._scope_stack, stop_at_index=i + 1)
         return None
 
     @override
