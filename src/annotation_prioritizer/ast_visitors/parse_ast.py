@@ -14,6 +14,25 @@ import ast
 from pathlib import Path
 
 
+def parse_ast_from_source(source: str, filename: str = "<string>") -> tuple[ast.Module, str] | None:
+    """Parse Python source code into an AST.
+
+    Args:
+        source: Python source code as a string
+        filename: Filename to use in error messages and tracebacks.
+                  Defaults to "<string>" (Python's convention for code from strings).
+
+    Returns:
+        Tuple of (AST module, source code) on success, None on syntax error
+    """
+    try:
+        tree = ast.parse(source, filename=filename)
+    except SyntaxError:
+        return None
+    else:
+        return (tree, source)
+
+
 def parse_ast_from_file(file_path: Path) -> tuple[ast.Module, str] | None:
     """Parse a Python file into an AST and return source code.
 
@@ -22,15 +41,14 @@ def parse_ast_from_file(file_path: Path) -> tuple[ast.Module, str] | None:
 
     Returns:
         Tuple of (AST module, source code) on success, None on failure
-        (file not found or syntax error)
+        (file not found, syntax error, or encoding error)
     """
     if not file_path.exists():
         return None
 
     try:
         source_code = file_path.read_text(encoding="utf-8")
-        tree = ast.parse(source_code, filename=str(file_path))
-    except (OSError, SyntaxError):
+    except (OSError, UnicodeDecodeError):
         return None
-    else:
-        return (tree, source_code)
+
+    return parse_ast_from_source(source_code, str(file_path))

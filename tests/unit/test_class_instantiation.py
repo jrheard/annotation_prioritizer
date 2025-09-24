@@ -2,34 +2,8 @@
 
 from __future__ import annotations
 
-import ast
-from pathlib import Path
-
-from annotation_prioritizer.ast_visitors.call_counter import count_function_calls
-from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
-from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
-from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
-from annotation_prioritizer.models import QualifiedName, make_qualified_name
-from tests.helpers.function_parsing import parse_functions_from_source
-
-
-def count_calls_from_source(source: str) -> dict[QualifiedName, int]:
-    """Count function calls in source code and return as dict.
-
-    This is a thin wrapper around production code for test convenience.
-    """
-    tree = ast.parse(source)
-    file_path = Path("test.py")
-
-    # Use production code to build registries and count calls
-    class_registry = build_class_registry(tree)
-    functions = parse_function_definitions(tree, file_path, class_registry)
-    variable_registry = build_variable_registry(tree, class_registry)
-
-    call_counts, _ = count_function_calls(tree, functions, class_registry, variable_registry, source)
-
-    # Convert to dict for easier assertions
-    return {call.function_qualified_name: call.call_count for call in call_counts}
+from annotation_prioritizer.models import make_qualified_name
+from tests.helpers.function_parsing import count_calls_from_source, parse_functions_from_source
 
 
 def test_class_with_explicit_init() -> None:
