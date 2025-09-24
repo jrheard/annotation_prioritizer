@@ -26,9 +26,20 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
   - Self method calls (`self.method()`)
   - Static/class method calls (`Calculator.static_method()`)
   - Nested function calls (functions defined inside other functions)
+  - Class instantiations (`Calculator()` counts as call to `Calculator.__init__`)
 - **Priority Calculation**: Combined metric based on call frequency × annotation incompleteness
 - **Conservative Methodology**: Only tracks function calls that can be confidently resolved, avoiding uncertain inferences
 - **Scope-Aware Tracking**: Complete scope hierarchy tracking (module/class/function) with typed `Scope` dataclass
+
+### Class Instantiation Tracking
+- **Synthetic __init__ Generation**: Classes without explicit constructors have synthetic `__init__` methods generated
+- **Instantiation Counting**: All `ClassName()` calls are tracked as calls to `ClassName.__init__`
+- **Nested Class Support**: Instantiations like `Outer.Inner()` and `Outer.Middle.Inner()` are properly tracked
+- **Count All Attempts**: Instantiations with incorrect parameters are still counted (we're a prioritizer, not a type checker)
+- **Limitations**:
+  - Synthetic `__init__` methods always have just `(self)` as parameter - no inference from parent classes
+  - Class reference assignments (`CalcClass = Calculator; CalcClass()`) are not supported
+  - Inheritance-aware parameter inference is future work
 
 ### CLI and Output
 - **Rich Console Output**: Formatted tables with color coding
@@ -161,21 +172,13 @@ None currently.
 ## Planned Features 📋
 
 ### High Priority
-1. **Class Instantiation Tracking** (Partially Complete)
-   - ✅ Track direct `ClassName()` calls as calls to `__init__` methods
-   - ✅ Generate synthetic `__init__` for classes without explicit constructors
-   - ✅ Count instantiations properly for priority scoring
-   - ✅ Support nested class instantiation (`Outer.Inner()`, `Outer.Middle.Inner()`)
-     - Note: This counts the call to `Outer.Inner.__init__`, but doesn't track the variable type for subsequent method calls
-   - ⏸️ **Deferred:** Class reference assignments (`CalcClass = Calculator; CalcClass()`)
-
-2. **@property Support**
+1. **@property Support**
    - Distinguish properties from regular attributes
    - Count property access as method calls
    - Properties are already discovered, just need to track access
    - Example: `person.full_name` → counts as call to `Person.full_name` property
 
-3. **Import Resolution** (Phase 1 - Single File)
+2. **Import Resolution** (Phase 1 - Single File)
    - Parse and track import statements
    - Resolve imported names to their modules
    - Support common import patterns:
@@ -184,7 +187,7 @@ None currently.
      - `import pandas as pd` → `pd.DataFrame()`
    - Still single-file analysis, but much more effective
 
-4. **Inheritance Resolution**
+3. **Inheritance Resolution**
    - Track class inheritance hierarchies
    - Resolve method calls on subclasses to parent class methods
    - Support Method Resolution Order (MRO)
@@ -192,7 +195,7 @@ None currently.
 
 ### Medium Priority
 
-5. **Return Type Inference**
+4. **Return Type Inference**
    - Track function return types to enable method chaining
    - Support patterns like `get_calc().add()`
    - Would require significant type inference infrastructure
