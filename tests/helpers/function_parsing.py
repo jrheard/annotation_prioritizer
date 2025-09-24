@@ -3,13 +3,19 @@
 import ast
 from pathlib import Path
 
-from annotation_prioritizer.analyzer import analyze_source
+from annotation_prioritizer.analyzer import analyze_ast
 from annotation_prioritizer.ast_visitors.call_counter import count_function_calls
 from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry, build_class_registry
 from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
-from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file
+from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file, parse_ast_from_source
 from annotation_prioritizer.ast_visitors.variable_discovery import VariableRegistry, build_variable_registry
-from annotation_prioritizer.models import CallCount, FunctionInfo, QualifiedName, UnresolvableCall
+from annotation_prioritizer.models import (
+    AnalysisResult,
+    CallCount,
+    FunctionInfo,
+    QualifiedName,
+    UnresolvableCall,
+)
 
 
 def parse_functions_from_file(file_path: Path) -> tuple[FunctionInfo, ...]:
@@ -55,10 +61,28 @@ def parse_functions_from_source(source: str) -> tuple[FunctionInfo, ...]:
     return parse_function_definitions(tree, file_path, class_registry)
 
 
+def analyze_source(source_code: str) -> AnalysisResult:
+    """Complete analysis pipeline for Python source code.
+
+    Args:
+        source_code: Python source code as a string
+        filename: Filename to use for the analysis (affects qualified names)
+
+    Returns:
+        AnalysisResult with function priorities sorted by priority score
+        (highest first) and all unresolvable calls.
+    """
+    filename = "<test source code>"
+    parse_result = parse_ast_from_source(source_code, filename)
+    if not parse_result:
+        return AnalysisResult(priorities=(), unresolvable_calls=())
+
+    tree, _ = parse_result
+    return analyze_ast(tree, source_code, filename)
+
+
 def count_calls_from_source(source: str) -> dict[QualifiedName, int]:
     """Count function calls in source code and return as dict.
-
-    Uses the production analyze_source() function to ensure consistency.
 
     Args:
         source: Python source code as a string

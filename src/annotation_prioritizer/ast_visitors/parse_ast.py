@@ -14,13 +14,12 @@ import ast
 from pathlib import Path
 
 
-def parse_ast_from_source(source: str, filename: str = "<string>") -> tuple[ast.Module, str] | None:
+def parse_ast_from_source(source: str, filename: str) -> tuple[ast.Module, str] | None:
     """Parse Python source code into an AST.
 
     Args:
         source: Python source code as a string
         filename: Filename to use in error messages and tracebacks.
-                  Defaults to "<string>" (Python's convention for code from strings).
 
     Returns:
         Tuple of (AST module, source code) on success, None on syntax error
