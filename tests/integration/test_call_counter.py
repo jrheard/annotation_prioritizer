@@ -9,7 +9,6 @@ import pytest
 from annotation_prioritizer.ast_visitors.call_counter import (
     CallCountVisitor,
     UnresolvableCall,
-    count_function_calls,
 )
 from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
 from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
@@ -17,7 +16,7 @@ from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
 from tests.helpers.factories import make_function_info, make_parameter
-from tests.helpers.function_parsing import parse_functions_from_file
+from tests.helpers.function_parsing import count_calls_from_file, parse_functions_from_file
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -56,7 +55,7 @@ def caller():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
 
         # Convert to dict for easier testing
         call_counts = {call.function_qualified_name: call.call_count for call in result}
@@ -112,7 +111,7 @@ def use_calculator():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.add() called twice in calculate method = 2 times
@@ -148,7 +147,7 @@ def external_use():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Utils.format_number() called twice
@@ -179,7 +178,7 @@ def another_unused():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         assert call_counts[make_qualified_name("__module__.unused_function")] == 0
@@ -207,7 +206,7 @@ def caller():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         assert call_counts[make_qualified_name("__module__.known_func")] == 1
@@ -215,7 +214,7 @@ def caller():
 
 def test_count_calls_nonexistent_file() -> None:
     """Test handling of nonexistent files."""
-    result, _ = count_function_calls("/nonexistent/file.py", ())
+    result, _ = count_calls_from_file("/nonexistent/file.py", ())
     assert result == ()
 
 
@@ -227,7 +226,7 @@ def broken_syntax(
 """
 
     with temp_python_file(code) as temp_path:
-        result, _ = count_function_calls(temp_path, ())
+        result, _ = count_calls_from_file(temp_path, ())
         assert result == ()
 
 
@@ -239,7 +238,7 @@ def some_function():
 """
 
     with temp_python_file(code) as temp_path:
-        result, _ = count_function_calls(temp_path, ())
+        result, _ = count_calls_from_file(temp_path, ())
         assert result == ()
 
 
@@ -271,7 +270,7 @@ class Outer:
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Due to our simple implementation, these complex calls won't be tracked
@@ -317,7 +316,7 @@ def test_self_without_class():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # The obj.method_in_class() call resolves to MyClass.method_in_class through variable tracking
@@ -470,7 +469,7 @@ def top_level_caller():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # outer_function() called:
@@ -544,7 +543,7 @@ class Calculator:
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.add() called:
@@ -595,7 +594,7 @@ def module_function():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.helper_method() called once from level3_function
@@ -638,7 +637,7 @@ def module_helper():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # self.other_inner_method() called once from inner_method
@@ -792,7 +791,7 @@ async def top_level_async():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # async_outer() called:
@@ -846,7 +845,7 @@ def test():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # User-defined class method should be called
@@ -881,7 +880,7 @@ def test():
         )
 
         # Should not crash, just return 0 calls since we can't resolve complex expressions
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         assert call_counts[make_qualified_name("__module__.MyClass.method")] == 0
@@ -912,7 +911,7 @@ def test():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # None of the unresolvable references should be counted
@@ -961,7 +960,7 @@ def custom_function(x):
             ),
         )
 
-        result, unresolvable_calls = count_function_calls(temp_path, known_functions)
+        result, unresolvable_calls = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # custom_function should be counted
@@ -1012,7 +1011,7 @@ Calculator.create_and_compute(5, 10)
         functions = parse_functions_from_file(temp_path)
 
         # Count calls
-        result, _ = count_function_calls(temp_path, functions)
+        result, _ = count_calls_from_file(temp_path, functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # cls.add() should be counted:
@@ -1111,7 +1110,7 @@ def use_calculator():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # calc.add() should be counted once
@@ -1166,7 +1165,7 @@ def test():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Both obj.add() calls resolve to Helper.add (final type in registry)
@@ -1200,7 +1199,7 @@ def process(calc: Calculator):
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # calc.add() should be counted
@@ -1238,7 +1237,7 @@ def outer():
             ),
         )
 
-        result, _ = count_function_calls(temp_path, known_functions)
+        result, _ = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
         # Inner function's use of calc.add() should be counted
