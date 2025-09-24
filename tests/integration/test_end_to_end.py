@@ -287,7 +287,7 @@ def mixed_patterns():
         # Should be called from: module level, use_direct_instantiation,
         # use_variable_annotation, mixed_patterns
         # Note: use_reassignment calls are attributed to Helper.add due to two-pass limitation
-        # Note: use_class_reference is unresolvable (CalcClass() instantiation not tracked)
+        # Note: use_class_reference's CalcClass() is not tracked (class reference assignment not supported)
         assert calc_add.call_count == 4
 
         # Test that Calculator.multiply is tracked from parameter annotations and nested scope
@@ -307,12 +307,12 @@ def mixed_patterns():
         assert helper_assist is not None
         assert helper_assist.call_count == 2  # Called in mixed_patterns twice
 
-        # Verify that most variable-based calls are now resolvable
+        # Verify that most variable-based calls are resolvable
         unresolvable_texts = [call.call_text for call in result.unresolvable_calls]
 
         # Most calc.add and calc.multiply calls should be resolved
         # Exception: use_class_reference's calc.add(9, 10) is unresolvable
-        # because CalcClass() instantiation is not tracked
+        # because CalcClass() instantiation is not tracked (class reference assignment not supported)
         calc_add_unresolved = [t for t in unresolvable_texts if "calc.add" in t]
         assert len(calc_add_unresolved) <= 1  # Only use_class_reference's call
 
@@ -325,8 +325,8 @@ def mixed_patterns():
         # Module-level calls should be tracked
         assert not any("module_calc.add" in text for text in unresolvable_texts)
 
-        # Constructor calls are expected to be unresolvable
-        assert any("Calculator()" in text for text in unresolvable_texts)  # Constructor calls
+        # Constructor calls are tracked as __init__ calls
+        assert not any("Calculator()" in text for text in unresolvable_texts)
         # Built-in functions like len() are not reported as unresolvable
 
 

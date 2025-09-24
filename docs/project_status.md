@@ -160,11 +160,12 @@ None currently.
 ## Planned Features 📋
 
 ### High Priority
-1. **Class Instantiation Tracking**
-   - Track `ClassName()` calls as calls to `__init__` methods
-   - Resolve constructor calls that are currently unresolvable
-   - Count instantiations properly for priority scoring
-   - Example: `Dog()` → counts as call to `Dog.__init__`
+1. **Class Instantiation Tracking** (Partially Complete)
+   - ✅ Track direct `ClassName()` calls as calls to `__init__` methods
+   - ✅ Generate synthetic `__init__` for classes without explicit constructors
+   - ✅ Count instantiations properly for priority scoring
+   - ⏸️ **Deferred:** Nested class instantiation (`Outer.Inner()`)
+   - ⏸️ **Deferred:** Class reference assignments (`CalcClass = Calculator; CalcClass()`)
 
 2. **@property Support**
    - Distinguish properties from regular attributes

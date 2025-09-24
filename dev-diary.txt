@@ -975,7 +975,7 @@ NVM also think about htis:
 
 TODO and this:     - The plan doesn't mention how to avoid double-counting
 
-TODO update the init doc after the refactor
+DONE update the init doc after the refactor
 
 TODO come back and handle this:
   ### Parameter Inference Limitations
