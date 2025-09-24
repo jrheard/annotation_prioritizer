@@ -97,70 +97,39 @@ def _generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[Quali
     return tuple(candidates)
 
 
-def build_qualified_name(
-    scope_stack: ScopeStack,
-    name: str | None = None,
-    exclude_kinds: frozenset[ScopeKind] | None = None,
-    stop_at_index: int | None = None,
-) -> QualifiedName:
-    """Build a qualified name from scope stack with optional filtering.
+def build_qualified_name(scope_stack: ScopeStack, name: str) -> QualifiedName:
+    """Build a qualified name from scope stack and name.
 
-    Used for building qualified names from scope stacks with various options:
-    - Appending a name to the scope path
-    - Excluding certain scope kinds (for self.method() resolution)
-    - Using only part of the stack up to a specific index
+    Combines the scope hierarchy with a name to create a fully qualified name.
+    This is the standard way to build qualified names from scope context.
 
     Args:
         scope_stack: Current scope context from ScopeState (must not be empty)
-        name: Optional name to append to the qualified path
-        exclude_kinds: Scope kinds to exclude from the path
-        stop_at_index: If provided, only use scopes up to this index (exclusive)
+        name: Name to append to the scope path
 
     Returns:
         A validated QualifiedName instance
 
     Raises:
-        ValueError: If scope_stack is empty or contains invalid elements
+        ValueError: If scope_stack is empty or name is invalid
 
-    Examples:
-        >>> stack = (Scope(MODULE, "__module__"), Scope(CLASS, "Calc"))
+    Example:
+        >>> stack = (Scope(MODULE, "__module__"), Scope(CLASS, "Calculator"))
         >>> build_qualified_name(stack, "add")
-        QualifiedName("__module__.Calc.add")
-
-        >>> build_qualified_name(stack)
-        QualifiedName("__module__.Calc")
-
-        >>> build_qualified_name(stack, "add", stop_at_index=1)
-        QualifiedName("__module__.add")
-
-        >>> build_qualified_name(stack, "add", exclude_kinds={FUNCTION})
-        # Returns "__module__.Calc.add" if no function in stack
+        QualifiedName("__module__.Calculator.add")
     """
     if not scope_stack:
         msg = "Cannot build qualified name from empty scope stack"
         raise ValueError(msg)
 
-    # Apply stop_at_index if provided
-    if stop_at_index is not None:
-        scope_stack = scope_stack[:stop_at_index]
-
-    # Apply filtering by scope kinds
-    exclude_kinds = exclude_kinds or frozenset()
-    filtered = [s.name for s in scope_stack if s.kind not in exclude_kinds]
-
-    # Validate parts
-    if not all(filtered):
-        msg = f"Scope stack contains empty names: {scope_stack}"
+    if not name or not name.strip():
+        msg = f"Name cannot be empty or whitespace: {name!r}"
         raise ValueError(msg)
 
-    # Build the qualified name
-    if name:
-        if not name.strip():
-            msg = f"Name to append cannot be empty or whitespace: {name!r}"
-            raise ValueError(msg)
-        filtered.append(name)
+    parts = [s.name for s in scope_stack]
+    parts.append(name)
 
-    return make_qualified_name(".".join(filtered))
+    return make_qualified_name(".".join(parts))
 
 
 def resolve_name_in_scope(

@@ -142,8 +142,8 @@ def test_generate_name_candidates(
     assert result == expected
 
 
-def test_build_qualified_name_no_exclusions() -> None:
-    """Test building qualified names without excluding any scopes."""
+def test_build_qualified_name_basic() -> None:
+    """Test building qualified names from scope stack and name."""
     scope_stack = (
         Scope(kind=ScopeKind.MODULE, name="__module__"),
         Scope(kind=ScopeKind.CLASS, name="Calculator"),
@@ -153,84 +153,28 @@ def test_build_qualified_name_no_exclusions() -> None:
     assert result == "__module__.Calculator.helper.add"
 
 
-def test_build_qualified_name_exclude_functions() -> None:
-    """Test building qualified names while excluding function scopes."""
-    scope_stack = (
-        Scope(kind=ScopeKind.MODULE, name="__module__"),
-        Scope(kind=ScopeKind.CLASS, name="Calculator"),
-        Scope(kind=ScopeKind.FUNCTION, name="helper"),
-    )
-    result = build_qualified_name(scope_stack, "add", exclude_kinds=frozenset({ScopeKind.FUNCTION}))
-    assert result == "__module__.Calculator.add"
-
-
-def test_build_qualified_name_with_stop_at_index() -> None:
-    """Test building qualified names with stop_at_index parameter."""
+def test_build_qualified_name_nested() -> None:
+    """Test building qualified names with nested scopes."""
     scope_stack = (
         Scope(kind=ScopeKind.MODULE, name="__module__"),
         Scope(kind=ScopeKind.CLASS, name="Outer"),
         Scope(kind=ScopeKind.FUNCTION, name="method"),
         Scope(kind=ScopeKind.CLASS, name="Inner"),
     )
-
-    # Stop at index 2 (before "method")
-    result = build_qualified_name(scope_stack, "foo", stop_at_index=2)
-    assert result == "__module__.Outer.foo"
-
-    # Stop at index 1 (only module)
-    result = build_qualified_name(scope_stack, "bar", stop_at_index=1)
-    assert result == "__module__.bar"
-
-    # Stop at index 3 (before "Inner")
-    result = build_qualified_name(scope_stack, stop_at_index=3)
-    assert result == "__module__.Outer.method"
-
-
-def test_build_qualified_name_without_name() -> None:
-    """Test building qualified names without appending a name."""
-    scope_stack = (
-        Scope(kind=ScopeKind.MODULE, name="__module__"),
-        Scope(kind=ScopeKind.CLASS, name="Calculator"),
-    )
-
-    # Build name from scope stack only
-    result = build_qualified_name(scope_stack)
-    assert result == "__module__.Calculator"
-
-    # With stop_at_index
-    result = build_qualified_name(scope_stack, stop_at_index=1)
-    assert result == "__module__"
+    result = build_qualified_name(scope_stack, "foo")
+    assert result == "__module__.Outer.method.Inner.foo"
 
 
 def test_build_qualified_name_validation_errors() -> None:
     """Test validation errors in build_qualified_name."""
     # Empty scope stack
     with pytest.raises(ValueError, match="Cannot build qualified name from empty scope stack"):
-        build_qualified_name(())
+        build_qualified_name((), "foo")
 
     # Empty name string
     scope_stack = (Scope(kind=ScopeKind.MODULE, name="__module__"),)
-    with pytest.raises(ValueError, match="Name to append cannot be empty or whitespace"):
+    with pytest.raises(ValueError, match="Name cannot be empty or whitespace"):
         build_qualified_name(scope_stack, "  ")
-
-    # Scope with empty name (after filtering)
-    scope_stack_with_empty = (
-        Scope(kind=ScopeKind.MODULE, name="__module__"),
-        Scope(kind=ScopeKind.CLASS, name=""),  # Empty name
-    )
-    with pytest.raises(ValueError, match="Scope stack contains empty names"):
-        build_qualified_name(scope_stack_with_empty, "foo")
-
-
-def test_build_qualified_name_exclude_classes() -> None:
-    """Test building qualified names while excluding class scopes."""
-    scope_stack = (
-        Scope(kind=ScopeKind.MODULE, name="__module__"),
-        Scope(kind=ScopeKind.CLASS, name="Calculator"),
-        Scope(kind=ScopeKind.FUNCTION, name="compute"),
-    )
-    result = build_qualified_name(scope_stack, "helper", exclude_kinds=frozenset({ScopeKind.CLASS}))
-    assert result == "__module__.compute.helper"
 
 
 def test_resolve_name_in_scope() -> None:
