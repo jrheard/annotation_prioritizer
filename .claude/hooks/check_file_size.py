@@ -76,9 +76,6 @@ def main() -> None:
     except (json.JSONDecodeError, KeyError):
         sys.exit(0)
 
-    if not file_path.endswith(".py"):
-        sys.exit(0)
-
     # Skip demo files (they're excluded from linting)
     if "demo_files/" in file_path:
         sys.exit(0)

@@ -25,18 +25,9 @@ def main() -> None:
     # Read hook data from stdin
     try:
         hook_data = json.load(sys.stdin)
-        tool_name = hook_data.get("tool_name", "")
         tool_input = hook_data.get("tool_input", {})
         file_path = tool_input.get("file_path", "")
     except (json.JSONDecodeError, KeyError):
-        sys.exit(0)
-
-    # Only check Write operations (new files)
-    if tool_name != "Write":
-        sys.exit(0)
-
-    # Only check Python files
-    if not file_path.endswith(".py"):
         sys.exit(0)
 
     # Skip demo files and test files

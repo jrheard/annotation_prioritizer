@@ -123,19 +123,10 @@ def main() -> None:
     # Read hook data from stdin
     try:
         hook_data = json.load(sys.stdin)
-        tool_name = hook_data.get("tool_name", "")
         tool_input = hook_data.get("tool_input", {})
         command = tool_input.get("command", "")
     except (json.JSONDecodeError, KeyError):
         # Invalid JSON or missing fields - don't block
-        sys.exit(0)
-
-    # Only validate Bash commands
-    if tool_name != "Bash":
-        sys.exit(0)
-
-    # Only validate git commit commands
-    if "git commit" not in command:
         sys.exit(0)
 
     # Try to extract the commit message

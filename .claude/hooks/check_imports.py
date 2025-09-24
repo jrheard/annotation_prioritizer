@@ -46,8 +46,6 @@ def main() -> None:
         file_path = tool_input.get("file_path", "")
     except (json.JSONDecodeError, KeyError):
         sys.exit(0)
-    if not file_path.endswith(".py"):
-        sys.exit(0)
 
     # Skip demo files
     if "demo_files/" in file_path:
