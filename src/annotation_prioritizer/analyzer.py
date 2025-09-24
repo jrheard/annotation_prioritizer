@@ -6,6 +6,7 @@ from annotation_prioritizer.ast_visitors.call_counter import count_function_call
 from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
 from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file
+from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
 from annotation_prioritizer.models import AnalysisResult, AnnotationScore, FunctionPriority, QualifiedName
 from annotation_prioritizer.scoring import calculate_annotation_score
 
@@ -32,10 +33,11 @@ def analyze_file(file_path: str) -> AnalysisResult:
     if not parse_result:
         return AnalysisResult(priorities=(), unresolvable_calls=())
 
-    tree, _source_code = parse_result
+    tree, source_code = parse_result
 
-    # Build registries
+    # Build all registries upfront
     class_registry = build_class_registry(tree)
+    variable_registry = build_variable_registry(tree, class_registry)
 
     # 1. Parse function definitions with class registry
     function_infos = parse_function_definitions(tree, file_path_obj, class_registry)
@@ -43,8 +45,10 @@ def analyze_file(file_path: str) -> AnalysisResult:
     if not function_infos:
         return AnalysisResult(priorities=(), unresolvable_calls=())
 
-    # 2. Count function calls
-    resolved_counts, unresolvable_calls = count_function_calls(file_path, function_infos)
+    # 2. Count function calls with all dependencies
+    resolved_counts, unresolvable_calls = count_function_calls(
+        tree, function_infos, class_registry, variable_registry, source_code
+    )
     call_count_map: dict[QualifiedName, int] = {
         cc.function_qualified_name: cc.call_count for cc in resolved_counts
     }

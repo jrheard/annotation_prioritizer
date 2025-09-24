@@ -1,6 +1,6 @@
 """AST-based counting of function calls for annotation priority analysis.
 
-This module traverses Python source files to count how many times each known function
+This module traverses Python ASTs to count how many times each known function
 is called. These call counts feed into the priority analysis to identify frequently-used
 functions that lack type annotations.
 
@@ -12,13 +12,12 @@ Key Design Decisions:
     - Conservative attribution: Only count calls we're confident about
     - Qualified name matching: Uses full qualified names (e.g., "__module__.Calculator.add")
       to distinguish methods from module-level functions
-    - Two-stage analysis: Stage 1 builds registries (classes, variables), Stage 2 counts calls
+    - Dependency injection: Receives pre-built AST and registries from orchestrator
 
 Relationship to Other Modules:
     - function_parser.py: Provides the FunctionInfo definitions to count calls for
-    - analyzer.py: Combines call counts with function definitions for prioritization
+    - analyzer.py: Orchestrates analysis, provides AST and registries
     - models.py: Defines CallCount data structure
-    - variable_discovery.py: Builds variable-to-type mappings for resolution
     - variable_registry.py: Provides utilities for variable type lookup
 
 Limitations:
@@ -30,11 +29,9 @@ Limitations:
 
 import ast
 import builtins
-from pathlib import Path
 from typing import override
 
-from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry, build_class_registry
-from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
+from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
 from annotation_prioritizer.models import (
     CallCount,
     FunctionInfo,
@@ -77,41 +74,24 @@ def _is_builtin_call(node: ast.Call) -> bool:
 
 
 def count_function_calls(
-    file_path: str, known_functions: tuple[FunctionInfo, ...]
+    tree: ast.Module,
+    known_functions: tuple[FunctionInfo, ...],
+    class_registry: ClassRegistry,
+    variable_registry: VariableRegistry,
+    source_code: str,
 ) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
-    """Count calls to known functions using two-stage analysis.
-
-    Stage 1: Build registries (class discovery then variable discovery)
-    Stage 2: Count function calls using type information
-
-    Parses the Python source file and identifies calls to functions from the
-    known_functions list. Handles direct function calls, method calls on self,
-    class method calls, and instance method calls via variables.
+    """Count calls to known functions in the AST.
 
     Args:
-        file_path: Path to the Python source file to analyze
-        known_functions: Functions to count calls for, matched by qualified_name
+        tree: Parsed AST module
+        known_functions: Functions to count calls for
+        class_registry: Registry of known classes
+        variable_registry: Registry of variable type information
+        source_code: Source code for error context
 
     Returns:
-        Tuple of (resolved call counts, all unresolvable calls).
-        Functions with zero calls are still included in resolved counts.
-
+        Tuple of (resolved call counts, unresolvable calls)
     """
-    file_path_obj = Path(file_path)
-    if not file_path_obj.exists():
-        return ((), ())
-
-    try:
-        source_code = file_path_obj.read_text(encoding="utf-8")
-        tree = ast.parse(source_code, filename=file_path)
-    except (OSError, SyntaxError):
-        return ((), ())
-
-    # Stage 1: Build registries
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
-
-    # Stage 2: Count calls with type information
     visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
     visitor.visit(tree)
 

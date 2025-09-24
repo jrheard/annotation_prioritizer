@@ -163,7 +163,7 @@ This includes updating tests in:
 - Added test for nonexistent file case in analyze_file to maintain 100% coverage
 - Fixed linting issues (unused variables, unused parameters)
 
-### Step 3: Update count_function_calls and complete analyzer.py
+### Step 3: Update count_function_calls and complete analyzer.py ✅ COMPLETED
 
 Update `src/annotation_prioritizer/ast_visitors/call_counter.py`:
 
@@ -247,7 +247,16 @@ This includes updating tests in:
 - `tests/integration/test_call_counter.py`
 - Any helper functions in `tests/helpers/` that use this function
 
-**Commit**: `refactor: update count_function_calls to accept AST and registries`
+**Commit**: `refactor: update count_function_calls to accept AST and registries` ✅ COMPLETED
+
+**Implementation notes**:
+- Updated function signature to accept tree, known_functions, class_registry, variable_registry, and source_code
+- Removed all file reading, parsing, and registry building logic from count_function_calls
+- Updated analyzer.py to import and build variable_registry
+- Updated analyzer.py to store source_code from parse result and pass all dependencies
+- Created count_calls_from_file helper function in tests/helpers/function_parsing.py for test simplification
+- Updated all test files to use the new helper function instead of calling count_function_calls directly
+- All tests pass with 100% coverage, all linting and type checking passes
 
 ### Step 4: Update file path types throughout (OPTIONAL - DEFER IF COMPLEX)
 
