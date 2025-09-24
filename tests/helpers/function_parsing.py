@@ -1,5 +1,6 @@
 """Helper functions for parsing AST in tests."""
 
+import ast
 from pathlib import Path
 
 from annotation_prioritizer.ast_visitors.call_counter import count_function_calls
@@ -34,3 +35,20 @@ def count_calls_from_file(
     variable_registry = build_variable_registry(tree, class_registry)
 
     return count_function_calls(tree, known_functions, class_registry, variable_registry, source_code)
+
+
+def parse_functions_from_source(source: str) -> tuple[FunctionInfo, ...]:
+    """Parse functions from source code string with full AST and registry context.
+
+    Useful for tests that need to verify function discovery including synthetic __init__.
+
+    Args:
+        source: Python source code as a string
+
+    Returns:
+        Tuple of FunctionInfo objects
+    """
+    tree = ast.parse(source)
+    file_path = Path("test.py")
+    class_registry = build_class_registry(tree)
+    return parse_function_definitions(tree, file_path, class_registry)
