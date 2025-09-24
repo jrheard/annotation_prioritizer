@@ -12,12 +12,12 @@ from annotation_prioritizer.ast_visitors.call_counter import (
     count_function_calls,
 )
 from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
-from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
 from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import Scope, ScopeKind, make_qualified_name
 from annotation_prioritizer.scope_tracker import add_scope, drop_last_scope
 from tests.helpers.factories import make_function_info, make_parameter
+from tests.helpers.function_parsing import parse_functions_from_file
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -1009,7 +1009,7 @@ Calculator.create_and_compute(5, 10)
 
     with temp_python_file(source) as temp_path:
         # Parse to get function info
-        functions = parse_function_definitions(temp_path)
+        functions = parse_functions_from_file(temp_path)
 
         # Count calls
         result, _ = count_function_calls(temp_path, functions)
