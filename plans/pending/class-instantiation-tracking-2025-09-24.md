@@ -127,7 +127,7 @@ Update integration tests to verify synthetic __init__ methods appear in parse re
 
 **Implementation Notes:**
 - Successfully implemented class instantiation detection for direct class names (e.g., `Calculator()`)
-- Deferred support for nested class instantiations (e.g., `Outer.Inner()`) - added to project_status.md
+- Added support for nested class instantiations (e.g., `Outer.Inner()`, `Outer.Middle.Inner()`)
 - Class reference assignments (e.g., `CalcClass = Calculator; CalcClass()`) are not supported - this would require value tracking
 
 Modify `CallCountVisitor._resolve_call()` in `src/annotation_prioritizer/ast_visitors/call_counter.py`:
@@ -171,7 +171,7 @@ Also update `_resolve_method_call()` to handle class instantiations:
 def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
     """Resolve qualified name from a method call (attribute access).
 
-    Now also handles nested class instantiations like Outer.Inner().
+    Handles nested class instantiations like Outer.Inner() and Outer.Middle.Inner().
     """
     # ... existing self.method() and variable.method() handling ...
 
@@ -276,12 +276,12 @@ obj3 = PartialAnnotations(1, 2)  # Should count, show partial annotations
 for i in range(5):
     WithoutInit()  # Should show count of 6 total
 
-# Nested classes (not supported for now)
+# Nested classes
 class Outer:
     class Inner:
         pass
 
-nested = Outer.Inner()  # Doesn't count toward Outer.Inner.__init__ yet
+nested = Outer.Inner()  # Counts toward Outer.Inner.__init__
 ```
 
 Manually verify the tool output shows:

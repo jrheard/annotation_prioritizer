@@ -19,9 +19,9 @@ WithoutInit()  # First instantiation
 for i in range(5):
     WithoutInit()  # Loop counts as 1 (static analysis limitation)
 
-# Nested classes (not supported for now)
+# Nested classes
 class Outer:
     class Inner:
         pass
 
-nested = Outer.Inner()  # Doesn't count toward Outer.Inner.__init__ yet
+nested = Outer.Inner()  # Counts toward Outer.Inner.__init__

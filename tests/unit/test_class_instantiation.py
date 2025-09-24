@@ -147,17 +147,17 @@ Calculator().add(2)
 
 
 def test_nested_class_instantiation() -> None:
-    """Test instantiation of nested classes (currently not fully supported)."""
+    """Test instantiation of nested classes."""
     source = """
 class Outer:
     class Inner:
         def __init__(self) -> None:
             pass
 
-# Direct nested instantiation - not currently tracked
+# Direct nested instantiation
 inner = Outer.Inner()
 
-# Instantiation of outer class should still work
+# Instantiation of outer class
 outer = Outer()
 """
     counts = count_calls_from_source(source)
@@ -166,8 +166,28 @@ outer = Outer()
     outer_init = make_qualified_name("__module__.Outer.__init__")
     assert counts.get(outer_init, 0) == 1
 
-    # Note: Nested class instantiation (Outer.Inner()) is not fully supported yet
-    # This is documented as a known limitation in project_status.md
+    # Verify nested class instantiation is tracked
+    inner_init = make_qualified_name("__module__.Outer.Inner.__init__")
+    assert counts.get(inner_init, 0) == 1
+
+
+def test_deeply_nested_class_instantiation() -> None:
+    """Test instantiation of deeply nested classes."""
+    source = """
+class Outer:
+    class Middle:
+        class Inner:
+            def __init__(self, value: int) -> None:
+                self.value = value
+
+# Deeply nested instantiation
+obj = Outer.Middle.Inner(42)
+"""
+    counts = count_calls_from_source(source)
+
+    # Verify deeply nested class instantiation is tracked
+    inner_init = make_qualified_name("__module__.Outer.Middle.Inner.__init__")
+    assert counts.get(inner_init, 0) == 1
 
 
 def test_class_in_function() -> None:
