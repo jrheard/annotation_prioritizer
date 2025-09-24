@@ -41,7 +41,6 @@ from annotation_prioritizer.ast_arguments import ArgumentKind, iter_all_argument
 from annotation_prioritizer.models import (
     FunctionInfo,
     ParameterInfo,
-    QualifiedName,
     Scope,
     ScopeKind,
 )
@@ -214,7 +213,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         Side Effects:
             Appends a new FunctionInfo object to self.functions.
         """
-        qualified_name = self._build_qualified_name(node.name)
+        qualified_name = build_qualified_name(self._scope_stack, node.name)
         parameters = _extract_parameters(node.args)
         has_return_annotation = node.returns is not None
 
@@ -228,24 +227,6 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
         )
 
         self.functions.append(function_info)
-
-    def _build_qualified_name(self, function_name: str) -> QualifiedName:
-        """Construct a fully qualified name using the current scope context.
-
-        Builds qualified names by combining all scopes in the current stack with
-        the function name. This creates names like "__module__.function_name" for
-        module-level functions, "__module__.ClassName.method_name" for methods,
-        and "__module__.outer_func.inner_func" for nested functions. The complete
-        scope hierarchy is preserved for full explicitness.
-
-        Args:
-            function_name: The local name of the function or method.
-
-        Returns:
-            Qualified name string that uniquely identifies the function with
-            its complete scope hierarchy including the module scope.
-        """
-        return build_qualified_name(self._scope_stack, function_name)
 
 
 def parse_function_definitions(file_path: str) -> tuple[FunctionInfo, ...]:
