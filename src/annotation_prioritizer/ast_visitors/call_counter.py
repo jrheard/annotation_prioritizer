@@ -224,15 +224,28 @@ class CallCountVisitor(ast.NodeVisitor):
         confidently attributed to specific functions. Ambiguous or dynamic calls
         return None and are excluded from counting.
 
+        Handles both function calls and class instantiations. When a name
+        refers to a known class, resolves to ClassName.__init__.
+
         Returns:
             Qualified function name if resolvable, None otherwise.
         """
         func = node.func
 
-        # Direct calls to functions: function_name()
-        # TODO: could actually be a class name: Calculator()
+        # Direct calls to functions or class instantiations: name()
         if isinstance(func, ast.Name):
-            return self._resolve_function_call(func.id)
+            # Try to resolve the name in the current scope
+            resolved = resolve_name_in_scope(
+                self._scope_stack, func.id, self._class_registry.classes | self.call_counts.keys()
+            )
+
+            # Check if it's a known class
+            if resolved and self._class_registry.is_known_class(resolved):
+                # It's a class instantiation - resolve to __init__
+                return make_qualified_name(f"{resolved}.__init__")
+
+            # It's a function (or unresolvable)
+            return resolved
 
         # Method calls: obj.method_name()
         # TODO: once we support imports, this might not always be a method - could be eg `math.random()`
@@ -310,10 +323,6 @@ class CallCountVisitor(ast.NodeVisitor):
 
         # Class name couldn't be resolved in any scope or registry
         return None
-
-    def _resolve_function_call(self, function_name: str) -> QualifiedName | None:
-        """Resolve a function call to its qualified name."""
-        return resolve_name_in_scope(self._scope_stack, function_name, self.call_counts.keys())
 
     def _resolve_class_name(self, class_name: str) -> QualifiedName | None:
         """Resolve a class name to its qualified name."""

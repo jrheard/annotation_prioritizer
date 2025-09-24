@@ -234,7 +234,7 @@ def test_display_unresolvable_summary_with_many_calls() -> None:
     calls = [
         UnresolvableCall(
             line_number=i + 1,
-            # Note: call_text is now limited to 50 chars in call_counter.py
+            # Note: call_text is limited to 50 chars in call_counter.py
             call_text=f"call_{i}() with a very long text that should",
         )
         for i in range(8)

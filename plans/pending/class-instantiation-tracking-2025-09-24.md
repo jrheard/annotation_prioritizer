@@ -119,7 +119,12 @@ Update integration tests to verify synthetic __init__ methods appear in parse re
 
 **Commit**: `feat: integrate synthetic __init__ generation into function parsing`
 
-### Step 3: Update call resolution to handle class instantiations
+### Step 3: Update call resolution to handle class instantiations ✅ COMPLETED
+
+**Implementation Notes:**
+- Successfully implemented class instantiation detection for direct class names (e.g., `Calculator()`)
+- Deferred support for nested class instantiations (e.g., `Outer.Inner()`) - added to project_status.md
+- Class reference assignments (e.g., `CalcClass = Calculator; CalcClass()`) are not supported - this would require value tracking
 
 Modify `CallCountVisitor._resolve_call()` in `src/annotation_prioritizer/ast_visitors/call_counter.py`:
 

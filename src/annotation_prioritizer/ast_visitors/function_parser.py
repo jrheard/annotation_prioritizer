@@ -292,7 +292,8 @@ def parse_function_definitions(
 ) -> tuple[FunctionInfo, ...]:
     """Extract all function definitions from a parsed AST.
 
-    Now includes synthetic __init__ methods for classes without explicit constructors.
+    Includes synthetic __init__ methods for classes without explicit constructors.
+    These synthetic methods have a single 'self' parameter with no annotations.
 
     Args:
         tree: Parsed AST module
