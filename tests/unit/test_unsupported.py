@@ -91,6 +91,18 @@ class MagicClass:
     def __getattr__(self, name):
         return f"attribute {name}"
 
+    def __add__(self, other):
+        return f"adding {other}"
+
+    def __mul__(self, other):
+        return f"multiplying by {other}"
+
+    def __sub__(self, other):
+        return f"subtracting {other}"
+
+    def __eq__(self, other):
+        return other == self
+
 def use_magic_methods():
     obj = MagicClass()
 
@@ -102,6 +114,14 @@ def use_magic_methods():
 
     # __getattr__ - fallback for attribute access
     value = obj.some_attribute  # Calls __getattr__, not tracked
+
+    # Arithmetic operators
+    sum_result = obj + 5  # Calls __add__, not tracked
+    product = obj * 3  # Calls __mul__, not tracked
+    difference = obj - 2  # Calls __sub__, not tracked
+
+    # Comparison operators
+    is_equal = obj == "test"  # Calls __eq__, not tracked
 
 
 # ===========================================================================
@@ -157,6 +177,11 @@ def namespace_manipulation():
     assert counts.get(make_qualified_name("__module__.MagicClass.__call__"), 0) == 0
     assert counts.get(make_qualified_name("__module__.MagicClass.__getitem__"), 0) == 0
     assert counts.get(make_qualified_name("__module__.MagicClass.__getattr__"), 0) == 0
+    # Arithmetic and comparison operators also not tracked
+    assert counts.get(make_qualified_name("__module__.MagicClass.__add__"), 0) == 0
+    assert counts.get(make_qualified_name("__module__.MagicClass.__mul__"), 0) == 0
+    assert counts.get(make_qualified_name("__module__.MagicClass.__sub__"), 0) == 0
+    assert counts.get(make_qualified_name("__module__.MagicClass.__eq__"), 0) == 0
 
 
 def test_not_yet_supported() -> None:
@@ -455,7 +480,12 @@ def use_query_builder():
     assert counts.get(make_qualified_name("__module__.Outer.Inner.inner_method"), 0) == 0
     assert counts.get(make_qualified_name("__module__.Outer.Middle.DeepInner.deep_method"), 0) == 0
 
-    # Calculator: instantiations are counted (2 in list, 2 in dict, 2 in tuple, 2 in dataclass)
+    # Calculator: 8 instantiations are counted:
+    # - 2 in list: [Calculator(), Calculator()]
+    # - 2 in dict: {"main": Calculator(), "backup": Calculator()}
+    # - 2 in tuple unpacking: Calculator(), Calculator()
+    # - 2 passed to Configuration dataclass: Configuration("test", Calculator())
+    #                                      and Configuration("test2", Calculator())
     assert counts.get(make_qualified_name("__module__.Calculator.__init__"), 0) == 8
     # But calculate() calls through collections/variables/dataclass fields are not tracked
     assert counts.get(make_qualified_name("__module__.Calculator.calculate"), 0) == 0
