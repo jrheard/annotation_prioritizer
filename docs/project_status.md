@@ -116,13 +116,7 @@ None currently.
 ## Planned Features 📋
 
 ### High Priority
-1. **@property Support**
-   - Distinguish properties from regular attributes
-   - Count property access as method calls
-   - Properties are already discovered, just need to track access
-   - Example: `person.full_name` → counts as call to `Person.full_name` property
-
-2. **Import Resolution** (Phase 1 - Single File)
+1. **Import Resolution** (Phase 1 - Single File)
    - Parse and track import statements
    - Resolve imported names to their modules
    - Support common import patterns:
@@ -131,7 +125,7 @@ None currently.
      - `import pandas as pd` → `pd.DataFrame()`
    - Still single-file analysis, but much more effective
 
-3. **Inheritance Resolution**
+2. **Inheritance Resolution**
    - Track class inheritance hierarchies
    - Resolve method calls on subclasses to parent class methods
    - Support Method Resolution Order (MRO)
@@ -139,10 +133,18 @@ None currently.
 
 ### Medium Priority
 
-4. **Return Type Inference**
+3. **Return Type Inference**
    - Track function return types to enable method chaining
    - Support patterns like `get_calc().add()`
    - Would require significant type inference infrastructure
+
+4. **@property Support**
+   - Distinguish properties from regular attributes
+   - Count property access as method calls
+   - Properties are already discovered, just need to track access
+   - Example: `person.full_name` → counts as call to `Person.full_name` property
+   - **Note**: Most valuable AFTER return type inference is implemented
+   - Without return types, can't track chained calls from properties (e.g., `person.name.upper()`)
 
 ## Maybe Someday 🤔
 

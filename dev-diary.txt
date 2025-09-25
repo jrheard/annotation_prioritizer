@@ -986,3 +986,15 @@ i guess next up is property support??
 i'm honestly not 100% sure what i think about this - but let's investigate and see if it turns out to be trivial
 
 (properties don't take inputs, so do i actually care about this? i guess just for minimizing unresolvability?)
+
+===
+
+9/25
+
+TODO i see integration tests in https://github.com/jrheard/annotation_prioritizer/blob/main/tests/unit/test_parse_ast.py
+
+TODO establish clear guidelines for unit/integration tests in tests/CLAUDE.md
+
+ok i ran into docker space issues
+had claude set up a launchd service that runs docker system prune for me on sunday mornings
+neat
