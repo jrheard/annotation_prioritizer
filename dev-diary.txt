@@ -991,9 +991,9 @@ i'm honestly not 100% sure what i think about this - but let's investigate and s
 
 9/25
 
-TODO i see integration tests in https://github.com/jrheard/annotation_prioritizer/blob/main/tests/unit/test_parse_ast.py
+DONE i see integration tests in https://github.com/jrheard/annotation_prioritizer/blob/main/tests/unit/test_parse_ast.py
 
-TODO establish clear guidelines for unit/integration tests in tests/CLAUDE.md
+DONE establish clear guidelines for unit/integration tests in tests/CLAUDE.md
 
 ok i ran into docker space issues
 had claude set up a launchd service that runs docker system prune for me on sunday mornings

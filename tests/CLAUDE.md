@@ -6,6 +6,19 @@
 - Test structure: Tests should be bare functions, not methods in test classes. NEVER use wrapper classes like `class TestSomething:` - pytest doesn't need them
 - Use `@pytest.mark.parametrize` to test multiple scenarios efficiently instead of writing repetitive test functions
 
+## Unit vs Integration Tests
+
+**Unit tests** (`tests/unit/`):
+- Must NOT perform any I/O operations (file system, network, database, etc.)
+- Test pure functions and logic in isolation
+- Use in-memory data structures and string parsing
+- Example: Testing scoring calculations, model creation, AST manipulation from parsed strings
+
+**Integration tests** (`tests/integration/`):
+- Tests that perform I/O operations of any kind
+- Tests that verify interactions with external systems (file system, etc.)
+- Example: Reading/writing files, command-line interface testing with actual files
+
 ## Writing Timeless Test Comments
 
 Test comments should describe the current behavior without referencing historical changes or implementation evolution. Future maintainers don't need to know what used to work differently - they need to understand what the code does now.

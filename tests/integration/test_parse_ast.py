@@ -1,0 +1,107 @@
+"""Tests for the parse_ast module."""
+
+import ast
+from pathlib import Path
+
+from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file
+from tests.helpers.temp_files import temp_python_file
+
+
+def test_successful_parsing() -> None:
+    """Test parsing a valid Python file."""
+    source = "def foo():\n    pass\n"
+    with temp_python_file(source) as file_path:
+        result = parse_ast_from_file(file_path)
+        assert result is not None
+        tree, source_code = result
+        assert isinstance(tree, ast.Module)
+        assert source_code == "def foo():\n    pass\n"
+        # Verify the AST contains a function definition
+        assert len(tree.body) == 1
+        assert isinstance(tree.body[0], ast.FunctionDef)
+        assert tree.body[0].name == "foo"
+
+
+def test_file_not_found() -> None:
+    """Test parsing a non-existent file."""
+    file_path = Path("/nonexistent/path/to/file.py")
+    result = parse_ast_from_file(file_path)
+    assert result is None
+
+
+def test_syntax_error_in_file() -> None:
+    """Test parsing a file with syntax errors."""
+    # Invalid Python syntax
+    with temp_python_file("def foo(\n") as file_path:
+        result = parse_ast_from_file(file_path)
+        assert result is None
+
+
+def test_empty_file() -> None:
+    """Test parsing an empty file."""
+    # Empty file
+    with temp_python_file("") as file_path:
+        result = parse_ast_from_file(file_path)
+        assert result is not None
+        tree, source_code = result
+        assert isinstance(tree, ast.Module)
+        assert source_code == ""
+        assert len(tree.body) == 0
+
+
+def test_file_with_unicode() -> None:
+    """Test parsing a file with Unicode characters."""
+    source = "# Comment with emoji 🎉\ndef greet():\n    return '你好'\n"
+    with temp_python_file(source) as file_path:
+        result = parse_ast_from_file(file_path)
+        assert result is not None
+        tree, source_code = result
+        assert isinstance(tree, ast.Module)
+        assert source_code == source
+        assert len(tree.body) == 1
+        assert isinstance(tree.body[0], ast.FunctionDef)
+
+
+def test_complex_file_structure() -> None:
+    """Test parsing a file with complex Python structures."""
+    source = '''"""Module docstring."""
+import sys
+from typing import Optional
+
+class MyClass:
+    """A test class."""
+
+    def __init__(self) -> None:
+        self.value = 42
+
+def my_function(x: int) -> Optional[int]:
+    """A test function."""
+    if x > 0:
+        return x * 2
+    return None
+
+MY_CONSTANT = 100
+'''
+    with temp_python_file(source) as file_path:
+        result = parse_ast_from_file(file_path)
+        assert result is not None
+        tree, source_code = result
+        assert isinstance(tree, ast.Module)
+        assert source_code == source
+        # Check we have the expected elements
+        # Docstring, import, from import, class, function, assignment
+        assert len(tree.body) == 6
+
+
+def test_file_read_permission_error() -> None:
+    """Test handling of file read permission errors."""
+    with temp_python_file("def foo(): pass\n") as file_path:
+        # Remove read permissions
+        file_path.chmod(0o000)
+        try:
+            result = parse_ast_from_file(file_path)
+            # Should return None due to OSError
+            assert result is None
+        finally:
+            # Restore permissions before cleanup
+            file_path.chmod(0o644)
