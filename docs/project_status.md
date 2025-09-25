@@ -8,6 +8,8 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
 
 **Primary Goal:** Help developers maximize the value of their type annotation efforts by focusing on frequently-called, under-annotated functions.
 
+**Analysis Type:** This is a static analyzer that counts lexical function calls in the source code, not runtime execution counts.
+
 ## Current Implementation Status ✅
 
 ### Core Functionality

@@ -1,6 +1,6 @@
 # Project Overview
 
-This is a Python type annotation priority analyzer that identifies high-impact functions needing type annotations. Uses uv for dependency management.
+This is a Python type annotation priority analyzer that identifies high-impact functions needing type annotations. It performs static analysis to count lexical function calls in the source code, not runtime execution counts. Uses uv for dependency management.
 
 # Development Environment
 
