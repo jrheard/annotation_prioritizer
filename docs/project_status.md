@@ -18,6 +18,8 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
   - Parameter type annotations (including *args, **kwargs)
   - Return type annotations
   - Proper qualified names with full scope hierarchy (e.g., `__module__.Calculator.add`)
+- **Type Safety**: QualifiedName type wrapper with make_qualified_name() factory for type-safe qualified name handling
+- **Class Detection**: AST-based ClassRegistry that definitively identifies all classes, eliminating false positives
 
 ### Analysis Capabilities
 - **Annotation Scoring**: Weighted completeness scoring (75% parameters, 25% return type)
@@ -27,9 +29,20 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
   - Static/class method calls (`Calculator.static_method()`)
   - Nested function calls (functions defined inside other functions)
   - Class instantiations (`Calculator()` counts as call to `Calculator.__init__`)
+- **Variable Tracking**: VariableRegistry for tracking variable-to-type mappings:
+  - Builds registry upfront from AST analysis
+  - Direct instantiation: `calc = Calculator(); calc.add()`
+  - Parameter annotations: `def foo(calc: Calculator): calc.add()`
+  - Variable annotations: `calc: Calculator = ...`
+  - Variable reassignment tracking (most recent type)
+  - Scope isolation with parent scope access
 - **Priority Calculation**: Combined metric based on call frequency × annotation incompleteness
 - **Conservative Methodology**: Only tracks function calls that can be confidently resolved, avoiding uncertain inferences
 - **Scope-Aware Tracking**: Complete scope hierarchy tracking (module/class/function) with typed `Scope` dataclass
+- **Unresolvable Call Reporting**: Full transparency for calls that cannot be resolved statically:
+  - UnresolvableCall model with line number and call text
+  - Accurate multi-line call text extraction using ast.get_source_segment()
+  - Summary and examples in CLI output
 
 ### Class Instantiation Tracking
 - **Synthetic __init__ Generation**: Classes without explicit constructors have synthetic `__init__` methods generated
@@ -62,6 +75,7 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
 
 #### Call Tracking Limitations
 The following patterns are not yet supported for call counting:
+- **Nested class instantiation variable tracking**: `inner = Outer.Inner(); inner.method()` - variable type not tracked
 - **Method chaining from returns**: `get_calculator().add()` - requires return type inference
 - **Indexing operations**: `calculators[0].add()` - requires collection content tracking
 - **Attribute access chains**: `self.calc.add()` - requires object attribute type tracking
@@ -94,76 +108,6 @@ The following patterns are not yet supported for call counting:
    - Track calls across module boundaries
    - Aggregate metrics at project level
    - This is the ultimate goal for maximum value
-
-## Completed Improvements ✅
-
-### Scope-Aware Variable Tracking (Completed 2025-09-22)
-**What was implemented:** Two-pass analysis system for tracking variable-to-type mappings and resolving instance method calls.
-
-**Completed:**
-- ✅ **Variable Registry**: Data models and utilities for tracking variable types
-- ✅ **Variable Discovery Visitor**: AST visitor that builds registry of variable-to-type mappings
-- ✅ **Two-Pass Analysis**: First pass discovers variables, second pass counts calls
-- ✅ **Instance Method Resolution**: `calc = Calculator(); calc.add()` now correctly counted
-- ✅ **Parameter Type Annotations**: `def foo(calc: Calculator)` enables method resolution
-- ✅ **Variable Type Annotations**: `calc: Calculator = get_calculator()` tracked
-- ✅ **Scope Isolation**: Variables in different scopes tracked separately
-- ✅ **Parent Scope Access**: Nested functions can access parent scope variables
-- ✅ **Module-Level Variables**: Top-level variables accessible in all functions
-
-**Patterns Now Supported:**
-- Direct instantiation: `calc = Calculator(); calc.add()`
-- Parameter annotations: `def foo(calc: Calculator): calc.add()`
-- Variable annotations: `calc: Calculator = ...`
-- Class references: `CalcClass = Calculator` (tracked but not for instantiation)
-- Variable reassignment: Tracks the most recent type assignment
-
-**Patterns Still Deferred (Future Work):**
-- Nested class instantiation variable tracking: `inner = Outer.Inner(); inner.method()` (variable type not tracked)
-- Method chaining from returns: `get_calculator().add()` (no return type tracking)
-- Indexing operations: `calculators[0].add()` (no collection content tracking)
-- Attribute access chains: `self.calc.add()` (no object attribute tracking)
-- Collection type annotations: `calculators: list[Calculator]` (generics not handled)
-- Import tracking: `from module import Calculator` (cross-module not supported)
-
-### Scope Infrastructure (Completed Foundation)
-- ✅ **Scope Stack Foundation**: Replaced `_class_stack` with typed `_scope_stack` using `Scope` dataclass
-- ✅ **Function Scope Tracking**: Both parsers now track function scopes in addition to classes
-- ✅ **Nested Function Support**: Calls within nested functions can now be resolved
-
-### Unresolvable Call Reporting (Completed 2025-09-19)
-**What was implemented:** Full transparency system for tracking calls that cannot be resolved statically.
-
-**Completed:**
-- ✅ **UnresolvableCall model**: Data structure with line number and call text
-- ✅ **Call tracking in CallCountVisitor**: Tracks all unresolvable calls during traversal
-- ✅ **AnalysisResult integration**: Returns both priorities and unresolvable calls
-- ✅ **CLI output support**: Displays summary and examples of unresolvable calls
-- ✅ **Accurate call text extraction**: Uses ast.get_source_segment() for multi-line calls
-- ✅ **Full test coverage**: Comprehensive tests for all unresolvable call scenarios
-
-### QualifiedName Type Safety (Completed 2025-09-17)
-**What was implemented:** Type-safe qualified name handling using NewType.
-
-**Completed:**
-- ✅ **QualifiedName NewType**: Type-safe wrapper for qualified name strings
-- ✅ **make_qualified_name() factory**: Single entry point for creating QualifiedName instances
-- ✅ **Full codebase migration**: All qualified name usage converted to use QualifiedName type
-- ✅ **Type checking enforcement**: Pyright validates proper usage throughout codebase
-
-### Class Detection Foundation (Completed 2025-09-16)
-**What was implemented:** Full AST-based class detection system eliminating all false positives.
-
-**Completed:**
-- ✅ **ClassRegistry data structure**: Immutable registry with `is_known_class()` method
-- ✅ **AST-based class discovery**: ClassDiscoveryVisitor finds all ClassDef nodes
-- ✅ **False positive elimination**: Constants like `MAX_SIZE` no longer treated as classes
-- ✅ **Non-PEP8 class support**: Classes like `xmlParser` correctly identified
-- ✅ **Nested class resolution**: `Outer.Inner.method()` calls are properly counted
-- ✅ **Integration into CallCountVisitor**: Now uses ClassRegistry for definitive class identification
-- ✅ **Full test coverage**: Comprehensive tests for all class detection scenarios
-
-**Note:** Class detection now works correctly for all class patterns including nested classes.
 
 ## In Progress 🚧
 
