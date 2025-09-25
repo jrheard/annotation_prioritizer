@@ -1001,3 +1001,5 @@ neat
 
 TODO consider supporting a command-line flag that controls whether or not functions need a return type annotation to be considered "fully annotated" - what would we use as the default? "yes they do need that"?
   something about --explicit-return-type maybe
+
+TODO dig around in test_unsupported.py next time i'm looking for something to work on
