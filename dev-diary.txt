@@ -998,3 +998,6 @@ TODO establish clear guidelines for unit/integration tests in tests/CLAUDE.md
 ok i ran into docker space issues
 had claude set up a launchd service that runs docker system prune for me on sunday mornings
 neat
+
+TODO consider supporting a command-line flag that controls whether or not functions need a return type annotation to be considered "fully annotated" - what would we use as the default? "yes they do need that"?
+  something about --explicit-return-type maybe
