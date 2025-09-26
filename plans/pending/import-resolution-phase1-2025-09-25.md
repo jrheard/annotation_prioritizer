@@ -562,3 +562,208 @@ This implementation sets up for multi-file support by:
 - Building a registry that can be merged across files
 
 When Phase 2 is implemented, we'll enhance the resolution logic to check if imported modules exist in the project and resolve them to actual functions.
+
+## Appendix: Phase 2 Multi-File Analysis Design
+
+This appendix outlines how Phase 2 would build upon Phase 1's foundation to achieve full directory/project analysis.
+
+NOTE THAT THIS IS JUST A SKETCH. We might choose to design/implement phase 2 in a different way entirely. This appendix just explains why phase 1's design is expected to be relevant to future phase 2 work.
+
+### Phase 2 Overview
+
+Phase 2 transforms unresolvable imports from Phase 1 into resolved function calls by analyzing multiple files together. While Phase 1 identifies and tracks imports, Phase 2 performs the actual resolution across file boundaries.
+
+### Core Components
+
+#### 1. Project-Wide Context Aggregation
+
+Phase 2 would aggregate individual file analyses into a project context:
+
+```python
+@dataclass(frozen=True)
+class ProjectContext:
+    """Aggregates analysis data across all files in a project."""
+    file_analyses: dict[Path, FileAnalysis]  # Path -> individual file's analysis
+    import_graph: ImportGraph  # Tracks which files import from which
+
+    def resolve_import(self, from_file: Path, import_name: ImportedName) -> FunctionInfo | None:
+        """Resolve an import from Phase 1 to an actual function."""
+        # Use import_name.source_module from Phase 1
+        if import_name.source_module:
+            # Absolute import like "math" or "mypackage.utils"
+            target_file = self._find_module_file(import_name.source_module)
+        else:
+            # Relative import - use import_name.relative_level from Phase 1
+            target_file = self._resolve_relative_import(
+                from_file,
+                import_name.relative_level,
+                import_name.local_name
+            )
+
+        if target_file and target_file in self.file_analyses:
+            target_analysis = self.file_analyses[target_file]
+            # Look up the actual function in the target file
+            return target_analysis.lookup_function(import_name.original_name or import_name.local_name)
+        return None
+```
+
+#### 2. Enhanced Call Resolution
+
+Phase 2 would extend Phase 1's resolution to handle imports:
+
+```python
+def _resolve_direct_call_phase2(self, func: ast.Name, project: ProjectContext) -> QualifiedName | None:
+    """Phase 2 version that can resolve imports."""
+    # First check Phase 1's import registry
+    import_info = self._import_registry.lookup_import(func.id, self._scope_stack)
+
+    if import_info:
+        if import_info.is_module_import:
+            # Still can't call a module directly
+            return None
+        else:
+            # Phase 2: Actually resolve the import
+            resolved_func = project.resolve_import(self._current_file, import_info)
+            if resolved_func:
+                return resolved_func.qualified_name
+            # If we can't find it (external library), still unresolvable
+            return None
+
+    # Rest is same as Phase 1 - local resolution
+    return resolve_name_in_scope(...)
+```
+
+#### 3. Module Method Resolution
+
+Phase 2 would resolve module method calls identified by Phase 1:
+
+```python
+def _resolve_method_call_phase2(self, func: ast.Attribute, project: ProjectContext) -> QualifiedName | None:
+    """Phase 2 version that can resolve module methods."""
+    if isinstance(func.value, ast.Name):
+        variable_name = func.value.id
+
+        # Check Phase 1's import registry
+        import_info = self._import_registry.lookup_import(variable_name, self._scope_stack)
+
+        if import_info and import_info.is_module_import:
+            # Phase 2: Resolve module.method calls
+            module_file = project.find_module_file(import_info.source_module)
+
+            if module_file:
+                module_analysis = project.file_analyses[module_file]
+                # Look for func.attr in the module
+                target_func = module_analysis.lookup_function(func.attr)
+                if target_func:
+                    return target_func.qualified_name
+
+            # External library (numpy, pandas, etc) - still unresolvable
+            return None
+
+        # Rest handles variable.method() same as Phase 1
+```
+
+### How Phase 1 Enables Phase 2
+
+#### Source Module Tracking
+Phase 1's `ImportedName.source_module` field tells Phase 2 exactly where to look for the imported item. For `import pandas as pd`, Phase 1 records `source_module="pandas"`, which Phase 2 uses to locate the pandas package in the project.
+
+#### Relative Import Resolution
+Phase 1's `ImportedName.relative_level` field enables Phase 2 to resolve relative imports correctly:
+
+```python
+def _resolve_relative_import(from_file: Path, level: int, module: str) -> Path:
+    """Use Phase 1's relative_level to find the target file."""
+    current_dir = from_file.parent
+    for _ in range(level - 1):  # Go up 'level' directories
+        current_dir = current_dir.parent
+    return current_dir / module.replace('.', '/') / "__init__.py"
+```
+
+#### Scope-Aware Import Visibility
+Phase 1's scope tracking ensures Phase 2 respects Python's import visibility rules. An import inside a function is only visible within that function's scope, which Phase 1's `ImportedName.scope` field preserves for Phase 2's use.
+
+### Directory Analysis Implementation
+
+The main entry point for Phase 2 would orchestrate multi-file analysis:
+
+```python
+def analyze_directory(directory: Path) -> ProjectAnalysisResult:
+    """Phase 2's main entry point for directory analysis."""
+    # Step 1: First pass - analyze each file with Phase 1 infrastructure
+    file_analyses = {}
+    for py_file in directory.rglob("*.py"):
+        tree = ast.parse(py_file.read_text())
+
+        # Build Phase 1 registries for this file
+        import_registry = build_import_registry(tree)  # From Phase 1
+        class_registry = build_class_registry(tree)
+        variable_registry = build_variable_registry(tree, class_registry)
+
+        file_analyses[py_file] = FileAnalysis(
+            imports=import_registry,
+            classes=class_registry,
+            variables=variable_registry,
+            functions=parse_function_definitions(tree, py_file, class_registry)
+        )
+
+    # Step 2: Build project context
+    project = ProjectContext(file_analyses, build_import_graph(file_analyses))
+
+    # Step 3: Second pass - resolve all calls with cross-file knowledge
+    all_priorities = []
+    for py_file, analysis in file_analyses.items():
+        resolved_counts, unresolvable = count_function_calls_phase2(
+            analysis.tree,
+            analysis.functions,
+            analysis.classes,
+            analysis.variables,
+            analysis.imports,  # Phase 1's import registry
+            project  # Cross-file context
+        )
+        all_priorities.extend(calculate_priorities(resolved_counts, analysis.functions))
+
+    # Step 4: Aggregate and rank across entire project
+    return ProjectAnalysisResult(
+        priorities=sorted(all_priorities, key=lambda p: p.priority_score, reverse=True),
+        total_files=len(file_analyses),
+        cross_file_calls=count_cross_file_calls(project)
+    )
+```
+
+### Division of Responsibilities
+
+**Phase 1 Provides:**
+- Import identification and tracking (ImportRegistry)
+- Source module information for each import
+- Relative import levels for path resolution
+- Scope-aware visibility rules
+- Clear separation of "what's imported" from "what it resolves to"
+
+**Phase 2 Adds:**
+- Multi-file scanning and aggregation
+- Import resolution to actual functions/classes
+- Cross-file call counting
+- Project-wide priority rankings
+- Import graph construction for dependency tracking
+
+### Implementation Benefits
+
+This phased approach offers several advantages:
+
+1. **Testability**: Phase 1 can be thoroughly tested in isolation by verifying imports are tracked correctly, without needing multi-file test fixtures.
+
+2. **Incremental Progress**: Phase 1 provides immediate value by distinguishing imported-but-unresolvable calls from completely unknown calls, improving single-file analysis accuracy.
+
+3. **Clean Separation**: Phase 1 handles the complexity of import parsing and scope tracking, allowing Phase 2 to focus purely on resolution logic.
+
+4. **Reusability**: Phase 1's ImportRegistry can be reused for other analyses that need import information, not just call counting.
+
+### Limitations and External Libraries
+
+Even with Phase 2, calls to external libraries (numpy, pandas, standard library) would remain unresolvable unless we either:
+1. Include those libraries in the analysis scope (potentially massive)
+2. Build hardcoded knowledge of common library APIs
+3. Accept that external calls remain unresolved (most pragmatic)
+
+The pragmatic approach aligns with the project's philosophy of conservative, accurate analysis - only counting what we can confidently resolve.
