@@ -81,6 +81,7 @@ The following patterns are not yet supported for call counting:
 - **Attribute access chains**: `self.calc.add()` - requires object attribute type tracking
 - **Collection type annotations**: `calculators: list[Calculator]` - generics not handled
 - **Cross-module types**: `from module import Calculator` - import resolution not implemented
+- **Duplicate function definitions**: Functions redefined with the same name in the same file will share call counts (intentionally unsupported - uncommon pattern)
 
 ### Fixed Issues
 - ✅ **Instance Method Calls Not Counted**: Previously `calc = Calculator(); calc.add()` showed 0 calls (FIXED via variable tracking)
