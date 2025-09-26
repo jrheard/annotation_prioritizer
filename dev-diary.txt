@@ -1012,7 +1012,10 @@ TODO someday read through vulture's codebase and see how they do all this
 
 ok let's read the import doc again and use /review-plan on it
 
-TODO will lookup_import() be a perf bottleneck?
+DONE will lookup_import() be a perf bottleneck?
+  not yet, can figure it out later
 
-TODO follow up on this
+DONE follow up on this
   The ImportRegistry.lookup_import scope checking logic uses string prefix matching which could have edge cases with similarly named scopes. Consider whether exact scope parent checking would be more robust
+
+ok let's make a new branch and start work
