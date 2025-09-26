@@ -10,6 +10,23 @@ The new architecture:
 3. **Fixes shadowing bug** by resolving names based on their position in the file
 4. **Simplifies codebase** by eliminating 5 separate visitors and their registries
 
+## Phase Definitions
+
+- **Phase 1 (Current State)**: Single-file analysis where imports are tracked but not resolved (we know `sqrt` was imported from `math`, but can't resolve what `math.sqrt` actually refers to). This limitation already exists in the current codebase.
+
+- **Phase 2 (Future)**: Multi-file analysis where imports can be resolved by analyzing the imported modules. This would allow tracking calls across module boundaries. The `source_module` field in NameBinding is included now to prepare for this future enhancement.
+
+**This plan** refactors the existing Phase 1 implementation to fix the shadowing bug and reduce AST passes by consolidating 5 separate visitors into a single NameBindingCollector.
+
+## Out of Scope
+
+The following Python binding scenarios are intentionally NOT supported:
+- Decorators (function/class decorators)
+- `global` and `nonlocal` statements
+- Exception handlers (`except E as e:`)
+- `del` statements
+- Comprehension variables (list/dict/set comprehensions have their own scope)
+
 ## Code Reuse Inventory
 
 ### Existing utilities to leverage:
@@ -35,9 +52,9 @@ The new architecture:
 
 ## Implementation Steps
 
-### Step 1: Add NameBindingKind enum to models.py with comprehensive tests
+### Step 1: Add NameBindingKind enum and NameBinding dataclass to models.py
 
-Add a new enum to categorize different types of name bindings:
+Add a new enum to categorize different types of name bindings and the core data structure that represents a name binding at a specific position:
 
 ```python
 class NameBindingKind(StrEnum):
@@ -46,18 +63,7 @@ class NameBindingKind(StrEnum):
     FUNCTION = "function"       # def foo(): ...
     CLASS = "class"            # class Calculator: ...
     VARIABLE = "variable"      # calc = Calculator()
-```
 
-Tests will verify:
-- Enum values are correct strings
-- All binding types are covered
-- String representation works correctly
-
-### Step 2: Create NameBinding dataclass with position tracking and tests
-
-Add the core data structure that represents a name binding at a specific position:
-
-```python
 @dataclass(frozen=True)
 class NameBinding:
     """A name binding at a specific position in the code."""
@@ -65,18 +71,12 @@ class NameBinding:
     line_number: int                    # Where defined/imported (1-indexed)
     kind: NameBindingKind              # Type of binding
     qualified_name: QualifiedName | None  # None for imports (Phase 1)
-    scope: QualifiedName                # Scope where binding occurs
+    scope_stack: ScopeStack             # Full scope stack where binding occurs
     source_module: str | None          # For imports: "math" from "from math import sqrt"
     target_class: QualifiedName | None # For variables: class they're instances of
 ```
 
-Tests will cover:
-- Initialization with all field combinations
-- Frozen behavior (immutability)
-- Equality comparisons
-- Proper handling of optional fields
-
-### Step 3: Implement PositionIndex class with binary search and comprehensive tests
+### Step 2: Implement PositionIndex class with binary search and comprehensive tests
 
 Create the position-aware index that efficiently resolves names using binary search:
 
@@ -85,7 +85,7 @@ Create the position-aware index that efficiently resolves names using binary sea
 class PositionIndex:
     """Efficient position-aware name resolution index."""
     # Internal structure: Dict[scope][name] -> sorted list of (line_number, binding)
-    _index: dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]]
+    _index: Mapping[QualifiedName, dict[str, list[tuple[int, NameBinding]]]]
 
     def resolve(self, name: str, line: int, scope_stack: ScopeStack) -> NameBinding | None:
         """Resolve a name at a given position using binary search."""
@@ -99,7 +99,7 @@ Tests will verify:
 - Scope chain resolution (inner scopes checked before outer)
 - Edge cases (no bindings, line before any binding, etc.)
 
-### Step 4: Create NameBindingCollector base structure with scope tracking and tests
+### Step 3: Create NameBindingCollector base structure with scope tracking and tests
 
 Implement the core visitor that will collect all name bindings:
 
@@ -109,6 +109,7 @@ class NameBindingCollector(ast.NodeVisitor):
 
     def __init__(self):
         self.bindings: list[NameBinding] = []
+        self.unresolved_variables: list[tuple[NameBinding, str]] = []  # For Step 7
         self._scope_stack: ScopeStack = create_initial_stack()
 
     # Scope management using existing utilities from scope_tracker.py
@@ -121,7 +122,7 @@ Tests will verify:
 - Scope stack maintained correctly
 - Base visitor functionality works
 
-### Step 5: Add import binding collection (Import, ImportFrom) with tests for all patterns
+### Step 4: Add import binding collection (Import, ImportFrom) with tests for all patterns
 
 Extend collector to track imports with source module information:
 
@@ -134,7 +135,7 @@ def visit_Import(self, node: ast.Import) -> None:
             line_number=node.lineno,
             kind=NameBindingKind.IMPORT,
             qualified_name=None,  # Unresolvable in Phase 1
-            scope=build_qualified_name(self._scope_stack),
+            scope_stack=self._scope_stack,
             source_module=alias.name,  # Track for Phase 2
             target_class=None
         )
@@ -153,7 +154,7 @@ Tests will cover:
 - Star imports: `from math import *`
 - Relative imports: `from . import utils`
 
-### Step 6: Add function binding collection (FunctionDef, AsyncFunctionDef) with tests
+### Step 5: Add function binding collection (FunctionDef, AsyncFunctionDef) with tests
 
 Track function definitions at all scope levels:
 
@@ -166,7 +167,7 @@ def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         line_number=node.lineno,
         kind=NameBindingKind.FUNCTION,
         qualified_name=qualified,
-        scope=build_qualified_name(self._scope_stack),
+        scope_stack=self._scope_stack,
         source_module=None,
         target_class=None
     )
@@ -185,7 +186,7 @@ Tests will verify:
 - Async functions
 - Functions that shadow imports
 
-### Step 7: Add class binding collection (ClassDef) with tests for nested classes
+### Step 6: Add class binding collection (ClassDef) with tests for nested classes
 
 Track class definitions including nested classes:
 
@@ -198,7 +199,7 @@ def visit_ClassDef(self, node: ast.ClassDef) -> None:
         line_number=node.lineno,
         kind=NameBindingKind.CLASS,
         qualified_name=qualified,
-        scope=build_qualified_name(self._scope_stack),
+        scope_stack=self._scope_stack,
         source_module=None,
         target_class=None
     )
@@ -216,9 +217,9 @@ Tests will cover:
 - Classes inside functions
 - Classes that shadow imports
 
-### Step 8: Add variable binding collection (Assign, AnnAssign) with tests for instance tracking
+### Step 7: Add variable binding collection (Assign, AnnAssign) with tests for instance tracking
 
-Track variable assignments that are relevant for method resolution:
+Track variable assignments that are relevant for method resolution. Since we can't resolve class names during collection (the index doesn't exist yet), we track unresolved references:
 
 ```python
 def visit_Assign(self, node: ast.Assign) -> None:
@@ -228,23 +229,36 @@ def visit_Assign(self, node: ast.Assign) -> None:
 
         # Check if it's a class instantiation or reference
         if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name):
-            # calc = Calculator() - track with target_class
-            target = self._resolve_class_name(node.value.func.id)
-            if target:  # Only track if it's a known class
-                binding = NameBinding(
-                    name=variable_name,
-                    line_number=node.lineno,
-                    kind=NameBindingKind.VARIABLE,
-                    qualified_name=build_qualified_name(self._scope_stack, variable_name),
-                    scope=build_qualified_name(self._scope_stack),
-                    source_module=None,
-                    target_class=target
-                )
-                self.bindings.append(binding)
+            # calc = Calculator() - track for later resolution
+            class_name = node.value.func.id
+            binding = NameBinding(
+                name=variable_name,
+                line_number=node.lineno,
+                kind=NameBindingKind.VARIABLE,
+                qualified_name=build_qualified_name(self._scope_stack, variable_name),
+                scope_stack=self._scope_stack,
+                source_module=None,
+                target_class=None  # Will be resolved in build_position_index
+            )
+            self.bindings.append(binding)
+            self.unresolved_variables.append((binding, class_name))
+
         elif isinstance(node.value, ast.Name):
             # calc = Calculator (class reference)
-            # Also track function references: process_data = json.loads
-            # Will need position-aware resolution to determine what node.value.id refers to
+            # process = sqrt (function reference)
+            # Note: function references like process = sqrt won't yet resolve if sqrt is imported
+            ref_name = node.value.id
+            binding = NameBinding(
+                name=variable_name,
+                line_number=node.lineno,
+                kind=NameBindingKind.VARIABLE,
+                qualified_name=build_qualified_name(self._scope_stack, variable_name),
+                scope_stack=self._scope_stack,
+                source_module=None,
+                target_class=None  # Will be resolved in build_position_index
+            )
+            self.bindings.append(binding)
+            self.unresolved_variables.append((binding, ref_name))
 ```
 
 Tests will verify:
@@ -255,23 +269,56 @@ Tests will verify:
 - Annotated assignments: `calc: Calculator = Calculator()`
 - Assignments we ignore: `x = 5`, `y = "string"`
 
-### Step 9: Implement build_position_index() factory with comprehensive shadowing tests
+### Step 8: Implement build_position_index() factory with comprehensive shadowing tests
 
-Create the factory function that builds a PositionIndex from collected bindings:
+Create the factory function that builds a PositionIndex from collected bindings and resolves variable targets:
 
 ```python
-def build_position_index(bindings: list[NameBinding]) -> PositionIndex:
-    """Build an efficient position-aware index from bindings."""
+def build_position_index(
+    bindings: list[NameBinding],
+    unresolved_variables: list[tuple[NameBinding, str]]
+) -> PositionIndex:
+    """Build an efficient position-aware index from bindings and resolve variable targets."""
+    # First, build the basic index
     index: dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]] = defaultdict(lambda: defaultdict(list))
 
     for binding in bindings:
         # Add to index, maintaining sorted order by line number
-        index[binding.scope][binding.name].append((binding.line_number, binding))
+        # Convert scope_stack to qualified name for indexing
+        scope_name = build_qualified_name(binding.scope_stack)
+        index[scope_name][binding.name].append((binding.line_number, binding))
 
     # Sort each name's bindings by line number for binary search
     for scope_dict in index.values():
         for binding_list in scope_dict.values():
             binding_list.sort(key=lambda x: x[0])
+
+    # Create temporary index for resolution
+    temp_index = PositionIndex(_index=dict(index))
+
+    # Resolve variable targets
+    for variable_binding, target_name in unresolved_variables:
+        # Look up what target_name refers to at the variable's position
+        resolved = temp_index.resolve(
+            target_name,
+            variable_binding.line_number,
+            variable_binding.scope_stack
+        )
+
+        if resolved and resolved.kind == NameBindingKind.CLASS:
+            # Update the variable binding with the resolved class
+            # Since NameBinding is frozen, use dataclasses.replace()
+            resolved_binding = dataclasses.replace(
+                variable_binding,
+                target_class=resolved.qualified_name  # Now resolved!
+            )
+
+            # Replace the unresolved binding with resolved one in the index
+            # This requires finding and updating the binding in the index structure
+            # Implementation details omitted for brevity
+
+        # Note: If resolved is a FUNCTION or IMPORT, target_class remains None
+        # This is a Phase 1 limitation - imports and function references aren't fully tracked
 
     return PositionIndex(_index=dict(index))
 ```
@@ -283,9 +330,9 @@ Tests focusing on shadowing scenarios from issue #31:
 - Class shadowing import
 - Multiple shadows in same scope
 
-### Step 10: Update CallCountVisitor to use PositionIndex with shadowing scenario tests
+### Step 9: Update CallCountVisitor to use PositionIndex with shadowing scenario tests
 
-Modify CallCountVisitor to use the new position-aware resolution:
+Modify CallCountVisitor to use the new position-aware resolution, including support for method calls through variables:
 
 ```python
 class CallCountVisitor(ast.NodeVisitor):
@@ -311,16 +358,39 @@ class CallCountVisitor(ast.NodeVisitor):
             return binding.qualified_name
 
         return None  # Variables aren't directly callable
+
+    def _resolve_attribute_call(self, func: ast.Attribute) -> QualifiedName | None:
+        """Resolve method calls like calc.add()."""
+        if isinstance(func.value, ast.Name):
+            # Look up the variable
+            binding = self._position_index.resolve(
+                func.value.id,
+                func.lineno,
+                self._scope_stack
+            )
+
+            if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
+                # We know what class the variable refers to
+                return make_qualified_name(f"{binding.target_class}.{func.attr}")
+
+        # Fall back to existing attribute resolution logic
+        return self._existing_attribute_resolution(func)
 ```
 
-**Note**: This commit will be larger as we need to update all CallCountVisitor tests in the same commit. Use sub-agents to help fix the tests efficiently.
+**Note**: This commit will be larger as we need to update all CallCountVisitor tests in the same commit. Specific tests to update:
+- All tests that use ImportRegistry (remove this dependency)
+- All tests that use ClassRegistry (remove this dependency)
+- Add new tests for position-aware shadowing scenarios
+- Ensure test coverage remains at 100%
+
+Use sub-agents to help fix the tests efficiently.
 
 Tests will verify all shadowing scenarios work correctly:
 - Test cases directly from issue #31
 - Complex shadowing with multiple redefinitions
 - Shadowing in nested scopes
 
-### Step 11: Integrate NameBindingCollector in analyzer.py with integration tests
+### Step 10: Integrate NameBindingCollector in analyzer.py with integration tests
 
 Update the main analysis pipeline to use the new collector:
 
@@ -332,8 +402,8 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
     collector = NameBindingCollector()
     collector.visit(tree)
 
-    # Build position-aware index
-    position_index = build_position_index(collector.bindings)
+    # Build position-aware index with resolved variable targets
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
 
     # Parse function definitions (kept separate for detailed info)
     # Note: FunctionDefinitionVisitor might need minor updates to work without ClassRegistry
@@ -356,7 +426,7 @@ Integration tests will verify:
 - Performance is acceptable
 - All existing functionality preserved
 
-### Step 12: Remove old visitors and registries with test cleanup
+### Step 11: Remove old visitors and registries with test cleanup
 
 Clean up the codebase by removing obsolete components:
 
@@ -372,9 +442,11 @@ Updates needed:
 - Update any remaining references
 - Ensure all tests still pass
 
+**Test Migration Strategy**: Before deleting test files, review them to ensure all test scenarios are covered by the new NameBindingCollector tests. Create a checklist of important test cases to verify we don't lose coverage.
+
 This step confirms the refactor is complete and the old code is no longer needed.
 
-### Step 13: Update FunctionDefinitionVisitor to work with PositionIndex and add tests
+### Step 12: Update FunctionDefinitionVisitor to work with PositionIndex and add tests
 
 Since FunctionDefinitionVisitor remains separate but previously depended on ClassRegistry, update it to work with PositionIndex:
 
@@ -400,7 +472,7 @@ Each step includes comprehensive tests to ensure correctness:
 4. **Regression tests** for issue #31 shadowing scenarios
 5. **Performance tests** confirming O(log k) lookup performance
 
-**Important**: When updating CallCountVisitor (Step 10), we'll need to update many tests at once. Plan to use sub-agents to help with test fixes to keep the commit size manageable.
+**Important**: When updating CallCountVisitor (Step 9), we'll need to update many tests at once. Plan to use sub-agents to help with test fixes to keep the commit size manageable.
 
 ## Migration Notes
 

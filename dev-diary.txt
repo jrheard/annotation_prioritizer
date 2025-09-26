@@ -1030,3 +1030,27 @@ TODO instead of QualifiedName strings, should we passing around lists of scope t
 
 TODO fix position-sensitive name support
   TODO https://github.com/jrheard/annotation_prioritizer/issues/31
+
+  this is a can of worms!!!
+
+im just gonna remove context7
+
+DONE   4. Inconsistent Import Handling: Plan says imports have qualified_name=None in Phase 1, but Step 8 shows tracking process = sqrt where sqrt would be an import. How can we track that a variable references an import if imports have
+  no resolvable qualified name?
+
+TODO someday - distant future - comprehension variables?
+  we should at least track this in test_unsupported.py
+
+TODO reread doc from scratch on monday
+
+TODO make sure i understand the proposed shape of PositionIndex. why is it dict[qualified_name][str] instead of dict[qualified_name]?
+
+TODO /review-plan on this single-pass doc at _least_ one more time
+
+TODO as part of the final PR review phase, we should run both main and the new branch on the demo files to verify we didn't lose functionality
+
+TODO do a perf/memory investigation about the behavior/characeristics of using ScopeStacks everywhere vs using strings everywhere
+
+TODO the main operation we're performing is prefix-based lookups - would a trie or some other data structure be relevant??
+
+TODO investigate using a format like 'm:foo.c:bar.f:baz:v.quux' for qualified names, so it's not lossy compared to scopestack
