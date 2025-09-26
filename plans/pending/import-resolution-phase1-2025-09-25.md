@@ -13,6 +13,10 @@ This plan implements import resolution for single-file analysis, laying the foun
 
 ## Implementation Steps
 
+### Phase A: Build Import Infrastructure (No Breaking Changes)
+
+These steps can be done incrementally with full test coverage. Nothing breaks because it's all new code.
+
 ### Step 1: Add Import Data Models
 
 Create the data structures for tracking imports in `src/annotation_prioritizer/models.py`:
@@ -44,7 +48,7 @@ This distinction is critical for call resolution:
 - `math()` where math is a module import → Invalid, return None
 - `sqrt()` where sqrt is a from-import → Valid call (though unresolvable in Phase 1)
 - `math.sqrt()` where math is a module import → Valid module method call
-- `sqrt.something()` where sqrt is a from-import → Usually invalid
+- `sqrt.something()` where sqrt is a from-import
 
 **Tests to add:**
 - Unit tests for ImportedName creation with various import patterns
@@ -208,7 +212,17 @@ def build_import_registry(tree: ast.Module) -> ImportRegistry:
 - Test dotted module paths (xml.etree.ElementTree)
 - Verify scope tracking is correct
 
-### Step 4: Integrate Import Registry into Analyzer
+**Note**: The build_import_registry function should always be called, even for files with no imports. It should return an ImportRegistry with an empty frozenset rather than None. This ensures consistent behavior across the codebase.
+
+### Phase B: Atomic Integration (Single Commit)
+
+**CRITICAL**: Steps 4-7 must be done in a SINGLE COMMIT to avoid breaking tests. Since there are only 3 call sites for count_function_calls (analyzer.py and tests/helpers/function_parsing.py), we can update them all atomically.
+
+### Step 4: Integrate Import Registry Everywhere
+
+This step combines all integration changes into one atomic commit:
+
+#### 4.1: Update analyzer.py
 
 Update `src/annotation_prioritizer/analyzer.py` to build the import registry:
 
@@ -237,11 +251,7 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
     # ... rest remains the same
 ```
 
-**Tests to add:**
-- Integration test that import registry is built and passed through pipeline
-- Verify analyzer still works with the new parameter
-
-### Step 5: Update Call Counter Constructor
+#### 4.2: Update Call Counter
 
 Modify `src/annotation_prioritizer/ast_visitors/call_counter.py` to accept the import registry:
 
@@ -281,11 +291,32 @@ class CallCountVisitor(ast.NodeVisitor):
         self._unresolvable_calls: list[UnresolvableCall] = []
 ```
 
-**Tests to add:**
-- Update all existing call counter tests to provide import registry
-- Can use empty registry for backwards compatibility
+#### 4.3: Update Test Helpers
 
-### Step 6: Integrate Import Checking in Direct Call Resolution
+Update `tests/helpers/function_parsing.py` to build and pass the import registry:
+
+```python
+def count_calls_from_file(
+    file_path: Path, known_functions: tuple[FunctionInfo, ...]
+) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
+    """Count function calls from a file with full AST and registry context."""
+    parse_result = parse_ast_from_file(file_path)
+    if not parse_result:
+        return ((), ())
+
+    tree, source_code = parse_result
+    class_registry = build_class_registry(tree)
+    variable_registry = build_variable_registry(tree, class_registry)
+    import_registry = build_import_registry(tree)  # NEW
+
+    return count_function_calls(
+        tree, known_functions, class_registry, variable_registry, import_registry, source_code
+    )
+```
+
+**Note**: Any other helper functions that call count_function_calls must also be updated in this commit.
+
+#### 4.4: Integrate Import Checking in Direct Call Resolution
 
 Update `_resolve_direct_call` in `call_counter.py`:
 
@@ -317,12 +348,7 @@ def _resolve_direct_call(self, func: ast.Name) -> QualifiedName | None:
     # ... rest of existing logic
 ```
 
-**Tests to add:**
-- Test that imported functions return None (unresolvable)
-- Test that module imports return None
-- Test that non-imported names still resolve normally
-
-### Step 7: Integrate Import Checking in Method Call Resolution
+#### 4.5: Integrate Import Checking in Method Call Resolution
 
 Update `_resolve_method_call` in `call_counter.py`:
 
@@ -354,12 +380,13 @@ def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
     # ... rest of existing logic remains the same
 ```
 
-**Tests to add:**
-- Test that math.sqrt() is recognized as module method and returns None
-- Test that pandas.DataFrame() (with alias) is recognized
-- Test that regular method calls still work
+**End of Atomic Commit**
 
-### Step 8: Add Comprehensive Tests
+At this point, all tests should pass. The import registry is built and passed through the entire pipeline, and the resolution logic checks for imports.
+
+### Phase C: Add Comprehensive Tests
+
+### Step 5: Add Import-Specific Tests
 
 Create `tests/unit/test_import_discovery.py`:
 
@@ -470,6 +497,8 @@ def test_star_import_ignored():
     assert len(registry.imports) == 0  # Star import should be ignored
 ```
 
+### Step 6: Add Integration Tests
+
 Update `tests/unit/test_unsupported.py` to verify imports are still unresolved but properly identified:
 
 ```python
@@ -496,23 +525,11 @@ def use_imports():
     # This sets us up for Phase 2 where these will be resolvable
 ```
 
-### Step 9: Update Existing Tests
-
-Many existing tests will need the new import_registry parameter. Update helper functions:
-
-```python
-# In tests/helpers/function_parsing.py or similar
-def count_calls_from_source(source: str) -> tuple[...]:
-    """Helper that includes empty import registry for backwards compatibility."""
-    tree = ast.parse(source)
-    # ... existing setup ...
-    import_registry = build_import_registry(tree)  # NEW
-
-    resolved_counts, unresolvable_calls = count_function_calls(
-        tree, function_infos, class_registry, variable_registry, import_registry, source
-    )
-    # ...
-```
+Add additional integration tests to verify:
+- Imported functions are marked as unresolvable (not unknown)
+- Module imports like math() return None
+- Module methods like math.sqrt() are detected but unresolved
+- Regular function calls still work normally
 
 ## Key Architectural Decisions
 
