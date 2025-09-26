@@ -21,7 +21,8 @@
                 "ms-python.python",
                 "ms-python.pylance",
                 "charliermarsh.ruff",
-                "tamasfe.even-better-toml"
+                "tamasfe.even-better-toml",
+                "GitHub.vscode-pull-request-github"
             ],
             "settings": {
                 "remote.autoForwardPorts": false,
