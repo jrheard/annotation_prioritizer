@@ -16,7 +16,7 @@ class Calculator:
 
 calc = Calculator()
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -37,7 +37,7 @@ class Calculator:
 def process(calc: Calculator):
     pass
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -57,7 +57,7 @@ class Calculator:
 
 calc: Calculator = get_calculator()
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -81,7 +81,7 @@ class Helper:
 obj = Calculator()
 obj = Helper()  # Reassignment - should track Helper
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -109,7 +109,7 @@ def func2():
     calc = Calculator()  # Different function
     pass
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -141,7 +141,7 @@ def outer():
         nested_calc = Calculator()
         pass
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -167,7 +167,7 @@ calc1 = Calculator()
 calc2: Calculator = get_calculator()
 calc3: Calculator
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -192,7 +192,7 @@ class Calculator:
 calc_instance = Calculator()  # Instance
 calc_class = Calculator  # Class reference
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -219,7 +219,7 @@ def use_calculator(calc: Calculator):
     calc = Calculator()  # Reassignment
     return calc.add(1, 2)
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
 
     # Use the orchestration function
     registry = build_variable_registry(tree, class_registry)
@@ -241,7 +241,7 @@ def create_calculator():
     calc = Calculator()
     return calc
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -262,7 +262,7 @@ class Outer:
 
 inner = Outer.Inner()  # Not supported yet (would need attribute resolution)
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -279,7 +279,7 @@ def test_unknown_class_not_tracked() -> None:
 calc = Calculator()  # Should not be tracked
 obj: UnknownType  # Should not be tracked
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -300,7 +300,7 @@ calc1: Optional[Calculator]  # Not supported
 calc2: List[Calculator]  # Not supported
 calc3: Calculator | None  # Not supported
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -319,7 +319,7 @@ class Calculator:
 calc1, calc2 = Calculator(), Calculator()
 calc3 = calc4 = Calculator()
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -338,7 +338,7 @@ class Calculator:
 class Helper:
     pass
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -365,7 +365,7 @@ class Calculator:
 async def process_async(calc: Calculator):
     pass
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -386,7 +386,7 @@ class Calculator:
 # Comprehension variables - complex scope, not tracked
 calcs = [Calculator() for _ in range(5)]
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -398,7 +398,7 @@ calcs = [Calculator() for _ in range(5)]
 def test_empty_registry() -> None:
     """Test behavior with empty code."""
     code = ""
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -414,7 +414,7 @@ class Calculator:
 
 calc: Calculator  # Annotation without assignment
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -437,7 +437,7 @@ self.calc: Calculator = Calculator()
 obj.attr: Calculator = Calculator()
 items[0]: Calculator = Calculator()
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -459,7 +459,7 @@ def some_function():
 calc = some_function  # Should not be tracked as Calculator type
 obj = unknown_name  # Should not be tracked
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()
@@ -485,7 +485,7 @@ def process_all_types(
 ):
     pass
 """
-    tree, class_registry, _ = build_registries_from_source(code)
+    tree, class_registry, _, _ = build_registries_from_source(code)
     visitor = VariableDiscoveryVisitor(class_registry)
     visitor.visit(tree)
     registry = visitor.get_registry()

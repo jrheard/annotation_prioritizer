@@ -31,6 +31,7 @@ import builtins
 from typing import override
 
 from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
+from annotation_prioritizer.import_registry import ImportRegistry
 from annotation_prioritizer.models import (
     CallCount,
     FunctionInfo,
@@ -72,11 +73,13 @@ def _is_builtin_call(node: ast.Call) -> bool:
     return False
 
 
-def count_function_calls(
+# TODO: Consider composing the registries into a single (well-named) object
+def count_function_calls(  # noqa: PLR0913
     tree: ast.Module,
     known_functions: tuple[FunctionInfo, ...],
     class_registry: ClassRegistry,
     variable_registry: VariableRegistry,
+    import_registry: ImportRegistry,
     source_code: str,
 ) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
     """Count calls to known functions in the AST.
@@ -86,12 +89,15 @@ def count_function_calls(
         known_functions: Functions to count calls for
         class_registry: Registry of known classes
         variable_registry: Registry of variable type information
+        import_registry: Registry of imported names
         source_code: Source code for error context
 
     Returns:
         Tuple of (resolved call counts, unresolvable calls)
     """
-    visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, source_code, variable_registry, import_registry
+    )
     visitor.visit(tree)
 
     resolved = tuple(
@@ -140,6 +146,7 @@ class CallCountVisitor(ast.NodeVisitor):
         class_registry: ClassRegistry,
         source_code: str,
         variable_registry: VariableRegistry,
+        import_registry: ImportRegistry,
     ) -> None:
         """Initialize visitor with functions to track and registries.
 
@@ -148,6 +155,7 @@ class CallCountVisitor(ast.NodeVisitor):
             class_registry: Registry of known classes for definitive identification
             source_code: Source code for extracting unresolvable call text
             variable_registry: Registry of variable types for resolution
+            import_registry: Registry of imported names
         """
         super().__init__()
         # Create internal call count tracking from known functions
@@ -156,6 +164,7 @@ class CallCountVisitor(ast.NodeVisitor):
         self._scope_stack = create_initial_stack()
         self._source_code = source_code
         self._variable_registry = variable_registry
+        self._import_registry = import_registry
         self._unresolvable_calls: list[UnresolvableCall] = []
 
     @override
@@ -258,6 +267,19 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified name if resolvable, None otherwise
         """
+        # First check if it's an imported name
+        import_info = self._import_registry.lookup_import(func.id, self._scope_stack)
+        if import_info:
+            if import_info.is_module_import:
+                # It's a module import like "math" - can't be a direct call
+                # math() would be calling a module, which isn't valid
+                return None
+            # It's an imported function/class like "sqrt" from "from math import sqrt"
+            # For single-file analysis, we can't resolve to the actual function
+            # Mark as unresolvable (will be handled by caller)
+            return None
+
+        # Continue with existing resolution logic
         # Try to resolve the name in the current scope
         resolved = resolve_name_in_scope(
             self._scope_stack, func.id, self._class_registry.classes | self.call_counts.keys()
@@ -309,9 +331,7 @@ class CallCountVisitor(ast.NodeVisitor):
         """Resolve qualified name from a method call (attribute access).
 
         Handles self.method(), ClassName.method(), variable.method(), and
-        Outer.Inner.method() calls.
-
-        TODO: Once we support imports, this might not always be a method - could be eg `math.random()`
+        module.function() calls.
 
         Args:
             func: The ast.Attribute node representing the method call
@@ -319,11 +339,18 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified method name if resolvable, None otherwise
         """
-        # Check if it's a call on a variable
+        # Check if it's a call on a variable or module
         if isinstance(func.value, ast.Name):
             variable_name = func.value.id
 
-            # Look up the variable's type
+            # Check if it's an imported module
+            import_info = self._import_registry.lookup_import(variable_name, self._scope_stack)
+            if import_info and import_info.is_module_import:
+                # It's a module method like math.sqrt() or pd.DataFrame()
+                # For single-file analysis, mark as unresolvable
+                return None
+
+            # Continue with existing variable lookup logic
             variable_type = lookup_variable(self._variable_registry, self._scope_stack, variable_name)
 
             if variable_type:

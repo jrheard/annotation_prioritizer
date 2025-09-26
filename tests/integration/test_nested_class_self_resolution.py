@@ -24,7 +24,7 @@ class Outer:
         return Inner
 """
     # Build registries
-    tree, class_registry, variable_registry = build_registries_from_source(source_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -41,7 +41,9 @@ class Outer:
     )
 
     # Count calls
-    visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, source_code, variable_registry, import_registry
+    )
     visitor.visit(tree)
 
     # Verify that self.foo() in Inner.inner_method resolves to Inner.foo
@@ -74,7 +76,7 @@ class Outer:
         return Inner
 """
     # Build registries
-    tree, class_registry, variable_registry = build_registries_from_source(source_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -91,7 +93,9 @@ class Outer:
     )
 
     # Count calls
-    visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, source_code, variable_registry, import_registry
+    )
     visitor.visit(tree)
 
     # Verify each self.foo() resolves to its own Inner class
@@ -118,7 +122,7 @@ class A:
         return B
 """
     # Build registries
-    tree, class_registry, variable_registry = build_registries_from_source(source_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -130,7 +134,9 @@ class A:
     )
 
     # Count calls
-    visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, source_code, variable_registry, import_registry
+    )
     visitor.visit(tree)
 
     # Verify self.foo() in C.call_foo resolves correctly
@@ -158,7 +164,7 @@ class Outer:
         return Inner
 """
     # Build registries
-    tree, class_registry, variable_registry = build_registries_from_source(source_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -175,7 +181,9 @@ class Outer:
     )
 
     # Count calls
-    visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, source_code, variable_registry, import_registry
+    )
     visitor.visit(tree)
 
     # Verify cls.inner_classmethod() resolves correctly
@@ -199,7 +207,7 @@ class MyClass:
         self.foo()  # Should resolve to MyClass.foo
 """
     # Build registries
-    tree, class_registry, variable_registry = build_registries_from_source(source_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -211,7 +219,9 @@ class MyClass:
     )
 
     # Count calls
-    visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, source_code, variable_registry, import_registry
+    )
     visitor.visit(tree)
 
     # Verify only the self.foo() in MyClass.method resolves
@@ -242,7 +252,7 @@ class MyClass:
         self.helper()  # Currently resolves (detecting @staticmethod is a future enhancement)
 """
     # Build registries
-    tree, class_registry, variable_registry = build_registries_from_source(source_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -254,7 +264,9 @@ class MyClass:
     )
 
     # Count calls
-    visitor = CallCountVisitor(known_functions, class_registry, source_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, source_code, variable_registry, import_registry
+    )
     visitor.visit(tree)
 
     # Both self.helper() calls resolve (detecting @staticmethod is a future enhancement)

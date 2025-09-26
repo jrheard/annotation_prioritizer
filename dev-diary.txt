@@ -1019,3 +1019,5 @@ DONE follow up on this
   The ImportRegistry.lookup_import scope checking logic uses string prefix matching which could have edge cases with similarly named scopes. Consider whether exact scope parent checking would be more robust
 
 ok let's make a new branch and start work
+
+TODO move test to test_unsupported, not test_call_count

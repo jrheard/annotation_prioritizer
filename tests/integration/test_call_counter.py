@@ -340,7 +340,7 @@ self.method()
 """
 
     # Parse the code to get real AST nodes
-    tree, class_registry, variable_registry = build_registries_from_source(edge_case_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(edge_case_code)
 
     # Find the self.method() call node in the AST
     def is_self_method_call(node: ast.AST) -> bool:
@@ -365,7 +365,9 @@ self.method()
         ),
     )
 
-    visitor = CallCountVisitor(known_functions, class_registry, edge_case_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, edge_case_code, variable_registry, import_registry
+    )
 
     # Test by visiting the call - self.method() outside a class should not resolve
     visitor.visit_Call(call_node)
@@ -385,7 +387,7 @@ outer.inner.method()
 """
 
     # Parse the code to get real AST nodes
-    tree, class_registry, variable_registry = build_registries_from_source(complex_call_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(complex_call_code)
 
     # Find the outer.inner.method() call node in the AST
     def is_outer_inner_method_call(node: ast.AST) -> bool:
@@ -412,7 +414,9 @@ outer.inner.method()
         ),
     )
 
-    visitor = CallCountVisitor(known_functions, class_registry, complex_call_code, variable_registry)
+    visitor = CallCountVisitor(
+        known_functions, class_registry, complex_call_code, variable_registry, import_registry
+    )
 
     # Test by visiting the call - unresolved references should not be counted
     visitor.visit_Call(call_node)
@@ -653,7 +657,7 @@ getattr(obj, 'method')()
 """
 
     # Parse the code to get real AST nodes
-    tree, class_registry, variable_registry = build_registries_from_source(dynamic_call_code)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(dynamic_call_code)
 
     # Find the getattr(obj, 'method')() call node in the AST
     def is_getattr_dynamic_call(node: ast.AST) -> bool:
@@ -669,7 +673,7 @@ getattr(obj, 'method')()
     assert isinstance(call_node, ast.Call)
 
     # Create a visitor with the registries
-    visitor = CallCountVisitor((), class_registry, dynamic_call_code, variable_registry)
+    visitor = CallCountVisitor((), class_registry, dynamic_call_code, variable_registry, import_registry)
 
     # Test that resolve_call_name returns None for dynamic calls
     result = visitor._resolve_call_name(call_node)
@@ -684,8 +688,8 @@ class Outer:
         class Nested:
             pass
 """
-    _, class_registry, variable_registry = build_registries_from_source(source)
-    visitor = CallCountVisitor((), class_registry, source, variable_registry)
+    _, class_registry, variable_registry, import_registry = build_registries_from_source(source)
+    visitor = CallCountVisitor((), class_registry, source, variable_registry, import_registry)
 
     # Try to resolve a compound name that doesn't exist
     result = visitor._resolve_class_name("NonExistent.Inner")
@@ -722,7 +726,7 @@ def my_function():
     # This compound call should be resolved
     Outer.Inner.method()
 """
-    tree, class_registry, variable_registry = build_registries_from_source(source)
+    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source)
 
     # Create a visitor with the Inner.method as a known function
     known_functions = (
@@ -734,7 +738,7 @@ def my_function():
         ),
     )
 
-    visitor = CallCountVisitor(known_functions, class_registry, source, variable_registry)
+    visitor = CallCountVisitor(known_functions, class_registry, source, variable_registry, import_registry)
     visitor.visit(tree)
 
     assert visitor.call_counts[make_qualified_name("__module__.my_function.Outer.Inner.method")] == 1
@@ -1028,8 +1032,8 @@ def _create_visitor_and_visit_call(
     code: str, call_node: ast.Call
 ) -> tuple[CallCountVisitor, tuple[UnresolvableCall, ...]]:
     """Create a visitor and visit a call node, returning visitor and unresolvable calls."""
-    _, class_registry, variable_registry = build_registries_from_source(code)
-    visitor = CallCountVisitor((), class_registry, code, variable_registry)
+    _, class_registry, variable_registry, import_registry = build_registries_from_source(code)
+    visitor = CallCountVisitor((), class_registry, code, variable_registry, import_registry)
     visitor.visit_Call(call_node)
     return visitor, visitor.get_unresolvable_calls()
 
@@ -1057,8 +1061,8 @@ def test_unresolvable_call_when_source_segment_fails(return_value: str | None) -
     simple_code = "unknown_func()"
     call_node = _get_first_call_node(simple_code)
 
-    _, class_registry, variable_registry = build_registries_from_source(simple_code)
-    visitor = CallCountVisitor((), class_registry, simple_code, variable_registry)
+    _, class_registry, variable_registry, import_registry = build_registries_from_source(simple_code)
+    visitor = CallCountVisitor((), class_registry, simple_code, variable_registry, import_registry)
 
     with patch.object(ast, "get_source_segment", return_value=return_value):
         visitor.visit_Call(call_node)
@@ -1189,6 +1193,38 @@ def process(calc: Calculator):
 
         # calc.add() should be counted
         assert call_counts[make_qualified_name("__module__.Calculator.add")] == 1
+
+
+def test_from_import_function_calls_unresolvable() -> None:
+    """Test that function calls from from-imports are marked as unresolvable.
+
+    This test covers the case where a function is imported via 'from module import func'
+    and then called directly. Such calls cannot be resolved in single-file analysis.
+    """
+    code = """
+from math import sqrt, floor
+from os.path import join
+
+def compute():
+    # These calls to imported functions should be unresolvable
+    result = sqrt(16)
+    rounded = floor(3.7)
+    path = join("/tmp", "file.txt")
+    return result + rounded
+"""
+
+    with temp_python_file(code) as temp_path:
+        # No known functions - we're testing import handling
+        _result, unresolvable_calls = count_calls_from_file(temp_path, ())
+
+        # All three imported function calls should be unresolvable
+        assert len(unresolvable_calls) == 3
+
+        # Check that the unresolvable calls are the imported functions
+        call_texts = {call.call_text for call in unresolvable_calls}
+        assert "sqrt(16)" in call_texts
+        assert "floor(3.7)" in call_texts
+        assert 'join("/tmp", "file.txt")' in call_texts
 
 
 def test_parent_scope_variable_access_in_nested_functions() -> None:
