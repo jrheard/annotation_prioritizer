@@ -217,11 +217,11 @@ def build_import_registry(tree: ast.Module) -> ImportRegistry:
 
 **Note**: The build_import_registry function should always be called, even for files with no imports. It should return an ImportRegistry with an empty frozenset rather than None. This ensures consistent behavior across the codebase.
 
-### Phase B: Atomic Integration (Single Commit)
+### Phase B: Atomic Integration (Single Commit) ✅ COMPLETED
 
-**CRITICAL**: Steps 4-7 must be done in a SINGLE COMMIT to avoid breaking tests. Since there are only 3 call sites for count_function_calls (analyzer.py and tests/helpers/function_parsing.py), we can update them all atomically.
+**CRITICAL**: Phase B must be done in a SINGLE COMMIT to avoid breaking tests. Since there are only 3 call sites for count_function_calls (analyzer.py and tests/helpers/function_parsing.py), we can update them all atomically.
 
-### Step 4: Integrate Import Registry Everywhere
+### Step 4: Integrate Import Registry Everywhere ✅ COMPLETED
 
 This step combines all integration changes into one atomic commit:
 

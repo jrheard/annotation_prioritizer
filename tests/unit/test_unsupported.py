@@ -209,9 +209,13 @@ def use_imports():
 
     # From imports
     d = defaultdict(list)  # Not tracked
+    sqrt(25)  # Direct call to from-imported function - not tracked
 
     # Imported functions called as methods
     json.loads(data)  # Not tracked
+
+    # Direct module call (invalid Python but analyzer handles it)
+    math()  # Not tracked - calling module directly
 
 
 # ===========================================================================
