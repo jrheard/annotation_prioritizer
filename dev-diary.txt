@@ -1030,3 +1030,13 @@ TODO instead of QualifiedName strings, should we passing around lists of scope t
 
 TODO fix position-sensitive name support
   TODO https://github.com/jrheard/annotation_prioritizer/issues/31
+
+  this is a can of worms!!!
+
+im just gonna remove context7
+
+DONE   4. Inconsistent Import Handling: Plan says imports have qualified_name=None in Phase 1, but Step 8 shows tracking process = sqrt where sqrt would be an import. How can we track that a variable references an import if imports have
+  no resolvable qualified name?
+
+TODO someday - distant future - comprehension variables?
+  we should at least track this in test_unsupported.py
