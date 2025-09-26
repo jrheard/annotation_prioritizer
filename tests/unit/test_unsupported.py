@@ -157,6 +157,26 @@ def namespace_manipulation():
 
     # Calling via globals()
     globals()["Calculator"]().add(1, 2)  # Dynamic class lookup
+
+
+# ===========================================================================
+# DUPLICATE FUNCTION DEFINITIONS
+# ===========================================================================
+# Functions redefined with the same name in the same file will share call
+# counts. This is an uncommon pattern that we intentionally don't support.
+
+def helper():
+    return "first"
+
+helper()  # Call to first helper
+
+def helper():  # Redefines helper with same name
+    return "second"
+
+helper()  # Call to second helper
+
+# Both functions have qualified_name "__module__.helper" and share the
+# call count (both will show 2 calls instead of 1 each)
 """
 
     counts = count_calls_from_source(source)
@@ -182,6 +202,10 @@ def namespace_manipulation():
     assert counts.get(make_qualified_name("__module__.MagicClass.__mul__"), 0) == 0
     assert counts.get(make_qualified_name("__module__.MagicClass.__sub__"), 0) == 0
     assert counts.get(make_qualified_name("__module__.MagicClass.__eq__"), 0) == 0
+
+    # Duplicate function definitions share call counts (intentionally unsupported)
+    # Both helper() functions have the same qualified_name so they share the count
+    assert counts.get(make_qualified_name("__module__.helper"), 0) == 2
 
 
 def test_from_import_function_calls_unresolvable() -> None:

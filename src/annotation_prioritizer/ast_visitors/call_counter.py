@@ -267,6 +267,13 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified name if resolvable, None otherwise
         """
+        # TODO: This "check imports first" approach doesn't match Python's shadowing
+        # semantics. When a local function/class shadows an import, we incorrectly
+        # mark all calls as unresolvable. We need position-aware name resolution.
+        # Example: import sqrt, call sqrt (should be import), define local sqrt,
+        # call sqrt again (should be local function).
+        # See: https://github.com/jrheard/annotation_prioritizer/issues/31
+
         # First check if it's an imported name
         import_info = self._import_registry.lookup_import(func.id, self._scope_stack)
         if import_info:
@@ -279,7 +286,6 @@ class CallCountVisitor(ast.NodeVisitor):
             # Mark as unresolvable (will be handled by caller)
             return None
 
-        # Continue with existing resolution logic
         # Try to resolve the name in the current scope
         resolved = resolve_name_in_scope(
             self._scope_stack, func.id, self._class_registry.classes | self.call_counts.keys()

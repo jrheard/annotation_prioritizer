@@ -1020,4 +1020,13 @@ DONE follow up on this
 
 ok let's make a new branch and start work
 
-TODO move test to test_unsupported, not test_call_count
+DONE move test to test_unsupported, not test_call_count
+
+TODO why check imports FIRST rather than LAST?
+  actually last would be wrong too
+  it's more complicated than that
+
+TODO instead of QualifiedName strings, should we passing around lists of scope tuples??
+
+TODO fix position-sensitive name support
+  TODO https://github.com/jrheard/annotation_prioritizer/issues/31
