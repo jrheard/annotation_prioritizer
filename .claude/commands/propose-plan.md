@@ -36,10 +36,15 @@ Present a structured outline for the implementation plan that includes:
    - Each step should represent a logical atomic commit
    - Include brief description of what each step accomplishes
    - Order steps by dependencies and logical progression
-   - **IMPORTANT**: This project enforces 100% test coverage. Each commit must:
-     - Include both implementation AND tests (except for pure refactoring)
-     - Pass all pre-commit hooks (ruff, pyright, pytest with 100% coverage)
-     - Leave the codebase in a working state
+   - **CRITICAL REQUIREMENT**: Every commit must pass pre-commit hooks
+     - Each commit description MUST specify BOTH:
+       1. What code/functionality is being added/changed
+       2. What tests are being added/updated in THE SAME COMMIT
+     - Example: "Add User model with fields + Add comprehensive User model tests"
+     - NEVER defer tests to a later commit (e.g., avoid "Add tests for User model" as separate step)
+     - Exception: Pure refactoring commits may not need new tests
+     - Each commit must maintain 100% test coverage
+     - Each commit must pass pyright and ruff checks
 
 4. **Key Architectural Decisions**
    - File structure changes or new files needed
@@ -85,9 +90,13 @@ Then:
 
 The full plan should expand the outline into a detailed document following this format:
 - Full implementation steps with detailed context for each. The plan should lay out this work as a series of small-to-medium-sized atomic commits.
-  - Each commit must include both implementation AND tests (except for pure refactoring)
+  - **EACH COMMIT DESCRIPTION MUST EXPLICITLY STATE**:
+    - The implementation changes being made
+    - The test changes/additions in that SAME commit
+    - Example format: "Step 3: Add validation logic to User.validate() method and corresponding unit tests testing all validation rules"
   - Each commit must maintain 100% test coverage
-  - Each commit must pass all pre-commit hooks
+  - Each commit must pass all pre-commit hooks (pyright, ruff, pytest)
+  - Pure refactoring commits are the only exception to the test requirement
 - Recommended file structures with explanations
 - Example code snippets where helpful
 - Comprehensive list of assumptions and dependencies
@@ -118,23 +127,19 @@ Here's what an outline would look like for adding unresolvable call reporting (a
 ## Implementation Steps
 
 ### Data Model Changes
-1. Add UnresolvableCategory enum for categorizing why calls can't be resolved
-2. Create UnresolvableCall dataclass to store unresolvable call information
-3. Add AnalysisResult dataclass to bundle priorities with unresolvable calls
+1. Add UnresolvableCategory enum + tests for enum values and string representations
+2. Create UnresolvableCall dataclass + tests for initialization, equality, and frozen behavior
+3. Add AnalysisResult dataclass + tests for bundling priorities with unresolvable calls
 
 ### Core Logic Implementation
-4. Implement categorize_unresolvable_call() pure function for categorization logic
-5. Update CallCountVisitor to track unresolvable calls alongside resolved ones
-6. Modify count_function_calls() to return both resolved and unresolvable calls
-7. Update analyzer.py to handle the new AnalysisResult type
+4. Implement categorize_unresolvable_call() + comprehensive unit tests for each category
+5. Update CallCountVisitor + tests verifying both resolved and unresolvable tracking
+6. Modify count_function_calls() + update existing tests to verify new return type
+7. Update analyzer.py + tests for AnalysisResult handling
 
 ### CLI Integration
-8. Integrate unresolvable summary display into CLI main()
-9. Add display_unresolvable_summary() to output.py for formatting
-
-### Testing
-10. Write comprehensive unit tests for categorization logic
-11. Add integration tests for CLI output
+8. Integrate unresolvable summary into main() + update CLI integration tests
+9. Add display_unresolvable_summary() + tests for various display scenarios
 
 ## Key Architectural Decisions
 - New data models in models.py (UnresolvableCategory, UnresolvableCall, AnalysisResult)

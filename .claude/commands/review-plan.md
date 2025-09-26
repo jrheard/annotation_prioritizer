@@ -34,25 +34,36 @@ Critical: Can another Claude instance implement this plan WITHOUT asking questio
 - Are edge cases explicitly handled or marked as out-of-scope?
 - Is the implementation sequence realistic?
 
-### 4. Internal Consistency
+### 4. Commit Viability (CRITICAL)
+Each commit MUST pass pre-commit hooks (pyright, ruff, pytest with 100% coverage):
+- Does EVERY commit describe both implementation AND corresponding test changes?
+- Are test updates included in the SAME commit as the code they test?
+- Will each commit maintain 100% code coverage?
+- Are commits ordered so dependencies are satisfied (e.g., data models before usage)?
+- Exception: Pure refactoring commits may not need new tests, but must maintain coverage
+- Red flag: Any commit that says "add tests" as a separate later step
+
+### 5. Internal Consistency
 - Do all parts of the plan align with each other?
 - Are there contradictions between sections?
 - Do the examples match the described approach?
 - Are the success metrics achievable with the proposed solution?
 
-### 5. Missing Context
+### 6. Missing Context
 - What assumptions are being made but not stated?
 - What could go wrong that isn't mentioned?
 - Are there dependencies or prerequisites not covered?
 - Would someone unfamiliar with the codebase understand why these specific choices were made?
 
-### 6. Red Flags
+### 7. Red Flags
 Look for these specific issues:
 - Vague language ("handle appropriately", "process as needed")
 - Untested assumptions about existing code
 - Performance/scalability concerns not addressed
+- Commits that defer test writing to later steps
+- Implementation steps without corresponding test descriptions
 
-### 7. Scope Creep Detection
+### 8. Scope Creep Detection
 Aggressively challenge ANY features that don't deliver immediate, measurable value:
 - "Nice to have" features that complicate the core solution
 - "While we're at it" additions that expand the original problem
