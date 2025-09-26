@@ -159,25 +159,6 @@ class UnresolvableCall:
 
 
 @dataclass(frozen=True)
-class ImportedName:
-    """Represents an imported name and its source.
-
-    Examples:
-        import math -> ImportedName("math", "math", None, True, 0, "__module__")
-        from typing import List -> ImportedName("List", "typing", None, False, 0, "__module__")
-        import pandas as pd -> ImportedName("pd", "pandas", None, True, 0, "__module__")
-        from ..utils import helper -> ImportedName("helper", "utils", None, False, 2, "__module__")
-    """
-
-    local_name: str  # Name used in this file (e.g., "pd", "sqrt", "List")
-    source_module: str | None  # Module path (e.g., "pandas", "math", "typing"), None for relative
-    original_name: str | None  # Original name if aliased (e.g., "DataFrame" for "as DataFrame")
-    is_module_import: bool  # Distinguishes module imports from item imports (see below)
-    relative_level: int  # 0 for absolute, 1 for ".", 2 for "..", etc.
-    scope: QualifiedName  # Scope where import occurs (e.g., "__module__", "__module__.func")
-
-
-@dataclass(frozen=True)
 class AnalysisResult:
     """Complete result from analyzing a file.
 
