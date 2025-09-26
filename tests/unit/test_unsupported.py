@@ -1,7 +1,7 @@
 """Tests documenting patterns that are unsupported (either intentionally or not yet)."""
 
 from annotation_prioritizer.models import make_qualified_name
-from tests.helpers.function_parsing import count_calls_from_source
+from tests.helpers.function_parsing import analyze_source, count_calls_from_source
 
 
 def test_intentionally_unsupported() -> None:
@@ -182,6 +182,37 @@ def namespace_manipulation():
     assert counts.get(make_qualified_name("__module__.MagicClass.__mul__"), 0) == 0
     assert counts.get(make_qualified_name("__module__.MagicClass.__sub__"), 0) == 0
     assert counts.get(make_qualified_name("__module__.MagicClass.__eq__"), 0) == 0
+
+
+def test_from_import_function_calls_unresolvable() -> None:
+    """Test that function calls from from-imports are marked as unresolvable.
+
+    This test covers the case where a function is imported via 'from module import func'
+    and then called directly. Such calls cannot be resolved in single-file analysis.
+    This is a temporary limitation that will be addressed when import resolution is implemented.
+    """
+    source = """
+from math import sqrt, floor
+from os.path import join
+
+def compute():
+    # These calls to imported functions should be unresolvable
+    result = sqrt(16)
+    rounded = floor(3.7)
+    path = join("/tmp", "file.txt")
+    return result + rounded
+"""
+
+    result = analyze_source(source)
+
+    # All three imported function calls should be unresolvable
+    assert len(result.unresolvable_calls) == 3
+
+    # Check that the unresolvable calls are the imported functions
+    call_texts = {call.call_text for call in result.unresolvable_calls}
+    assert "sqrt(16)" in call_texts
+    assert "floor(3.7)" in call_texts
+    assert 'join("/tmp", "file.txt")' in call_texts
 
 
 def test_not_yet_supported() -> None:

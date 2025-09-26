@@ -1195,38 +1195,6 @@ def process(calc: Calculator):
         assert call_counts[make_qualified_name("__module__.Calculator.add")] == 1
 
 
-def test_from_import_function_calls_unresolvable() -> None:
-    """Test that function calls from from-imports are marked as unresolvable.
-
-    This test covers the case where a function is imported via 'from module import func'
-    and then called directly. Such calls cannot be resolved in single-file analysis.
-    """
-    code = """
-from math import sqrt, floor
-from os.path import join
-
-def compute():
-    # These calls to imported functions should be unresolvable
-    result = sqrt(16)
-    rounded = floor(3.7)
-    path = join("/tmp", "file.txt")
-    return result + rounded
-"""
-
-    with temp_python_file(code) as temp_path:
-        # No known functions - we're testing import handling
-        _result, unresolvable_calls = count_calls_from_file(temp_path, ())
-
-        # All three imported function calls should be unresolvable
-        assert len(unresolvable_calls) == 3
-
-        # Check that the unresolvable calls are the imported functions
-        call_texts = {call.call_text for call in unresolvable_calls}
-        assert "sqrt(16)" in call_texts
-        assert "floor(3.7)" in call_texts
-        assert 'join("/tmp", "file.txt")' in call_texts
-
-
 def test_parent_scope_variable_access_in_nested_functions() -> None:
     """Test that nested functions can access parent scope variables."""
     code = """
