@@ -53,9 +53,9 @@ This distinction is critical for call resolution:
 **Tests to add:**
 - None, this is just a dataclass with no behavior
 
-### Step 2: Create Import Registry
+### Step 2: Create Import Registry ✅ COMPLETED
 
-Add the registry structure, either in `models.py` or a new `src/annotation_prioritizer/import_registry.py`:
+Add the registry structure in a new `src/annotation_prioritizer/import_registry.py`:
 
 ```python
 @dataclass(frozen=True)
