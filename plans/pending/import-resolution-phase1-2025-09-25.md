@@ -98,7 +98,7 @@ class ImportRegistry:
 - Test that sibling scope imports are not visible
 - Test edge case: imports in `foo()` are NOT visible in `foo_bar()` (similar prefixes)
 
-### Step 3: Implement Import Discovery Visitor
+### Step 3: Implement Import Discovery Visitor ✅ COMPLETED
 
 Create `src/annotation_prioritizer/ast_visitors/import_discovery.py`:
 
