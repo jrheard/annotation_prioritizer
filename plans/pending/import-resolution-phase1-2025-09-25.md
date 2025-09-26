@@ -84,8 +84,11 @@ class ImportRegistry:
         # Check each import to see if it's visible in current scope
         for imp in self.imports:
             if imp.local_name == name:
-                # Import is visible if declared in current scope or parent scope
-                if current_scope.startswith(imp.scope):
+                # Import is visible if:
+                # 1. Declared in exactly the current scope, OR
+                # 2. Declared in a parent scope (must be followed by a dot)
+                # This avoids false matches like "__module__.foo_bar" matching "__module__.foo"
+                if current_scope == imp.scope or current_scope.startswith(imp.scope + "."):
                     return imp
         return None
 ```
@@ -94,6 +97,7 @@ class ImportRegistry:
 - Test lookup with various scope contexts
 - Verify scope visibility rules (parent scope imports visible in child scopes)
 - Test that sibling scope imports are not visible
+- Test edge case: imports in `foo()` are NOT visible in `foo_bar()` (similar prefixes)
 
 ### Step 3: Implement Import Discovery Visitor
 
@@ -495,6 +499,37 @@ def test_star_import_ignored():
     registry = build_import_registry(tree)
 
     assert len(registry.imports) == 0  # Star import should be ignored
+
+def test_scope_visibility_with_similar_names():
+    """Test that imports in foo() are NOT visible in foo_bar() despite prefix match."""
+    source = """
+def foo():
+    import math
+
+def foo_bar():
+    pass  # Should NOT see math import from foo()
+"""
+    tree = ast.parse(source)
+    registry = build_import_registry(tree)
+
+    # Create scope stacks for testing
+    from annotation_prioritizer.scope_tracker import create_initial_stack, add_scope
+    from annotation_prioritizer.models import Scope, ScopeKind
+
+    # Check visibility from foo_bar's scope
+    foo_bar_stack = create_initial_stack()
+    foo_bar_stack = add_scope(foo_bar_stack, Scope(kind=ScopeKind.FUNCTION, name="foo_bar"))
+
+    # math import from foo() should NOT be visible in foo_bar()
+    result = registry.lookup_import("math", foo_bar_stack)
+    assert result is None, "Import in foo() incorrectly visible in foo_bar()"
+
+    # But should be visible from foo's scope
+    foo_stack = create_initial_stack()
+    foo_stack = add_scope(foo_stack, Scope(kind=ScopeKind.FUNCTION, name="foo"))
+
+    result = registry.lookup_import("math", foo_stack)
+    assert result is not None, "Import should be visible in its own scope"
 ```
 
 ### Step 6: Add Integration Tests
