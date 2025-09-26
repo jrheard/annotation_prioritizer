@@ -17,7 +17,7 @@ This plan implements import resolution for single-file analysis, laying the foun
 
 These steps can be done incrementally with full test coverage. Nothing breaks because it's all new code.
 
-### Step 1: Add Import Data Models
+### Step 1: Add Import Data Models ✅ COMPLETED
 
 Create the data structures for tracking imports in `src/annotation_prioritizer/models.py`:
 
@@ -51,8 +51,7 @@ This distinction is critical for call resolution:
 - `sqrt.something()` where sqrt is a from-import
 
 **Tests to add:**
-- Unit tests for ImportedName creation with various import patterns
-- Verify frozen dataclass behavior
+- None, this is just a dataclass with no behavior
 
 ### Step 2: Create Import Registry
 
