@@ -215,6 +215,131 @@ def compute():
     assert 'join("/tmp", "file.txt")' in call_texts
 
 
+def test_import_calls_remain_unresolved() -> None:
+    """Test that imported function calls are still unresolved in Phase 1."""
+    source = """
+import math
+from json import dumps
+import pandas as pd
+
+def use_imports():
+    result = math.sqrt(16)  # Module method call
+    data = dumps({"key": "value"})  # Direct imported function
+    df = pd.DataFrame()  # Aliased module method
+"""
+
+    result = analyze_source(source)
+    resolved_counts = {p.function_info.qualified_name: p.call_count for p in result.priorities}
+    unresolvable_calls = result.unresolvable_calls
+
+    # The local function use_imports is tracked but has 0 calls
+    assert resolved_counts.get(make_qualified_name("__module__.use_imports"), 0) == 0
+
+    # All imported calls should be unresolvable in Phase 1
+    assert len(unresolvable_calls) == 3
+
+    # Verify they were detected as imports (not unknown)
+    call_texts = {call.call_text for call in unresolvable_calls}
+    assert "math.sqrt(16)" in call_texts
+    assert 'dumps({"key": "value"})' in call_texts
+    assert "pd.DataFrame()" in call_texts
+
+
+def test_module_direct_calls_unresolvable() -> None:
+    """Test that direct module calls (invalid Python) are marked as unresolvable."""
+    source = """
+import math
+import json
+
+def invalid_calls():
+    # These are invalid Python - calling a module directly
+    math()  # Can't call a module
+    json()  # Can't call a module
+"""
+
+    result = analyze_source(source)
+    unresolvable_calls = result.unresolvable_calls
+
+    # Direct module calls are marked as unresolvable (they return None in resolution)
+    assert len(unresolvable_calls) == 2
+
+    call_texts = {call.call_text for call in unresolvable_calls}
+    assert "math()" in call_texts
+    assert "json()" in call_texts
+
+
+def test_regular_functions_still_work_with_imports() -> None:
+    """Test that regular function calls work normally even when imports exist."""
+    source = """
+import math
+from json import dumps
+
+def local_function():
+    return 42
+
+def another_function():
+    pass
+
+def use_mixed():
+    # Local functions should still be tracked
+    result = local_function()
+    another_function()
+
+    # But imported functions are unresolvable
+    sqrt_result = math.sqrt(16)
+    json_data = dumps({"test": True})
+"""
+
+    resolved_counts, unresolvable_calls = (
+        count_calls_from_source(source),
+        analyze_source(source).unresolvable_calls,
+    )
+
+    # Local functions should be resolved
+    assert resolved_counts.get(make_qualified_name("__module__.local_function"), 0) == 1
+    assert resolved_counts.get(make_qualified_name("__module__.another_function"), 0) == 1
+
+    # Imported functions should be unresolvable
+    assert len(unresolvable_calls) == 2
+    call_texts = {call.call_text for call in unresolvable_calls}
+    assert "math.sqrt(16)" in call_texts
+    assert 'dumps({"test": True})' in call_texts
+
+
+def test_imported_vs_unknown_distinction() -> None:
+    """Test that we distinguish between imported-but-unresolvable and completely unknown calls."""
+    source = """
+import os
+from pathlib import Path
+
+def test_calls():
+    # Imported module method - unresolvable but known to be imported
+    os.remove("file.txt")
+
+    # Imported class instantiation - unresolvable but known to be imported
+    p = Path("/tmp")
+
+    # Completely unknown function - not imported, not defined
+    totally_unknown_function()
+
+    # Unknown method on unknown object
+    mystery_object.mystery_method()
+"""
+
+    result = analyze_source(source)
+    unresolvable_calls = result.unresolvable_calls
+
+    # All four calls are unresolvable in Phase 1
+    # We don't yet distinguish between imported and unknown in the UnresolvableCall data
+    assert len(unresolvable_calls) == 4
+
+    call_texts = {call.call_text for call in unresolvable_calls}
+    assert 'os.remove("file.txt")' in call_texts
+    assert 'Path("/tmp")' in call_texts
+    assert "totally_unknown_function()" in call_texts
+    assert "mystery_object.mystery_method()" in call_texts
+
+
 def test_not_yet_supported() -> None:
     """Patterns we don't support yet but plan to in the future."""
     source = '''

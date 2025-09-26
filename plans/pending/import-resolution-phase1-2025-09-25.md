@@ -398,7 +398,7 @@ At this point, all tests should pass. The import registry is built and passed th
 - Separate `test_import_registry.py` for thorough registry lookup testing
 - Total of 15+ comprehensive test functions covering all edge cases
 
-### Step 6: Add Integration Tests
+### Step 6: Add Integration Tests ✅ COMPLETED
 
 Update `tests/unit/test_unsupported.py` to verify imports are still unresolved but properly identified:
 
@@ -426,11 +426,12 @@ def use_imports():
     # This sets us up for Phase 2 where these will be resolvable
 ```
 
-Add additional integration tests to verify:
-- Imported functions are marked as unresolvable (not unknown)
-- Module imports like math() return None
-- Module methods like math.sqrt() are detected but unresolved
-- Regular function calls still work normally
+**Implementation Notes**:
+- Added 4 comprehensive integration tests to `test_unsupported.py`
+- Tests verify imported calls are unresolvable but properly detected
+- Module direct calls (invalid Python) are tracked as unresolvable
+- Regular function calls continue to work normally alongside imports
+- Both imported and unknown calls are unresolvable in Phase 1 (no distinction yet)
 
 ## Key Architectural Decisions
 
