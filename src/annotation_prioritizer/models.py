@@ -40,6 +40,14 @@ class ScopeKind(StrEnum):
     FUNCTION = "function"
 
 
+class NameBindingKind(StrEnum):
+    """Type of name binding in the AST (for prototype)."""
+
+    IMPORT = "import"  # from math import sqrt
+    FUNCTION = "function"  # def foo(): ...
+    CLASS = "class"  # class Calculator: ...
+
+
 @dataclass(frozen=True)
 class Scope:
     """Represents a scope context for building qualified names.
@@ -168,3 +176,26 @@ class AnalysisResult:
 
     priorities: tuple[FunctionPriority, ...]
     unresolvable_calls: tuple[UnresolvableCall, ...]
+
+
+# Import the ScopeStack type from scope_tracker at runtime only to avoid circular imports
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from annotation_prioritizer.scope_tracker import ScopeStack
+
+
+@dataclass(frozen=True)
+class NameBinding:
+    """A name binding at a specific position in the code (prototype).
+
+    Represents when a name is bound (defined/imported) in the source code,
+    tracking both the position and context to enable position-aware resolution.
+    """
+
+    name: str  # Local name like "sqrt", "Counter"
+    line_number: int  # Where defined/imported (1-indexed)
+    kind: NameBindingKind  # Type of binding
+    qualified_name: QualifiedName | None  # None for imports (Phase 1)
+    scope_stack: "ScopeStack"  # Full scope stack where binding occurs
+    source_module: str | None  # For imports: "math" from "from math import sqrt"

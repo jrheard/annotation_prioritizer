@@ -1054,3 +1054,6 @@ TODO do a perf/memory investigation about the behavior/characeristics of using S
 TODO the main operation we're performing is prefix-based lookups - would a trie or some other data structure be relevant??
 
 TODO investigate using a format like 'm:foo.c:bar.f:baz:v.quux' for qualified names, so it's not lossy compared to scopestack
+
+TODO consider a /make-prototype command that takes a plan file as input, spins up a new branch, and makes a quick prototype of it
+  to validate that the plan can work as written, to look for surprise missing prereqs, etc
