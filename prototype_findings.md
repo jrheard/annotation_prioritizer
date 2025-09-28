@@ -170,9 +170,9 @@ if binding.kind == NameBindingKind.CLASS and binding.qualified_name:
 
 **Why this gap matters**: Without this, class instantiations wouldn't be counted properly. The plan should have specified how class identification would work post-refactor.
 
-### 5. **Variable Tracking Deferred But Critical**
+### 5. **Variable Tracking Complexity Underestimated**
 
-**Issue**: The plan defers variable tracking to Step 7, presenting it as optional for the initial implementation. However, this causes immediate regressions.
+**Issue**: While the plan includes variable tracking in Step 7 (and Step 8 depends on it), it doesn't emphasize strongly enough that this is critical for feature parity, nor does it capture the full complexity of implementation.
 
 **What the plan says** (Step 7 description):
 ```
@@ -197,7 +197,7 @@ Function call count changes:
   __module__.Calculator.compute: 1 -> 0
 ```
 
-**Why this matters**: The plan presents variable tracking as a "nice to have" enhancement, but it's actually required for feature parity. Any production implementation must include it from the start or risk breaking existing functionality.
+**Why this matters**: While the plan includes variable tracking, it doesn't sufficiently emphasize that this is required for feature parity. The wording "assignments that are relevant for method resolution" might be interpreted as only special cases, when in fact it's needed for the common pattern of `calc = Calculator(); calc.compute()`.
 
 ## Inaccuracies in the Plan
 
@@ -333,3 +333,407 @@ But Step 12 keeps `FunctionDefinitionVisitor` separate, contradicting the "2 pas
 ## Conclusion
 
 The plan is fundamentally sound and the architecture works as designed. The prototype proves that position-aware resolution with binary search correctly fixes the shadowing bug. However, the plan underestimated implementation complexity in several areas, particularly around scope name management and method resolution. These findings should inform the full implementation to avoid the pitfalls discovered during prototyping.
+
+## Appendix: Variable Tracking Implementation Findings
+
+This appendix documents specific lessons learned while implementing variable tracking (Step 7 of the plan), which turned out to be far more critical and complex than the plan suggested.
+
+### A1. Variable Tracking is Critical But Underestimated
+
+**What the plan says** (Step 7 introduction):
+> "Track variable assignments that are relevant for method resolution. Since we can't resolve class names during collection (the index doesn't exist yet), we track unresolved references..."
+
+**What might be misunderstood**: While the plan includes variable tracking as Step 7 (and Step 8 depends on it), the wording "assignments that are relevant for method resolution" might suggest it's only for advanced cases. The plan doesn't emphasize that WITHOUT this step, common patterns will break.
+
+**What I discovered**: Without variable tracking, we have an immediate regression that breaks existing functionality.
+
+**Test case that fails without variable tracking**:
+```python
+# test_shadowing_prototype.py, lines 57-58
+class Calculator:
+    def compute(self, x):
+        return x * 2
+
+calc = Calculator()
+calc.compute(10)  # This becomes unresolvable without variable tracking!
+```
+
+**Test output showing the regression**:
+```
+--- PROTOTYPE IMPLEMENTATION (without variables) ---
+Unresolvable calls: 4
+  Line 58: calc.compute(10)  # <-- REGRESSION!
+
+Function call count changes:
+  __module__.Calculator.compute: 1 -> 0  # <-- Lost a call count!
+```
+
+**Why this matters**: The existing codebase has `VariableRegistry` that tracks these patterns. Removing it without replacement causes immediate breakage. While the plan does include variable tracking, it should more prominently state: **"Variable tracking is REQUIRED for feature parity. Without it, method calls through variables will not resolve."**
+
+### A2. Variable Resolution Process Complexity
+
+**What the plan shows** (Step 8, lines 276-323):
+```python
+def build_position_index(
+    bindings: list[NameBinding],
+    unresolved_variables: list[tuple[NameBinding, str]]
+) -> PositionIndex:
+    # Build the basic index...
+    # Create temporary index for resolution
+    temp_index = PositionIndex(_index=dict(index))
+
+    # Resolve variable targets
+    for variable_binding, target_name in unresolved_variables:
+        resolved = temp_index.resolve(target_name, ...)
+        if resolved and resolved.kind == NameBindingKind.CLASS:
+            resolved_binding = dataclasses.replace(
+                variable_binding,
+                target_class=resolved.qualified_name
+            )
+            # Replace the unresolved binding with resolved one in the index
+            # Implementation details omitted for brevity
+```
+
+**What this misses**: The plan doesn't explain HOW to "replace the unresolved binding in the index." Since we're building the index from a list of bindings, and bindings are immutable, this is non-trivial.
+
+**What I actually had to implement**:
+```python
+def build_position_index(
+    bindings: list[NameBinding],
+    unresolved_variables: list[tuple[NameBinding, str]] | None = None,
+) -> PositionIndex:
+    # Step 1: Build the initial index
+    index: dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+
+    for binding in bindings:
+        # Convert scope_stack to qualified name for indexing
+        if not binding.scope_stack or len(binding.scope_stack) == 1:
+            scope_name = make_qualified_name("__module__")
+        else:
+            scope_name = make_qualified_name(".".join(s.name for s in binding.scope_stack))
+        index[scope_name][binding.name].append((binding.line_number, binding))
+
+    # Sort for binary search
+    for scope_dict in index.values():
+        for binding_list in scope_dict.values():
+            binding_list.sort(key=lambda x: x[0])
+
+    # Step 2: If we have unresolved variables, resolve their targets
+    if unresolved_variables:
+        import dataclasses
+        from annotation_prioritizer.models import NameBindingKind
+
+        # Create temporary index for resolution
+        temp_index = PositionIndex(_index=dict(index))
+
+        # Step 3: Build a new list of ALL bindings with resolved variables
+        resolved_bindings = []
+        for binding in bindings:
+            # Check if this binding is an unresolved variable
+            is_unresolved = False
+            for var_binding, target_name in unresolved_variables:
+                if binding == var_binding:  # Found an unresolved variable
+                    is_unresolved = True
+                    # Resolve what the target refers to
+                    resolved = temp_index.resolve(
+                        target_name,
+                        binding.line_number,
+                        binding.scope_stack
+                    )
+
+                    if resolved and resolved.kind == NameBindingKind.CLASS:
+                        # Create NEW binding with resolved target_class
+                        resolved_binding = dataclasses.replace(
+                            binding,
+                            target_class=resolved.qualified_name
+                        )
+                        resolved_bindings.append(resolved_binding)
+                    else:
+                        # Couldn't resolve or not a class - keep original
+                        resolved_bindings.append(binding)
+                    break
+
+            if not is_unresolved:
+                # Not a variable - keep as-is
+                resolved_bindings.append(binding)
+
+        # Step 4: COMPLETELY REBUILD the index with resolved bindings
+        index = defaultdict(lambda: defaultdict(list))
+        for binding in resolved_bindings:
+            if not binding.scope_stack or len(binding.scope_stack) == 1:
+                scope_name = make_qualified_name("__module__")
+            else:
+                scope_name = make_qualified_name(".".join(s.name for s in binding.scope_stack))
+            index[scope_name][binding.name].append((binding.line_number, binding))
+
+        # Step 5: Sort again for binary search
+        for scope_dict in index.values():
+            for binding_list in scope_dict.values():
+                binding_list.sort(key=lambda x: x[0])
+
+    return PositionIndex(_index=dict(index))
+```
+
+**Key insights the plan missed**:
+1. You need to track ALL bindings, not just variables, to rebuild the complete index
+2. The index must be completely rebuilt after resolution - you can't modify it in place
+3. You need to check equality (`binding == var_binding`) to find which bindings to replace
+4. The sorting step must be repeated after rebuilding
+5. `dataclasses.replace()` is required because NameBinding is frozen
+
+### A3. Integration Points Were Incorrectly Named
+
+**What the plan shows** (Step 9, lines 362-378):
+```python
+def _resolve_attribute_call(self, func: ast.Attribute) -> QualifiedName | None:
+    """Resolve method calls like calc.add()."""
+    if isinstance(func.value, ast.Name):
+        # Look up the variable
+        binding = self._position_index.resolve(
+            func.value.id,
+            func.lineno,
+            self._scope_stack
+        )
+
+        if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
+            # We know what class the variable refers to
+            return make_qualified_name(f"{binding.target_class}.{func.attr}")
+
+    # Fall back to existing attribute resolution logic
+    return self._existing_attribute_resolution(func)
+```
+
+**Problems with this**:
+1. There's no method called `_resolve_attribute_call` in CallCountVisitor
+2. The actual method is `_resolve_method_call`
+3. The integration point is more complex than shown
+
+**What actually exists in the codebase**:
+```python
+# In call_counter_prototype.py
+def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
+    """Resolve method calls like self.method() or ClassName.method()."""
+    # Handle self.method() calls
+    if isinstance(func.value, ast.Name) and func.value.id == "self":
+        # ... self resolution logic ...
+        return None
+
+    # Handle ClassName.method() - extract the full attribute chain
+    try:
+        # Get the full chain including the final attribute
+        full_chain = extract_attribute_chain(func)
+        # ... complex chain resolution ...
+```
+
+**What I actually had to implement**:
+```python
+def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
+    """Resolve method calls like self.method() or ClassName.method()."""
+    # Handle self.method() calls
+    if isinstance(func.value, ast.Name) and func.value.id == "self":
+        # ... existing self resolution logic ...
+        return None
+
+    # NEW: Handle variable.method() calls - MUST come before ClassName.method()
+    if isinstance(func.value, ast.Name):
+        # Look up the variable
+        binding = self._position_index.resolve(
+            func.value.id,
+            func.lineno,
+            self._scope_stack
+        )
+
+        if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
+            # We know what class the variable refers to
+            return make_qualified_name(f"{binding.target_class}.{func.attr}")
+
+    # EXISTING: Handle ClassName.method() - extract the full attribute chain
+    try:
+        # ... existing complex chain resolution ...
+```
+
+**Why the placement matters**: The variable resolution MUST come before the complex ClassName.method() handling, but after self.method(). The plan doesn't specify this critical ordering.
+
+### A4. Unresolved Variables Collection Details
+
+**What the plan shows** (Step 7, lines 224-262):
+```python
+def visit_Assign(self, node: ast.Assign) -> None:
+    """Track assignments like calc = Calculator()."""
+    if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+        variable_name = node.targets[0].id
+
+        # Check if it's a class instantiation or reference
+        if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name):
+            # calc = Calculator() - track for later resolution
+            class_name = node.value.func.id
+            # ... create binding and append to unresolved_variables
+```
+
+**What the plan doesn't explain**: How to track the unresolved variables alongside the collector.
+
+**What I implemented**:
+```python
+class NameBindingCollector(ast.NodeVisitor):
+    def __init__(self) -> None:
+        self.bindings: list[NameBinding] = []
+        self.unresolved_variables: list[tuple[NameBinding, str]] = []  # Critical addition!
+        self._scope_stack: ScopeStack = create_initial_stack()
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Track assignments like calc = Calculator()."""
+        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            variable_name = node.targets[0].id
+
+            # Check if it's a class instantiation
+            if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name):
+                class_name = node.value.func.id
+                binding = NameBinding(
+                    name=variable_name,
+                    line_number=node.lineno,
+                    kind=NameBindingKind.VARIABLE,
+                    qualified_name=build_qualified_name(self._scope_stack, variable_name),
+                    scope_stack=self._scope_stack,
+                    source_module=None,
+                    target_class=None,  # Will be resolved later
+                )
+                self.bindings.append(binding)
+                self.unresolved_variables.append((binding, class_name))  # Track for resolution
+
+            elif isinstance(node.value, ast.Name):
+                # Handle calc = Calculator (without parens)
+                ref_name = node.value.id
+                binding = NameBinding(
+                    name=variable_name,
+                    line_number=node.lineno,
+                    kind=NameBindingKind.VARIABLE,
+                    qualified_name=build_qualified_name(self._scope_stack, variable_name),
+                    scope_stack=self._scope_stack,
+                    source_module=None,
+                    target_class=None,  # Will be resolved later
+                )
+                self.bindings.append(binding)
+                self.unresolved_variables.append((binding, ref_name))  # Track for resolution
+
+        self.generic_visit(node)  # Don't forget to continue traversal!
+```
+
+**Key detail missed**: The plan shows the structure but doesn't emphasize that `self.generic_visit(node)` is REQUIRED at the end of visit_Assign to continue traversing nested nodes.
+
+### A5. Edge Cases Not Addressed
+
+The plan doesn't discuss several important edge cases I encountered:
+
+**1. Variable-to-variable assignments**:
+```python
+calc = Calculator()
+calc2 = calc  # What should calc2.target_class be?
+calc2.compute()  # Should this resolve?
+```
+
+**What I implemented**: Only resolve one level. If `calc` resolves to a VARIABLE kind, we don't follow the chain. This means `calc2.compute()` won't resolve in the prototype.
+
+**2. Variable shadowing**:
+```python
+calc = OldCalculator()
+calc.old_method()  # Should resolve to OldCalculator.old_method
+calc = NewCalculator()
+calc.new_method()  # Should resolve to NewCalculator.new_method
+```
+
+**What works**: The position-aware index handles this correctly! Each assignment creates a new binding at a different line number.
+
+**3. Non-class assignments we track unnecessarily**:
+```python
+result = calc.compute(10)  # We track 'result' as a variable but can't resolve it
+```
+
+**Current behavior**: We create a variable binding for `result` with `target_class=None` because `calc.compute(10)` isn't a simple name. This is harmless but adds noise.
+
+### A6. The Immutability Constraint
+
+**Critical detail the plan glosses over**: Why do we need `dataclasses.replace()`?
+
+The plan mentions using `dataclasses.replace()` but doesn't explain the constraint that makes it necessary:
+
+```python
+@dataclass(frozen=True)  # <-- This makes ALL fields read-only!
+class NameBinding:
+    name: str
+    line_number: int
+    kind: NameBindingKind
+    qualified_name: QualifiedName | None
+    scope_stack: "ScopeStack"
+    source_module: str | None
+    target_class: QualifiedName | None = None
+```
+
+**What doesn't work**:
+```python
+# This will raise an error!
+binding.target_class = resolved.qualified_name  # FrozenInstanceError!
+```
+
+**What you must do instead**:
+```python
+import dataclasses
+
+# Create a NEW binding with the updated field
+resolved_binding = dataclasses.replace(
+    binding,
+    target_class=resolved.qualified_name
+)
+```
+
+**Why this matters**: The functional programming style (immutable data) is a project requirement. The plan should explicitly note: "Because NameBinding is frozen (immutable), resolution requires creating new instances, not modifying existing ones."
+
+### A7. Recommended Plan Updates
+
+Based on my implementation experience, here are specific changes needed in the plan:
+
+**1. Emphasize variable tracking importance**:
+- Keep Step 7 where it is (the sequencing is correct)
+- Add prominent warning: **"REQUIRED FOR FEATURE PARITY - without this, method calls through variables will not resolve"**
+- Clarify that "assignments relevant for method resolution" includes ALL variable assignments to classes
+
+**2. Add complete resolution example in Step 8**:
+- Show the full index rebuild process
+- Explain the need to track all bindings for rebuilding
+- Include the duplicate sorting step
+
+**3. Fix method names in Step 9**:
+- Change `_resolve_attribute_call` to `_resolve_method_call`
+- Show the exact placement in the existing method flow
+- Note that variable resolution must come before chain extraction
+
+**4. Add limitations section to variable tracking**:
+```
+### Variable Tracking Limitations (Phase 1)
+- Variable-to-variable assignments are not followed (calc2 = calc)
+- Only tracks assignments to ast.Name targets (not attributes or subscripts)
+- Function references through variables remain unresolvable (process = sqrt)
+- Import references through variables remain unresolvable (dt = datetime)
+```
+
+**5. Add performance note**:
+"Variable resolution adds a one-time O(n) cost during index building to resolve and rebuild the index. This doesn't affect the O(log k) lookup performance."
+
+### A8. Most Critical Insight
+
+**The plan's biggest gap**: Not emphasizing strongly enough that variable tracking is required for feature parity, and underestimating the complexity of the resolution process.
+
+**Evidence from test output**:
+```bash
+# Without variable tracking
+✗ Lines now unresolvable in prototype: [58]
+Function call count changes:
+  __module__.Calculator.compute: 1 -> 0  # REGRESSION!
+
+# With variable tracking
+✓ Line 58 (calc.compute()) resolved: True
+✓ __module__.Calculator.compute: 1 calls
+```
+
+**The lesson**: When refactoring working code, every existing feature needs a replacement. While the plan does include variable tracking (Step 7), it should more prominently highlight that this directly replaces VariableRegistry and is essential for maintaining existing functionality.
