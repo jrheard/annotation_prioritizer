@@ -1163,3 +1163,89 @@ Bash(python test_prototype.py)
 TODO use prototype_findings.md to update the doc
 
 and honestly maybe do this prototype approach _again_ once the doc feels like it's in a good state, seems valuable
+
+hrm
+
+PROTOTYPE VS ORIGINAL IMPLEMENTATION COMPARISON
+     ============================================================
+
+     ============================================================
+     Testing: Shadowing bug test cases
+     File: test_shadowing_prototype.py
+     ============================================================
+
+     --- UNRESOLVABLE CALLS ---
+     Original: 7 lines
+     Prototype: 3 lines
+
+     ✓ FIXED by prototype (now resolved): [20, 34, 43, 48]
+       Line 20: sqrt(25)
+       Line 34: Counter()
+       Line 43: sqrt(36)
+
+     --- FUNCTION CALL COUNTS ---
+     ✓ NEW: __module__.Counter.__init__: 1 calls (was untracked)
+     ✓ NEW: __module__.outer.sqrt: 1 calls (was untracked)
+     ✓ NEW: __module__.sqrt: 2 calls (was untracked)
+
+     ============================================================
+     SHADOWING TEST CASES
+     ============================================================
+
+     --- Function shadows import ---
+     Original unresolved: 1
+     Prototype unresolved: 0
+     ✓ Prototype BETTER
+
+     --- Inner function shadows outer ---
+     Original unresolved: 0
+     Prototype unresolved: 0
+     = Same result
+
+     --- Variable tracks class ---
+     Original unresolved: 0
+     Prototype unresolved: 0
+     = Same result
+
+     ============================================================
+     SUMMARY
+     ============================================================
+     ✓ Total lines fixed by prototype: 4
+     ✗ Total regressions in prototype: 0
+
+     ✅ PROTOTYPE IS STRICTLY BETTER
+     The prototype fixes bugs with no regressions.
+
+     Key achievements:
+     1. Fixes Python shadowing semantics (issue #31)
+     2. Single-pass architecture (5x fewer AST traversals)
+     3. O(log k) lookup performance vs O(n)
+     4. Cleaner, more maintainable codebase
+     5. With variable tracking: feature parity achieved
+
+    ============================================================
+     CONCRETE EXAMPLE: How Prototype Fixes Shadowing
+     ============================================================
+
+     CODE:
+     # Line 1
+     from math import sqrt  # Import sqrt
+
+     def sqrt(x):  # Line 4: Function shadows import
+         return x ** 0.5
+
+     result = sqrt(25)  # Line 7: Which sqrt?
+
+     RESOLUTION AT LINE 7:
+     ────────────────────────────────────────
+     Original Implementation:
+       1. Sees 'sqrt' is imported (line 2)
+       2. Sees 'sqrt' is defined (line 4)
+       3. Can't determine which applies ❌
+       4. Result: UNRESOLVED
+
+     Prototype Implementation:
+       1. Binary search for 'sqrt' before line 7
+       2. Finds: Line 4 definition (most recent)
+       3. Correctly shadows the import ✅
+       4. Result: Resolves to __module__.sqrt
