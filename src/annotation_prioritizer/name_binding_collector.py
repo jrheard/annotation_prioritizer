@@ -24,6 +24,7 @@ class NameBindingCollector(ast.NodeVisitor):
     def __init__(self) -> None:
         """Initialize the collector."""
         self.bindings: list[NameBinding] = []
+        self.unresolved_variables: list[tuple[NameBinding, str]] = []
         self._scope_stack: ScopeStack = create_initial_stack()
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -111,3 +112,40 @@ class NameBindingCollector(ast.NodeVisitor):
         self._scope_stack = add_scope(self._scope_stack, Scope(ScopeKind.CLASS, node.name))
         self.generic_visit(node)
         self._scope_stack = drop_last_scope(self._scope_stack)
+
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Track assignments like calc = Calculator()."""
+        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            variable_name = node.targets[0].id
+
+            # Check if it's a class instantiation
+            if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name):
+                class_name = node.value.func.id
+                binding = NameBinding(
+                    name=variable_name,
+                    line_number=node.lineno,
+                    kind=NameBindingKind.VARIABLE,
+                    qualified_name=build_qualified_name(self._scope_stack, variable_name),
+                    scope_stack=self._scope_stack,
+                    source_module=None,
+                    target_class=None,  # Will be resolved later
+                )
+                self.bindings.append(binding)
+                self.unresolved_variables.append((binding, class_name))
+
+            elif isinstance(node.value, ast.Name):
+                # Handle calc = Calculator (without parens)
+                ref_name = node.value.id
+                binding = NameBinding(
+                    name=variable_name,
+                    line_number=node.lineno,
+                    kind=NameBindingKind.VARIABLE,
+                    qualified_name=build_qualified_name(self._scope_stack, variable_name),
+                    scope_stack=self._scope_stack,
+                    source_module=None,
+                    target_class=None,  # Will be resolved later
+                )
+                self.bindings.append(binding)
+                self.unresolved_variables.append((binding, ref_name))
+
+        self.generic_visit(node)

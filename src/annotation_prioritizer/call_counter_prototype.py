@@ -142,6 +142,19 @@ class CallCountVisitorPrototype(ast.NodeVisitor):
                         return make_qualified_name(f"{class_qualified}.{func.attr}")
             return None
 
+        # Handle variable.method() calls
+        if isinstance(func.value, ast.Name):
+            # Look up the variable
+            binding = self._position_index.resolve(
+                func.value.id,
+                func.lineno,
+                self._scope_stack
+            )
+
+            if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
+                # We know what class the variable refers to
+                return make_qualified_name(f"{binding.target_class}.{func.attr}")
+
         # Handle ClassName.method() - extract the full attribute chain
         try:
             # Get the full chain including the final attribute

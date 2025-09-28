@@ -61,11 +61,15 @@ class PositionIndex:
         return None
 
 
-def build_position_index(bindings: list[NameBinding]) -> PositionIndex:
+def build_position_index(
+    bindings: list[NameBinding],
+    unresolved_variables: list[tuple[NameBinding, str]] | None = None,
+) -> PositionIndex:
     """Build an efficient position-aware index from bindings.
 
     Args:
         bindings: List of all name bindings collected from the AST
+        unresolved_variables: List of variables needing target resolution
 
     Returns:
         A PositionIndex for efficient name resolution
@@ -89,5 +93,56 @@ def build_position_index(bindings: list[NameBinding]) -> PositionIndex:
     for scope_dict in index.values():
         for binding_list in scope_dict.values():
             binding_list.sort(key=lambda x: x[0])
+
+    # If we have unresolved variables, resolve their targets
+    if unresolved_variables:
+        import dataclasses
+        from annotation_prioritizer.models import NameBindingKind
+
+        # Create temporary index for resolution
+        temp_index = PositionIndex(_index=dict(index))
+
+        # Resolve variable targets
+        resolved_bindings = []
+        for binding in bindings:
+            # Check if this binding is an unresolved variable
+            is_unresolved = False
+            for var_binding, target_name in unresolved_variables:
+                if binding == var_binding:
+                    is_unresolved = True
+                    # Resolve what the target refers to
+                    resolved = temp_index.resolve(
+                        target_name,
+                        binding.line_number,
+                        binding.scope_stack
+                    )
+
+                    if resolved and resolved.kind == NameBindingKind.CLASS:
+                        # Create new binding with resolved target_class
+                        resolved_binding = dataclasses.replace(
+                            binding,
+                            target_class=resolved.qualified_name
+                        )
+                        resolved_bindings.append(resolved_binding)
+                    else:
+                        resolved_bindings.append(binding)
+                    break
+
+            if not is_unresolved:
+                resolved_bindings.append(binding)
+
+        # Rebuild index with resolved bindings
+        index = defaultdict(lambda: defaultdict(list))
+        for binding in resolved_bindings:
+            if not binding.scope_stack or len(binding.scope_stack) == 1:
+                scope_name = make_qualified_name("__module__")
+            else:
+                scope_name = make_qualified_name(".".join(s.name for s in binding.scope_stack))
+            index[scope_name][binding.name].append((binding.line_number, binding))
+
+        # Sort again
+        for scope_dict in index.values():
+            for binding_list in scope_dict.values():
+                binding_list.sort(key=lambda x: x[0])
 
     return PositionIndex(_index=dict(index))

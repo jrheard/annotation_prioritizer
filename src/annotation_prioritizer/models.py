@@ -46,6 +46,7 @@ class NameBindingKind(StrEnum):
     IMPORT = "import"  # from math import sqrt
     FUNCTION = "function"  # def foo(): ...
     CLASS = "class"  # class Calculator: ...
+    VARIABLE = "variable"  # calc = Calculator()
 
 
 @dataclass(frozen=True)
@@ -199,3 +200,4 @@ class NameBinding:
     qualified_name: QualifiedName | None  # None for imports (Phase 1)
     scope_stack: "ScopeStack"  # Full scope stack where binding occurs
     source_module: str | None  # For imports: "math" from "from math import sqrt"
+    target_class: QualifiedName | None = None  # For VARIABLE kind: the class it refers to

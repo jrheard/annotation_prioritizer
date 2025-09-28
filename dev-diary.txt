@@ -1057,3 +1057,109 @@ TODO investigate using a format like 'm:foo.c:bar.f:baz:v.quux' for qualified na
 
 TODO consider a /make-prototype command that takes a plan file as input, spins up a new branch, and makes a quick prototype of it
   to validate that the plan can work as written, to look for surprise missing prereqs, etc
+
+  including a prototype_findings.md file at the end maybe, or maybe that can be a separate command to serve as a checkpoint
+
+  i used this prompt for now
+
+  > write a prototype_findings.md file that contains your findings from this prototype. what are the strengths of the plan doc? what
+   are the weaknesses? does the plan doc contain inaccuracies? are there parts where the doc was unintentionally underspecified
+  and you had to figure things out for yourself? etc. basically, what did you wish you knew before starting work on this
+  prototype?
+
+  but i had to prompt it to be more detailed, its initial output was vague at times
+
+Bash(python test_prototype.py)
+  ⎿  ============================================================
+     Testing: test_shadowing_prototype.py
+     ============================================================
+
+     --- CURRENT IMPLEMENTATION ---
+     Unresolvable calls: 7
+       Line 10: sqrt(16)
+       Line 18: sqrt(25)
+       Line 21: Counter()
+       Line 28: Counter()
+       Line 31: Counter()
+       ... and 2 more
+
+     Function call counts:
+       __module__.sqrt: 0 calls
+       __module__.Counter.__init__: 0 calls
+       __module__.outer.sqrt: 0 calls
+
+     --- PROTOTYPE IMPLEMENTATION ---
+     Unresolvable calls: 4
+       Line 10: sqrt(16)
+       Line 21: Counter()  # Should be unresolvable (import)
+       Line 31: Counter()  # Should be unresolvable again (import)
+       Line 48: calc.compute(10)  # Should resolve to Calculator.compute (if we tracked variables)
+
+     Function call counts:
+       __module__.sqrt: 2 calls
+       __module__.outer.sqrt: 1 calls
+       __module__.Counter.__init__: 1 calls
+
+     --- DIFFERENCES ---
+     ✓ Lines now correctly resolved by prototype: [18, 28, 35, 40]
+     ✗ Lines now unresolvable in prototype: [48]
+
+     Function call count changes:
+       __module__.sqrt: 0 -> 2
+       __module__.outer.sqrt: 0 -> 1
+       __module__.Counter.__init__: 0 -> 1
+       __module__.Calculator.compute: 1 -> 0
+
+     ============================================================
+     Testing regular file for regression...
+
+     ============================================================
+     Testing: src/annotation_prioritizer/cli.py
+     ============================================================
+
+     --- CURRENT IMPLEMENTATION ---
+     Unresolvable calls: 22
+       Line 13: logging.getLogger(__name__)
+       Line 18: argparse.ArgumentParser(
+             description="Analyze Python files to prioritize type annotation additions"
+         )
+       Line 21: parser.add_argument(
+             "target",
+             help="Python file to analyze",
+             type=Path,
+         )
+       Line 26: parser.add_argument(
+             "--min-calls",
+             type=int,
+             default=0,
+             help="Filter functions with fewer than N calls (default: 0)",
+         )
+       Line 32: parser.add_argument(
+             "--debug",
+             action="store_true",
+             help="Enable debug logging output",
+         )
+       ... and 17 more
+
+     Function call counts:
+
+     --- PROTOTYPE IMPLEMENTATION ---
+     Unresolvable calls: 24
+       Line 13: logger = logging.getLogger(__name__)
+       Line 18: parser = argparse.ArgumentParser(
+       Line 21: parser.add_argument(
+       Line 26: parser.add_argument(
+       Line 32: parser.add_argument(
+       ... and 19 more
+
+     Function call counts:
+
+     --- DIFFERENCES ---
+     No lines fixed
+     ✗ Lines now unresolvable in prototype: [77]
+
+     Function call count changes:
+
+TODO use prototype_findings.md to update the doc
+
+and honestly maybe do this prototype approach _again_ once the doc feels like it's in a good state, seems valuable

@@ -116,8 +116,8 @@ def analyze_ast_prototype(tree: ast.Module, source_code: str, filename: str = "t
     collector = NameBindingCollector()
     collector.visit(tree)
 
-    # Build position-aware index
-    position_index = build_position_index(collector.bindings)
+    # Build position-aware index with variable resolution
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
 
     # Extract known classes from the bindings
     known_classes = {
