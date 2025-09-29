@@ -5,7 +5,7 @@
 This plan implements a major architectural refactor to fix the import shadowing bug (issue #31) and simplify the codebase by replacing 5 separate AST visitors with a single NameBindingCollector that tracks all name bindings with their line numbers. This enables correct Python shadowing semantics through position-aware name resolution.
 
 The new architecture:
-1. **Single AST pass** (NameBindingCollector) collects all name bindings with positions
+1. **Reduced AST passes** (NameBindingCollector) collects all name bindings with positions in a single pass
 2. **PositionIndex** provides O(log k) position-aware name resolution using binary search
 3. **Fixes shadowing bug** by resolving names based on their position in the file
 4. **Simplifies codebase** by eliminating 5 separate visitors and their registries
@@ -50,6 +50,45 @@ The following Python binding scenarios are intentionally NOT supported:
 - **FunctionDefinitionVisitor** remains separate for detailed parameter extraction
 - All existing analysis logic in analyzer.py (just changes data source)
 
+## Implementation Patterns
+
+Several key patterns are used throughout this implementation. Understanding these upfront will help with implementing the steps below.
+
+### Converting ScopeStack to QualifiedName
+
+The `build_qualified_name(scope_stack, name)` function requires both a scope stack and a name to append. When you need just the scope's qualified name (without appending anything), use this pattern:
+
+```python
+# For module-level or empty scope
+if not scope_stack or len(scope_stack) == 1:
+    scope_name = make_qualified_name("__module__")
+else:
+    # Build qualified name from scope stack
+    scope_name = make_qualified_name(".".join(s.name for s in scope_stack))
+```
+
+This pattern appears in multiple places:
+- Building the PositionIndex (indexing by scope)
+- Resolving names (looking up in each scope level)
+- Converting scope contexts to qualified names
+
+### Working with Frozen Dataclasses
+
+`NameBinding` uses `@dataclass(frozen=True)` for immutability. To update a field, create a new instance:
+
+```python
+import dataclasses
+
+# This will raise FrozenInstanceError
+# binding.target_class = new_value
+
+# Instead, use dataclasses.replace()
+updated_binding = dataclasses.replace(
+    binding,
+    target_class=new_value
+)
+```
+
 ## Implementation Steps
 
 ### Step 1: Add NameBindingKind enum and NameBinding dataclass to models.py
@@ -76,6 +115,8 @@ class NameBinding:
     target_class: QualifiedName | None # For variables: class they're instances of
 ```
 
+**Important**: The `ScopeStack` type alias should be moved from `scope_tracker.py` to `models.py` to avoid circular imports. Since `NameBinding` needs `ScopeStack` and `scope_tracker.py` imports types from `models.py`, keeping the type alias in `scope_tracker.py` creates a circular dependency. Move the `type ScopeStack = tuple[Scope, ...]` definition to `models.py` alongside `Scope` and have `scope_tracker.py` import it.
+
 ### Step 2: Implement PositionIndex class with binary search and comprehensive tests
 
 Create the position-aware index that efficiently resolves names using binary search:
@@ -89,7 +130,21 @@ class PositionIndex:
 
     def resolve(self, name: str, line: int, scope_stack: ScopeStack) -> NameBinding | None:
         """Resolve a name at a given position using binary search."""
-        # Implementation using bisect.bisect_left for O(log k) lookup
+        # Try each scope from innermost to outermost
+        # For each scope, look up bindings for this name
+        # Use binary search to find the latest binding before this line
+
+        # Binary search pattern:
+        idx = bisect.bisect_left(bindings, (line, None))
+        # This works because:
+        # 1. bindings is a sorted list of (line_number, NameBinding) tuples
+        # 2. Python compares tuples left-to-right
+        # 3. We want all bindings with line_number < line
+        # 4. bisect_left finds the insertion point, so idx-1 gives us the last binding before this line
+
+        if idx > 0:
+            _, binding = bindings[idx - 1]
+            return binding
 ```
 
 Tests will verify:
@@ -109,7 +164,7 @@ class NameBindingCollector(ast.NodeVisitor):
 
     def __init__(self):
         self.bindings: list[NameBinding] = []
-        self.unresolved_variables: list[tuple[NameBinding, str]] = []  # For Step 7
+        self.unresolved_variables: list[tuple[NameBinding, str]] = []  # Track variables needing resolution
         self._scope_stack: ScopeStack = create_initial_stack()
 
     # Scope management using existing utilities from scope_tracker.py
@@ -276,16 +331,20 @@ Create the factory function that builds a PositionIndex from collected bindings 
 ```python
 def build_position_index(
     bindings: list[NameBinding],
-    unresolved_variables: list[tuple[NameBinding, str]]
+    unresolved_variables: list[tuple[NameBinding, str]] | None = None
 ) -> PositionIndex:
     """Build an efficient position-aware index from bindings and resolve variable targets."""
     # First, build the basic index
     index: dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]] = defaultdict(lambda: defaultdict(list))
 
     for binding in bindings:
-        # Add to index, maintaining sorted order by line number
         # Convert scope_stack to qualified name for indexing
-        scope_name = build_qualified_name(binding.scope_stack)
+        # Use the scope-to-qualified-name pattern (see Implementation Patterns section)
+        if not binding.scope_stack or len(binding.scope_stack) == 1:
+            scope_name = make_qualified_name("__module__")
+        else:
+            scope_name = make_qualified_name(".".join(s.name for s in binding.scope_stack))
+
         index[scope_name][binding.name].append((binding.line_number, binding))
 
     # Sort each name's bindings by line number for binary search
@@ -293,32 +352,60 @@ def build_position_index(
         for binding_list in scope_dict.values():
             binding_list.sort(key=lambda x: x[0])
 
-    # Create temporary index for resolution
-    temp_index = PositionIndex(_index=dict(index))
+    # If we have unresolved variables, resolve their targets and rebuild the index
+    if unresolved_variables:
+        import dataclasses
 
-    # Resolve variable targets
-    for variable_binding, target_name in unresolved_variables:
-        # Look up what target_name refers to at the variable's position
-        resolved = temp_index.resolve(
-            target_name,
-            variable_binding.line_number,
-            variable_binding.scope_stack
-        )
+        # Create temporary index for resolution
+        temp_index = PositionIndex(_index=dict(index))
 
-        if resolved and resolved.kind == NameBindingKind.CLASS:
-            # Update the variable binding with the resolved class
-            # Since NameBinding is frozen, use dataclasses.replace()
-            resolved_binding = dataclasses.replace(
-                variable_binding,
-                target_class=resolved.qualified_name  # Now resolved!
-            )
+        # Build a new list of ALL bindings with resolved variables
+        # We need to iterate through all bindings to find and replace the unresolved ones
+        resolved_bindings = []
+        for binding in bindings:
+            # Check if this binding is an unresolved variable
+            is_unresolved = False
+            for var_binding, target_name in unresolved_variables:
+                if binding == var_binding:  # Found an unresolved variable
+                    is_unresolved = True
+                    # Resolve what the target refers to
+                    resolved = temp_index.resolve(
+                        target_name,
+                        binding.line_number,
+                        binding.scope_stack
+                    )
 
-            # Replace the unresolved binding with resolved one in the index
-            # This requires finding and updating the binding in the index structure
-            # Implementation details omitted for brevity
+                    if resolved and resolved.kind == NameBindingKind.CLASS:
+                        # Create NEW binding with resolved target_class
+                        # Must use dataclasses.replace() because NameBinding is frozen
+                        resolved_binding = dataclasses.replace(
+                            binding,
+                            target_class=resolved.qualified_name
+                        )
+                        resolved_bindings.append(resolved_binding)
+                    else:
+                        # Couldn't resolve or not a class - keep original
+                        resolved_bindings.append(binding)
+                    break
 
-        # Note: If resolved is a FUNCTION or IMPORT, target_class remains None
-        # This is a Phase 1 limitation - imports and function references aren't fully tracked
+            if not is_unresolved:
+                # Not a variable - keep as-is
+                resolved_bindings.append(binding)
+
+        # Completely rebuild the index with resolved bindings
+        index = defaultdict(lambda: defaultdict(list))
+        for binding in resolved_bindings:
+            if not binding.scope_stack or len(binding.scope_stack) == 1:
+                scope_name = make_qualified_name("__module__")
+            else:
+                scope_name = make_qualified_name(".".join(s.name for s in binding.scope_stack))
+
+            index[scope_name][binding.name].append((binding.line_number, binding))
+
+        # Sort again for binary search
+        for scope_dict in index.values():
+            for binding_list in scope_dict.values():
+                binding_list.sort(key=lambda x: x[0])
 
     return PositionIndex(_index=dict(index))
 ```
@@ -338,7 +425,12 @@ Modify CallCountVisitor to use the new position-aware resolution, including supp
 class CallCountVisitor(ast.NodeVisitor):
     def __init__(self, ..., position_index: PositionIndex, ...):
         self._position_index = position_index
+        self._known_classes: set[QualifiedName] = set()  # For __init__ resolution
         # Remove old registry dependencies
+
+    def set_known_classes(self, classes: set[QualifiedName]) -> None:
+        """Set the known classes for __init__ resolution."""
+        self._known_classes = classes
 
     def _resolve_direct_call(self, func: ast.Name) -> QualifiedName | None:
         """Resolve using position-aware index."""
@@ -359,8 +451,15 @@ class CallCountVisitor(ast.NodeVisitor):
 
         return None  # Variables aren't directly callable
 
-    def _resolve_attribute_call(self, func: ast.Attribute) -> QualifiedName | None:
-        """Resolve method calls like calc.add()."""
+    def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
+        """Resolve method calls like self.method() or ClassName.method() or calc.method()."""
+        # FIRST: Handle self.method() calls (existing logic)
+        if isinstance(func.value, ast.Name) and func.value.id == "self":
+            # Find the containing class from scope stack
+            # ... existing self resolution logic ...
+            return None
+
+        # SECOND: Handle variable.method() calls (NEW - must come before chain extraction)
         if isinstance(func.value, ast.Name):
             # Look up the variable
             binding = self._position_index.resolve(
@@ -373,8 +472,9 @@ class CallCountVisitor(ast.NodeVisitor):
                 # We know what class the variable refers to
                 return make_qualified_name(f"{binding.target_class}.{func.attr}")
 
-        # Fall back to existing attribute resolution logic
-        return self._existing_attribute_resolution(func)
+        # THIRD: Handle ClassName.method() calls (existing logic)
+        # Extract the full attribute chain and resolve
+        # ... existing chain extraction logic ...
 ```
 
 **Note**: This commit will be larger as we need to update all CallCountVisitor tests in the same commit. Specific tests to update:
@@ -405,6 +505,14 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
     # Build position-aware index with resolved variable targets
     position_index = build_position_index(collector.bindings, collector.unresolved_variables)
 
+    # Extract known classes for __init__ resolution
+    # This replaces the ClassRegistry that's being removed
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
+
     # Parse function definitions (kept separate for detailed info)
     # Note: FunctionDefinitionVisitor might need minor updates to work without ClassRegistry
     function_infos = parse_function_definitions(tree, file_path_obj, position_index)
@@ -413,8 +521,9 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
         return AnalysisResult(priorities=(), unresolvable_calls=())
 
     # Count function calls with new position-aware resolution
+    # Pass known_classes to the visitor
     resolved_counts, unresolvable_calls = count_function_calls(
-        tree, function_infos, position_index, source_code
+        tree, function_infos, position_index, known_classes, source_code
     )
 
     # Rest of analysis remains the same...
@@ -485,7 +594,7 @@ Each step includes comprehensive tests to ensure correctness:
 ## Success Criteria
 
 1. **Bug fix**: Shadowing issue #31 is resolved with correct Python semantics
-2. **Performance**: Reduced from 5+ AST passes to 2 (NameBindingCollector + FunctionDefinitionVisitor)
+2. **Performance**: Reduced from 5+ AST passes to 3 (NameBindingCollector, FunctionDefinitionVisitor, CallCountVisitor)
 3. **Simplification**: Codebase has fewer files and clearer architecture
 4. **Maintainability**: Single source of truth for name bindings
 5. **Tests**: All tests pass with 100% coverage
