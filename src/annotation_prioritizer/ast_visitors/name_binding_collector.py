@@ -8,7 +8,7 @@ position-aware name resolution that correctly handles Python's shadowing semanti
 import ast
 from typing import override
 
-from annotation_prioritizer.models import NameBinding, Scope, ScopeKind, ScopeStack
+from annotation_prioritizer.models import NameBinding, NameBindingKind, Scope, ScopeKind, ScopeStack
 from annotation_prioritizer.scope_tracker import add_scope, create_initial_stack, drop_last_scope
 
 
@@ -52,3 +52,33 @@ class NameBindingCollector(ast.NodeVisitor):
         self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.CLASS, node.name))
         self.generic_visit(node)
         self.scope_stack = drop_last_scope(self.scope_stack)
+
+    @override
+    def visit_Import(self, node: ast.Import) -> None:
+        """Track module imports like 'import math' or 'import numpy as np'."""
+        for alias in node.names:
+            binding = NameBinding(
+                name=alias.asname or alias.name,
+                line_number=node.lineno,
+                kind=NameBindingKind.IMPORT,
+                qualified_name=None,  # Unresolvable in Phase 1
+                scope_stack=self.scope_stack,
+                source_module=alias.name,  # Track for Phase 2
+                target_class=None,
+            )
+            self.bindings.append(binding)
+
+    @override
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        """Track from imports like 'from math import sqrt' or 'from math import *'."""
+        for alias in node.names:
+            binding = NameBinding(
+                name=alias.asname or alias.name,
+                line_number=node.lineno,
+                kind=NameBindingKind.IMPORT,
+                qualified_name=None,  # Unresolvable in Phase 1
+                scope_stack=self.scope_stack,
+                source_module=node.module,  # Track for Phase 2
+                target_class=None,
+            )
+            self.bindings.append(binding)

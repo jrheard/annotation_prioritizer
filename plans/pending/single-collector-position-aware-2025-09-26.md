@@ -214,7 +214,7 @@ Tests will verify:
 
 **Status**: ✅ Completed - NameBindingCollector created with scope tracking for functions, async functions, and classes. Minimal tests added that verify initialization and scope restoration. All 282 tests pass with 100% coverage, pyright shows no errors.
 
-### Step 4: Add import binding collection (Import, ImportFrom) with tests for all patterns
+### Step 4: Add import binding collection (Import, ImportFrom) with tests for all patterns ✅
 
 Extend collector to track imports with source module information:
 
@@ -255,6 +255,8 @@ Tests will cover:
 - Multiple imports: `from math import sqrt, cos, sin`
 - Star imports: `from math import *`
 - Relative imports: `from . import utils`
+
+**Status**: ✅ Completed - Import binding collection implemented with visit_Import() and visit_ImportFrom() methods. Comprehensive tests added covering all import patterns including simple imports, aliased imports, multiple imports, star imports, relative imports, and imports in different scopes. All 299 tests pass with 100% coverage, pyright shows no errors.
 
 ### Step 5: Add function binding collection (FunctionDef, AsyncFunctionDef) with tests
 
