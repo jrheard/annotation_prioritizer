@@ -719,3 +719,401 @@ def outer():
     assert class_binding.scope_stack[1].name == "outer"
     assert class_binding.scope_stack[2].kind == ScopeKind.FUNCTION
     assert class_binding.scope_stack[2].name == "inner"
+
+
+# Variable binding collection tests
+
+
+def test_class_instantiation() -> None:
+    """Class instantiation like calc = Calculator() is tracked."""
+    source = """
+class Calculator:
+    pass
+
+calc = Calculator()
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # Should have class binding and variable binding
+    assert len(collector.bindings) == 2
+    assert len(collector.unresolved_variables) == 1
+
+    # Class binding
+    class_binding = collector.bindings[0]
+    assert class_binding.name == "Calculator"
+    assert class_binding.kind == NameBindingKind.CLASS
+
+    # Variable binding
+    var_binding = collector.bindings[1]
+    assert var_binding.name == "calc"
+    assert var_binding.line_number == 5
+    assert var_binding.kind == NameBindingKind.VARIABLE
+    assert var_binding.qualified_name == "__module__.calc"
+    assert var_binding.target_class is None  # Not yet resolved
+    assert var_binding.source_module is None
+
+    # Unresolved variable tracking
+    unresolved_binding, ref_name = collector.unresolved_variables[0]
+    assert unresolved_binding == var_binding
+    assert ref_name == "Calculator"
+
+
+def test_class_reference_without_call() -> None:
+    """Class reference without instantiation like calc = Calculator is tracked."""
+    source = """
+class Calculator:
+    pass
+
+calc = Calculator
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 2
+    assert len(collector.unresolved_variables) == 1
+
+    # Variable binding
+    var_binding = collector.bindings[1]
+    assert var_binding.name == "calc"
+    assert var_binding.kind == NameBindingKind.VARIABLE
+    assert var_binding.target_class is None  # Not yet resolved
+
+    # Unresolved tracking
+    _, ref_name = collector.unresolved_variables[0]
+    assert ref_name == "Calculator"
+
+
+def test_function_reference() -> None:
+    """Function reference like process = sqrt is tracked."""
+    source = """
+from math import sqrt
+
+process = sqrt
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 2
+    assert len(collector.unresolved_variables) == 1
+
+    # Import binding
+    import_binding = collector.bindings[0]
+    assert import_binding.name == "sqrt"
+    assert import_binding.kind == NameBindingKind.IMPORT
+
+    # Variable binding
+    var_binding = collector.bindings[1]
+    assert var_binding.name == "process"
+    assert var_binding.line_number == 4
+    assert var_binding.kind == NameBindingKind.VARIABLE
+    assert var_binding.qualified_name == "__module__.process"
+
+    # Unresolved tracking
+    _, ref_name = collector.unresolved_variables[0]
+    assert ref_name == "sqrt"
+
+
+def test_annotated_assignment_with_instantiation() -> None:
+    """Annotated assignment like calc: Calculator = Calculator() is tracked."""
+    source = """
+class Calculator:
+    pass
+
+calc: Calculator = Calculator()
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 2
+    assert len(collector.unresolved_variables) == 1
+
+    # Variable binding
+    var_binding = collector.bindings[1]
+    assert var_binding.name == "calc"
+    assert var_binding.line_number == 5
+    assert var_binding.kind == NameBindingKind.VARIABLE
+    assert var_binding.qualified_name == "__module__.calc"
+
+    # Unresolved tracking
+    _, ref_name = collector.unresolved_variables[0]
+    assert ref_name == "Calculator"
+
+
+def test_annotated_assignment_with_reference() -> None:
+    """Annotated assignment like calc: type[Calculator] = Calculator is tracked."""
+    source = """
+class Calculator:
+    pass
+
+calc: type[Calculator] = Calculator
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 2
+    assert len(collector.unresolved_variables) == 1
+
+    var_binding = collector.bindings[1]
+    assert var_binding.name == "calc"
+    assert var_binding.kind == NameBindingKind.VARIABLE
+
+    _, ref_name = collector.unresolved_variables[0]
+    assert ref_name == "Calculator"
+
+
+def test_variable_reassignment() -> None:
+    """Multiple assignments to same variable create multiple bindings."""
+    source = """
+class Calculator:
+    pass
+
+class AdvancedCalculator:
+    pass
+
+calc = Calculator()
+calc = AdvancedCalculator()
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # 2 class bindings + 2 variable bindings
+    assert len(collector.bindings) == 4
+    assert len(collector.unresolved_variables) == 2
+
+    # Both variable bindings have same name but different lines
+    var_bindings = [b for b in collector.bindings if b.kind == NameBindingKind.VARIABLE]
+    assert len(var_bindings) == 2
+    assert var_bindings[0].name == "calc"
+    assert var_bindings[1].name == "calc"
+    assert var_bindings[0].line_number == 8
+    assert var_bindings[1].line_number == 9
+
+    # Both tracked as unresolved
+    assert collector.unresolved_variables[0][1] == "Calculator"
+    assert collector.unresolved_variables[1][1] == "AdvancedCalculator"
+
+
+def test_assignment_ignores_literals() -> None:
+    """Simple assignments to literals are ignored."""
+    source = """
+x = 5
+y = "string"
+z = 3.14
+w = True
+items = []
+data = {}
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # No bindings should be created for literals
+    assert len(collector.bindings) == 0
+    assert len(collector.unresolved_variables) == 0
+
+
+def test_assignment_ignores_complex_targets() -> None:
+    """Assignments with multiple targets or attribute assignments are ignored."""
+    source = """
+class Calculator:
+    pass
+
+# Multiple targets
+a, b = Calculator(), Calculator()
+
+# Attribute assignment
+self.calc = Calculator()
+
+# Subscript assignment
+items[0] = Calculator()
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # Only the class binding should be tracked
+    assert len(collector.bindings) == 1
+    assert collector.bindings[0].name == "Calculator"
+    assert collector.bindings[0].kind == NameBindingKind.CLASS
+    assert len(collector.unresolved_variables) == 0
+
+
+def test_variable_in_function_scope() -> None:
+    """Variables defined inside functions track the function scope."""
+    source = """
+class Calculator:
+    pass
+
+def process():
+    calc = Calculator()
+    return calc
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 3  # class, function, variable
+    assert len(collector.unresolved_variables) == 1
+
+    # Function binding
+    func_binding = collector.bindings[1]
+    assert func_binding.name == "process"
+    assert func_binding.kind == NameBindingKind.FUNCTION
+
+    # Variable binding inside function
+    var_binding = collector.bindings[2]
+    assert var_binding.name == "calc"
+    assert var_binding.line_number == 6
+    assert var_binding.kind == NameBindingKind.VARIABLE
+    assert var_binding.qualified_name == "__module__.process.calc"
+    assert len(var_binding.scope_stack) == 2
+    assert var_binding.scope_stack[0].kind == ScopeKind.MODULE
+    assert var_binding.scope_stack[1].kind == ScopeKind.FUNCTION
+    assert var_binding.scope_stack[1].name == "process"
+
+
+def test_variable_in_class_method() -> None:
+    """Variables defined inside class methods track the class and method scope."""
+    source = """
+class Factory:
+    def create(self):
+        class Product:
+            pass
+        item = Product()
+        return item
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # Factory class, create method, Product class, item variable
+    assert len(collector.bindings) == 4
+    assert len(collector.unresolved_variables) == 1
+
+    # Variable binding
+    var_binding = collector.bindings[3]
+    assert var_binding.name == "item"
+    assert var_binding.line_number == 6
+    assert var_binding.kind == NameBindingKind.VARIABLE
+    assert var_binding.qualified_name == "__module__.Factory.create.item"
+    assert len(var_binding.scope_stack) == 3
+    assert var_binding.scope_stack[0].kind == ScopeKind.MODULE
+    assert var_binding.scope_stack[1].kind == ScopeKind.CLASS
+    assert var_binding.scope_stack[1].name == "Factory"
+    assert var_binding.scope_stack[2].kind == ScopeKind.FUNCTION
+    assert var_binding.scope_stack[2].name == "create"
+
+
+def test_annotated_assignment_without_value() -> None:
+    """Annotated assignments without value (calc: Calculator) are ignored."""
+    source = """
+class Calculator:
+    pass
+
+calc: Calculator
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # Only the class binding should be tracked
+    assert len(collector.bindings) == 1
+    assert collector.bindings[0].name == "Calculator"
+    assert len(collector.unresolved_variables) == 0
+
+
+def test_multiple_variables_in_same_scope() -> None:
+    """Multiple variable assignments in same scope are all tracked."""
+    source = """
+class Calculator:
+    pass
+
+class Display:
+    pass
+
+calc1 = Calculator()
+calc2 = Calculator()
+display = Display()
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 5  # 2 classes + 3 variables
+    assert len(collector.unresolved_variables) == 3
+
+    var_bindings = [b for b in collector.bindings if b.kind == NameBindingKind.VARIABLE]
+    assert len(var_bindings) == 3
+    var_names = [b.name for b in var_bindings]
+    assert var_names == ["calc1", "calc2", "display"]
+
+    # Check unresolved references
+    unresolved_refs = [ref for _, ref in collector.unresolved_variables]
+    assert unresolved_refs == ["Calculator", "Calculator", "Display"]
+
+
+def test_variable_shadows_import() -> None:
+    """Variables can shadow imports at the same scope level."""
+    source = """
+from math import sqrt
+
+sqrt = lambda x: x ** 0.5
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # Import binding and variable binding are both tracked
+    # Variable is not tracked because it's assigned a lambda (not a Name or Call with Name)
+    assert len(collector.bindings) == 1
+    assert collector.bindings[0].kind == NameBindingKind.IMPORT
+
+
+def test_assignment_with_call_to_attribute() -> None:
+    """Assignments with calls to attributes are ignored."""
+    source = """
+calc = math.Calculator()
+result = obj.create()
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # Neither should be tracked (not simple Name calls)
+    assert len(collector.bindings) == 0
+    assert len(collector.unresolved_variables) == 0
+
+
+@pytest.mark.parametrize(
+    ("source", "expected_bindings", "expected_unresolved"),
+    [
+        ("calc = Calculator()", 1, 1),
+        ("calc = Calculator", 1, 1),
+        ("calc: Calculator = Calculator()", 1, 1),
+        ("x = 5", 0, 0),
+        ("y = 'string'", 0, 0),
+        ("z = [1, 2, 3]", 0, 0),
+    ],
+)
+def test_assignment_patterns(source: str, expected_bindings: int, expected_unresolved: int) -> None:
+    """Various assignment patterns are handled correctly."""
+    # Add class definition if needed
+    if "Calculator" in source:
+        full_source = "class Calculator:\n    pass\n\n" + source
+        expected_bindings += 1  # Add one for the class binding
+    else:
+        full_source = source
+
+    tree = ast.parse(full_source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == expected_bindings
+    assert len(collector.unresolved_variables) == expected_unresolved
