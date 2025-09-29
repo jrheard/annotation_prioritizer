@@ -258,7 +258,7 @@ Tests will cover:
 
 **Status**: ✅ Completed - Import binding collection implemented with visit_Import() and visit_ImportFrom() methods. Comprehensive tests added covering all import patterns including simple imports, aliased imports, multiple imports, star imports, relative imports, and imports in different scopes. All 299 tests pass with 100% coverage, pyright shows no errors.
 
-### Step 5: Add function binding collection (FunctionDef, AsyncFunctionDef) with tests
+### Step 5: Add function binding collection (FunctionDef, AsyncFunctionDef) with tests ✅
 
 Track function definitions at all scope levels:
 
@@ -289,6 +289,8 @@ Tests will verify:
 - Class methods
 - Async functions
 - Functions that shadow imports
+
+**Status**: ✅ Completed - Function binding collection implemented for both visit_FunctionDef() and visit_AsyncFunctionDef() methods. Comprehensive tests added covering module-level functions, nested functions, class methods, async functions, function shadowing, multiple functions in same scope, deeply nested functions, and functions in nested classes. All 308 tests pass with 100% coverage, pyright shows no errors.
 
 ### Step 6: Add class binding collection (ClassDef) with tests for nested classes
 
