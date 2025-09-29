@@ -1,4 +1,4 @@
-"""Tests for PositionIndex class.
+"""Tests for position-aware name resolution.
 
 Tests verify position-aware name resolution with binary search,
 including shadowing scenarios, scope chain resolution, and edge cases.
@@ -14,6 +14,8 @@ from annotation_prioritizer.models import (
     ScopeStack,
     make_qualified_name,
 )
+from annotation_prioritizer.position_index import resolve_name
+from annotation_prioritizer.scope_tracker import scope_stack_to_qualified_name
 
 
 def create_binding(
@@ -40,11 +42,7 @@ def build_index(bindings: list[NameBinding]) -> PositionIndex:
     index: dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]] = {}
 
     for binding in bindings:
-        # Convert scope_stack to qualified name
-        if not binding.scope_stack or len(binding.scope_stack) == 1:
-            scope_name = make_qualified_name("__module__")
-        else:
-            scope_name = make_qualified_name(".".join(s.name for s in binding.scope_stack))
+        scope_name = scope_stack_to_qualified_name(binding.scope_stack)
 
         if scope_name not in index:
             index[scope_name] = {}
@@ -59,7 +57,7 @@ def build_index(bindings: list[NameBinding]) -> PositionIndex:
         for binding_list in scope_dict.values():
             binding_list.sort(key=lambda x: x[0])
 
-    return PositionIndex(_index=index)
+    return index
 
 
 class TestPositionIndexBasicResolution:
@@ -77,7 +75,7 @@ class TestPositionIndexBasicResolution:
         index = build_index([binding])
 
         # Should resolve at line 10 (after binding)
-        result = index.resolve("sqrt", 10, module_scope)
+        result = resolve_name(index, "sqrt", 10, module_scope)
         assert result == binding
 
     def test_resolve_returns_none_for_unknown_name(self) -> None:
@@ -91,7 +89,7 @@ class TestPositionIndexBasicResolution:
         )
         index = build_index([binding])
 
-        result = index.resolve("cos", 10, module_scope)
+        result = resolve_name(index, "cos", 10, module_scope)
         assert result is None
 
     def test_resolve_returns_none_before_binding(self) -> None:
@@ -106,7 +104,7 @@ class TestPositionIndexBasicResolution:
         index = build_index([binding])
 
         # Query at line 5 (before binding at line 10)
-        result = index.resolve("sqrt", 5, module_scope)
+        result = resolve_name(index, "sqrt", 5, module_scope)
         assert result is None
 
     def test_resolve_at_exact_binding_line(self) -> None:
@@ -122,7 +120,7 @@ class TestPositionIndexBasicResolution:
 
         # Query at exact line 10 (binding itself)
         # Should return None because we want bindings BEFORE this line
-        result = index.resolve("sqrt", 10, module_scope)
+        result = resolve_name(index, "sqrt", 10, module_scope)
         assert result is None
 
 
@@ -153,11 +151,11 @@ class TestPositionIndexShadowing:
         index = build_index([import_binding, function_binding])
 
         # At line 8, should resolve to import (line 5)
-        result = index.resolve("sqrt", 8, module_scope)
+        result = resolve_name(index, "sqrt", 8, module_scope)
         assert result == import_binding
 
         # At line 15, should resolve to function (line 10)
-        result = index.resolve("sqrt", 15, module_scope)
+        result = resolve_name(index, "sqrt", 15, module_scope)
         assert result == function_binding
 
     def test_shadowing_three_bindings_same_name(self) -> None:
@@ -183,9 +181,9 @@ class TestPositionIndexShadowing:
         index = build_index([binding_5, binding_10, binding_15])
 
         # Test resolution at different points
-        assert index.resolve("x", 7, module_scope) == binding_5
-        assert index.resolve("x", 12, module_scope) == binding_10
-        assert index.resolve("x", 20, module_scope) == binding_15
+        assert resolve_name(index, "x", 7, module_scope) == binding_5
+        assert resolve_name(index, "x", 12, module_scope) == binding_10
+        assert resolve_name(index, "x", 20, module_scope) == binding_15
 
     def test_shadowing_reverse_order_insertion(self) -> None:
         """Binary search works regardless of insertion order."""
@@ -199,9 +197,9 @@ class TestPositionIndexShadowing:
         index = build_index([binding_15, binding_10, binding_5])
 
         # Should still resolve correctly
-        assert index.resolve("x", 7, module_scope) == binding_5
-        assert index.resolve("x", 12, module_scope) == binding_10
-        assert index.resolve("x", 20, module_scope) == binding_15
+        assert resolve_name(index, "x", 7, module_scope) == binding_5
+        assert resolve_name(index, "x", 12, module_scope) == binding_10
+        assert resolve_name(index, "x", 20, module_scope) == binding_15
 
 
 class TestPositionIndexScopeChain:
@@ -235,11 +233,11 @@ class TestPositionIndexScopeChain:
         index = build_index([module_binding, function_binding])
 
         # In module scope at line 20, should resolve to module binding
-        result = index.resolve("x", 20, module_scope)
+        result = resolve_name(index, "x", 20, module_scope)
         assert result == module_binding
 
         # In function scope at line 15, should resolve to function binding
-        result = index.resolve("x", 15, function_scope)
+        result = resolve_name(index, "x", 15, function_scope)
         assert result == function_binding
 
     def test_resolve_falls_back_to_outer_scope(self) -> None:
@@ -261,7 +259,7 @@ class TestPositionIndexScopeChain:
         index = build_index([module_binding])
 
         # In function scope, should fall back to module scope
-        result = index.resolve("sqrt", 15, function_scope)
+        result = resolve_name(index, "sqrt", 15, function_scope)
         assert result == module_binding
 
     def test_inner_scope_shadows_outer_scope(self) -> None:
@@ -292,11 +290,11 @@ class TestPositionIndexScopeChain:
         index = build_index([module_binding, class_binding])
 
         # In class scope at line 15, should resolve to class binding
-        result = index.resolve("sqrt", 15, class_scope)
+        result = resolve_name(index, "sqrt", 15, class_scope)
         assert result == class_binding
 
         # In module scope at line 15, should resolve to module binding
-        result = index.resolve("sqrt", 15, module_scope)
+        result = resolve_name(index, "sqrt", 15, module_scope)
         assert result == module_binding
 
 
@@ -308,7 +306,7 @@ class TestPositionIndexEdgeCases:
         index = build_index([])
         module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
 
-        result = index.resolve("sqrt", 10, module_scope)
+        result = resolve_name(index, "sqrt", 10, module_scope)
         assert result is None
 
     def test_empty_scope_stack(self) -> None:
@@ -323,7 +321,7 @@ class TestPositionIndexEdgeCases:
         index = build_index([binding])
 
         # Empty scope should be treated as module scope
-        result = index.resolve("x", 10, empty_scope)
+        result = resolve_name(index, "x", 10, empty_scope)
         assert result == binding
 
     def test_single_scope_in_stack(self) -> None:
@@ -337,7 +335,7 @@ class TestPositionIndexEdgeCases:
         )
         index = build_index([binding])
 
-        result = index.resolve("x", 10, module_scope)
+        result = resolve_name(index, "x", 10, module_scope)
         assert result == binding
 
     def test_deeply_nested_scope(self) -> None:
@@ -360,7 +358,7 @@ class TestPositionIndexEdgeCases:
         index = build_index([module_binding])
 
         # Should find binding from module scope even in deeply nested scope
-        result = index.resolve("x", 50, deeply_nested_scope)
+        result = resolve_name(index, "x", 50, deeply_nested_scope)
         assert result == module_binding
 
     def test_multiple_names_same_scope(self) -> None:
@@ -374,9 +372,9 @@ class TestPositionIndexEdgeCases:
         index = build_index([sqrt_binding, cos_binding, sin_binding])
 
         # Each name should resolve independently
-        assert index.resolve("sqrt", 10, module_scope) == sqrt_binding
-        assert index.resolve("cos", 10, module_scope) == cos_binding
-        assert index.resolve("sin", 10, module_scope) == sin_binding
+        assert resolve_name(index, "sqrt", 10, module_scope) == sqrt_binding
+        assert resolve_name(index, "cos", 10, module_scope) == cos_binding
+        assert resolve_name(index, "sin", 10, module_scope) == sin_binding
 
 
 class TestPositionIndexBinarySearchEfficiency:
@@ -395,11 +393,11 @@ class TestPositionIndexBinarySearchEfficiency:
         index = build_index(bindings)
 
         # Test resolution at various points
-        assert index.resolve("x", 15, module_scope) == bindings[0]  # Line 10
-        assert index.resolve("x", 35, module_scope) == bindings[2]  # Line 30
-        assert index.resolve("x", 55, module_scope) == bindings[4]  # Line 50
-        assert index.resolve("x", 95, module_scope) == bindings[8]  # Line 90
-        assert index.resolve("x", 105, module_scope) == bindings[9]  # Line 100
+        assert resolve_name(index, "x", 15, module_scope) == bindings[0]  # Line 10
+        assert resolve_name(index, "x", 35, module_scope) == bindings[2]  # Line 30
+        assert resolve_name(index, "x", 55, module_scope) == bindings[4]  # Line 50
+        assert resolve_name(index, "x", 95, module_scope) == bindings[8]  # Line 90
+        assert resolve_name(index, "x", 105, module_scope) == bindings[9]  # Line 100
 
     def test_binary_search_boundary_conditions(self) -> None:
         """Binary search handles boundary conditions correctly."""
@@ -411,16 +409,16 @@ class TestPositionIndexBinarySearchEfficiency:
         index = build_index([binding_10, binding_20])
 
         # Just before first binding
-        assert index.resolve("x", 9, module_scope) is None
+        assert resolve_name(index, "x", 9, module_scope) is None
 
         # Just after first binding
-        assert index.resolve("x", 11, module_scope) == binding_10
+        assert resolve_name(index, "x", 11, module_scope) == binding_10
 
         # Just before second binding
-        assert index.resolve("x", 19, module_scope) == binding_10
+        assert resolve_name(index, "x", 19, module_scope) == binding_10
 
         # Just after second binding
-        assert index.resolve("x", 21, module_scope) == binding_20
+        assert resolve_name(index, "x", 21, module_scope) == binding_20
 
 
 class TestPositionIndexIssueShadowingScenarios:
@@ -445,13 +443,13 @@ class TestPositionIndexIssueShadowingScenarios:
         index = build_index([import_sqrt, function_sqrt])
 
         # Before shadowing: sqrt() at line 5 should resolve to import
-        result = index.resolve("sqrt", 5, module_scope)
+        result = resolve_name(index, "sqrt", 5, module_scope)
         assert result == import_sqrt
         assert result is not None
         assert result.kind == NameBindingKind.IMPORT
 
         # After shadowing: sqrt() at line 15 should resolve to local function
-        result = index.resolve("sqrt", 15, module_scope)
+        result = resolve_name(index, "sqrt", 15, module_scope)
         assert result == function_sqrt
         assert result is not None
         assert result.kind == NameBindingKind.FUNCTION
@@ -475,13 +473,13 @@ class TestPositionIndexIssueShadowingScenarios:
         index = build_index([function_sqrt, import_sqrt])
 
         # Before import: sqrt() at line 10 resolves to local function
-        result = index.resolve("sqrt", 10, module_scope)
+        result = resolve_name(index, "sqrt", 10, module_scope)
         assert result == function_sqrt
         assert result is not None
         assert result.kind == NameBindingKind.FUNCTION
 
         # After import: sqrt() at line 20 resolves to import
-        result = index.resolve("sqrt", 20, module_scope)
+        result = resolve_name(index, "sqrt", 20, module_scope)
         assert result == import_sqrt
         assert result is not None
         assert result.kind == NameBindingKind.IMPORT
@@ -505,9 +503,9 @@ class TestPositionIndexIssueShadowingScenarios:
         index = build_index([import_list, class_list])
 
         # Before class: List at line 5 resolves to import
-        result = index.resolve("List", 5, module_scope)
+        result = resolve_name(index, "List", 5, module_scope)
         assert result == import_list
 
         # After class: List at line 15 resolves to class
-        result = index.resolve("List", 15, module_scope)
+        result = resolve_name(index, "List", 15, module_scope)
         assert result == class_list

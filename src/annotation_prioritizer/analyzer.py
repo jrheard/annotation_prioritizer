@@ -13,8 +13,8 @@ from annotation_prioritizer.models import (
     FunctionPriority,
     NameBindingKind,
     QualifiedName,
-    build_position_index,
 )
+from annotation_prioritizer.position_index import build_position_index
 from annotation_prioritizer.scoring import calculate_annotation_score
 
 

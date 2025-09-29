@@ -258,9 +258,7 @@ def generate_synthetic_init_methods(
 
     # Extract known classes from the position index
     known_classes: set[str] = set()
-    # Access the internal index structure - this is legitimate for extracting all class bindings
-    # TODO: should `PositionIndex` just be a type alias with a helper function?
-    for scope_dict in position_index._index.values():  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+    for scope_dict in position_index.values():
         for bindings in scope_dict.values():
             for _, binding in bindings:
                 if binding.kind == NameBindingKind.CLASS and binding.qualified_name:
