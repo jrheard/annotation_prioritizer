@@ -189,7 +189,7 @@ Tests will verify:
 
 **Status**: ✅ Completed - PositionIndex class added to models.py:98-167 with resolve() method using binary search. Comprehensive test file created at tests/unit/test_position_index.py with 20 tests covering all scenarios including shadowing, scope chain resolution, and edge cases. All 280 tests pass with 100% coverage, pyright shows no errors.
 
-### Step 3: Create NameBindingCollector base structure with scope tracking and tests
+### Step 3: Create NameBindingCollector base structure with scope tracking and tests ✅
 
 Implement the core visitor that will collect all name bindings:
 
@@ -200,7 +200,7 @@ class NameBindingCollector(ast.NodeVisitor):
     def __init__(self):
         self.bindings: list[NameBinding] = []
         self.unresolved_variables: list[tuple[NameBinding, str]] = []  # Track variables needing resolution
-        self._scope_stack: ScopeStack = create_initial_stack()
+        self.scope_stack: ScopeStack = create_initial_stack()
 
     # Scope management using existing utilities from scope_tracker.py
     def visit_FunctionDef(self, node): ...
@@ -211,6 +211,8 @@ Tests will verify:
 - Proper scope tracking through nested structures
 - Scope stack maintained correctly
 - Base visitor functionality works
+
+**Status**: ✅ Completed - NameBindingCollector created with scope tracking for functions, async functions, and classes. Minimal tests added that verify initialization and scope restoration. All 282 tests pass with 100% coverage, pyright shows no errors.
 
 ### Step 4: Add import binding collection (Import, ImportFrom) with tests for all patterns
 
@@ -225,7 +227,7 @@ def visit_Import(self, node: ast.Import) -> None:
             line_number=node.lineno,
             kind=NameBindingKind.IMPORT,
             qualified_name=None,  # Unresolvable in Phase 1
-            scope_stack=self._scope_stack,
+            scope_stack=self.scope_stack,
             source_module=alias.name,  # Track for Phase 2
             target_class=None
         )
@@ -233,7 +235,17 @@ def visit_Import(self, node: ast.Import) -> None:
 
 def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
     """Track from imports like 'from math import sqrt'."""
-    # Similar implementation with source_module tracking
+    for alias in node.names:
+        binding = NameBinding(
+            name=alias.asname or alias.name,
+            line_number=node.lineno,
+            kind=NameBindingKind.IMPORT,
+            qualified_name=None,
+            scope_stack=self.scope_stack,
+            source_module=node.module,
+            target_class=None
+        )
+        self.bindings.append(binding)
 ```
 
 Tests will cover:
@@ -251,22 +263,22 @@ Track function definitions at all scope levels:
 ```python
 def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
     """Track function definitions."""
-    qualified = build_qualified_name(self._scope_stack, node.name)
+    qualified = build_qualified_name(self.scope_stack, node.name)
     binding = NameBinding(
         name=node.name,
         line_number=node.lineno,
         kind=NameBindingKind.FUNCTION,
         qualified_name=qualified,
-        scope_stack=self._scope_stack,
+        scope_stack=self.scope_stack,
         source_module=None,
         target_class=None
     )
     self.bindings.append(binding)
 
     # Continue traversal with updated scope
-    self._scope_stack = add_scope(self._scope_stack, Scope(ScopeKind.FUNCTION, node.name))
+    self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.FUNCTION, node.name))
     self.generic_visit(node)
-    self._scope_stack = drop_last_scope(self._scope_stack)
+    self.scope_stack = drop_last_scope(self.scope_stack)
 ```
 
 Tests will verify:
@@ -283,22 +295,22 @@ Track class definitions including nested classes:
 ```python
 def visit_ClassDef(self, node: ast.ClassDef) -> None:
     """Track class definitions."""
-    qualified = build_qualified_name(self._scope_stack, node.name)
+    qualified = build_qualified_name(self.scope_stack, node.name)
     binding = NameBinding(
         name=node.name,
         line_number=node.lineno,
         kind=NameBindingKind.CLASS,
         qualified_name=qualified,
-        scope_stack=self._scope_stack,
+        scope_stack=self.scope_stack,
         source_module=None,
         target_class=None
     )
     self.bindings.append(binding)
 
     # Continue traversal with class scope
-    self._scope_stack = add_scope(self._scope_stack, Scope(ScopeKind.CLASS, node.name))
+    self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.CLASS, node.name))
     self.generic_visit(node)
-    self._scope_stack = drop_last_scope(self._scope_stack)
+    self.scope_stack = drop_last_scope(self.scope_stack)
 ```
 
 Tests will cover:
@@ -325,8 +337,8 @@ def visit_Assign(self, node: ast.Assign) -> None:
                 name=variable_name,
                 line_number=node.lineno,
                 kind=NameBindingKind.VARIABLE,
-                qualified_name=build_qualified_name(self._scope_stack, variable_name),
-                scope_stack=self._scope_stack,
+                qualified_name=build_qualified_name(self.scope_stack, variable_name),
+                scope_stack=self.scope_stack,
                 source_module=None,
                 target_class=None  # Will be resolved in build_position_index
             )
@@ -342,8 +354,8 @@ def visit_Assign(self, node: ast.Assign) -> None:
                 name=variable_name,
                 line_number=node.lineno,
                 kind=NameBindingKind.VARIABLE,
-                qualified_name=build_qualified_name(self._scope_stack, variable_name),
-                scope_stack=self._scope_stack,
+                qualified_name=build_qualified_name(self.scope_stack, variable_name),
+                scope_stack=self.scope_stack,
                 source_module=None,
                 target_class=None  # Will be resolved in build_position_index
             )
@@ -505,7 +517,7 @@ class CallCountVisitor(ast.NodeVisitor):
         binding = self._position_index.resolve(
             func.id,
             func.lineno,
-            self._scope_stack
+            self.scope_stack
         )
 
         if binding is None or binding.kind == NameBindingKind.IMPORT:
@@ -533,7 +545,7 @@ class CallCountVisitor(ast.NodeVisitor):
             binding = self._position_index.resolve(
                 func.value.id,
                 func.lineno,
-                self._scope_stack
+                self.scope_stack
             )
 
             if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
