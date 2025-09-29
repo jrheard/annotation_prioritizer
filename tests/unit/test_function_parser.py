@@ -206,3 +206,21 @@ def some_function():
     # Should only have some_function, no __init__
     assert len(functions) == 1
     assert functions[0].name == "some_function"
+
+
+def test_positional_only_parameters() -> None:
+    """Functions with positional-only parameters (/) are handled correctly."""
+    source = """
+def func_with_posonly(x, y, /, z):
+    pass
+"""
+    functions = parse_functions_from_source(source)
+
+    assert len(functions) == 1
+    func = functions[0]
+    assert func.name == "func_with_posonly"
+
+    # Should have 3 parameters: x, y (positional-only), z (regular)
+    assert len(func.parameters) == 3
+    param_names = [p.name for p in func.parameters]
+    assert param_names == ["x", "y", "z"]
