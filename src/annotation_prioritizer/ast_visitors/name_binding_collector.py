@@ -81,7 +81,21 @@ class NameBindingCollector(ast.NodeVisitor):
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        """Visit a class definition and track the scope."""
+        """Track class definitions and their scope."""
+        # Create binding for the class name in the current scope
+        qualified = build_qualified_name(self.scope_stack, node.name)
+        binding = NameBinding(
+            name=node.name,
+            line_number=node.lineno,
+            kind=NameBindingKind.CLASS,
+            qualified_name=qualified,
+            scope_stack=self.scope_stack,
+            source_module=None,
+            target_class=None,
+        )
+        self.bindings.append(binding)
+
+        # Continue traversal with class scope
         self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.CLASS, node.name))
         self.generic_visit(node)
         self.scope_stack = drop_last_scope(self.scope_stack)

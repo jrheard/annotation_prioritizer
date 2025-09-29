@@ -292,7 +292,7 @@ Tests will verify:
 
 **Status**: ✅ Completed - Function binding collection implemented for both visit_FunctionDef() and visit_AsyncFunctionDef() methods. Comprehensive tests added covering module-level functions, nested functions, class methods, async functions, function shadowing, multiple functions in same scope, deeply nested functions, and functions in nested classes. All 308 tests pass with 100% coverage, pyright shows no errors.
 
-### Step 6: Add class binding collection (ClassDef) with tests for nested classes
+### Step 6: Add class binding collection (ClassDef) with tests for nested classes ✅
 
 Track class definitions including nested classes:
 
@@ -322,6 +322,8 @@ Tests will cover:
 - Nested classes (Inner classes)
 - Classes inside functions
 - Classes that shadow imports
+
+**Status**: ✅ Completed - Class binding collection implemented in visit_ClassDef() method. Comprehensive tests added covering top-level classes, nested classes, classes inside functions, class shadowing, multiple classes in same scope, deeply nested classes, classes with multiple methods, and classes in nested functions. Updated existing tests that expected class bindings. All 316 tests pass with 100% coverage, pyright shows no errors.
 
 ### Step 7: Add variable binding collection (Assign, AnnAssign) with tests for instance tracking
 
