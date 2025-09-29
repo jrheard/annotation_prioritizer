@@ -38,10 +38,11 @@ from pathlib import Path
 from typing import override
 
 from annotation_prioritizer.ast_arguments import ArgumentKind, iter_all_arguments
-from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
 from annotation_prioritizer.models import (
     FunctionInfo,
+    NameBindingKind,
     ParameterInfo,
+    PositionIndex,
     Scope,
     ScopeKind,
     make_qualified_name,
@@ -233,7 +234,7 @@ class FunctionDefinitionVisitor(ast.NodeVisitor):
 
 def generate_synthetic_init_methods(
     known_functions: tuple[FunctionInfo, ...],
-    class_registry: ClassRegistry,
+    position_index: PositionIndex,
     file_path: Path,
 ) -> tuple[FunctionInfo, ...]:
     """Generate synthetic __init__ methods for classes without explicit ones.
@@ -246,7 +247,7 @@ def generate_synthetic_init_methods(
 
     Args:
         known_functions: Already discovered functions to check for existing __init__
-        class_registry: Registry of all classes found in the AST
+        position_index: Position-aware index containing all name bindings
         file_path: Path to the source file for the FunctionInfo objects
 
     Returns:
@@ -255,10 +256,20 @@ def generate_synthetic_init_methods(
     # Build a set of existing __init__ qualified names for faster lookup
     existing_init_names = {func.qualified_name for func in known_functions if func.name == "__init__"}
 
+    # Extract known classes from the position index
+    known_classes: set[str] = set()
+    # Access the internal index structure - this is legitimate for extracting all class bindings
+    # TODO: should `PositionIndex` just be a type alias with a helper function?
+    for scope_dict in position_index._index.values():  # noqa: SLF001  # pyright: ignore[reportPrivateUsage]
+        for bindings in scope_dict.values():
+            for _, binding in bindings:
+                if binding.kind == NameBindingKind.CLASS and binding.qualified_name:
+                    known_classes.add(str(binding.qualified_name))
+
     # Find classes that need synthetic __init__ methods
     classes_needing_init = [
         class_name
-        for class_name in class_registry.classes
+        for class_name in known_classes
         if make_qualified_name(f"{class_name}.__init__") not in existing_init_names
     ]
 
@@ -288,7 +299,7 @@ def generate_synthetic_init_methods(
 def parse_function_definitions(
     tree: ast.Module,
     file_path: Path,
-    class_registry: ClassRegistry,
+    position_index: PositionIndex,
 ) -> tuple[FunctionInfo, ...]:
     """Extract all function definitions from a parsed AST.
 
@@ -298,7 +309,7 @@ def parse_function_definitions(
     Args:
         tree: Parsed AST module
         file_path: Path to the source file (for FunctionInfo objects)
-        class_registry: Registry of known classes
+        position_index: Position-aware index containing all name bindings
 
     Returns:
         Tuple of FunctionInfo objects containing function metadata including
@@ -308,6 +319,6 @@ def parse_function_definitions(
     visitor.visit(tree)
 
     # Generate synthetic __init__ methods for classes without them
-    synthetic_inits = generate_synthetic_init_methods(tuple(visitor.functions), class_registry, file_path)
+    synthetic_inits = generate_synthetic_init_methods(tuple(visitor.functions), position_index, file_path)
 
     return tuple(visitor.functions) + synthetic_inits

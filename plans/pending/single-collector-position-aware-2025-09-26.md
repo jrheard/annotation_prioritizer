@@ -582,7 +582,7 @@ Tests will verify all shadowing scenarios work correctly:
 
 **Status**: ✅ Completed - Updated CallCountVisitor to use PositionIndex and known_classes instead of registries. Implemented position-aware resolution in _resolve_direct_call() and _resolve_method_call(). Added support for variable.method() calls and compound class references (e.g., Outer.Inner.method()). Updated count_function_calls() factory signature. Updated analyzer.py to use NameBindingCollector and build_position_index(). Fixed all test instantiations (38+ tests across multiple files). Added new test file tests/integration/test_shadowing_resolution.py with 8 tests covering import shadowing, class shadowing, multiple redefinitions, nested scope shadowing, variable reassignment, and edge cases. All 361 tests pass with 100% coverage, pyright shows no errors.
 
-### Step 10: Update FunctionDefinitionVisitor to work with PositionIndex and add tests
+### Step 10: Update FunctionDefinitionVisitor to work with PositionIndex and add tests ✅
 
 Since FunctionDefinitionVisitor remains separate but previously depended on ClassRegistry, update it to work with PositionIndex:
 
@@ -599,6 +599,8 @@ Tests will verify:
 - All parameter extraction functionality preserved
 
 **Note**: This must be done BEFORE Step 11 (integration) because analyzer.py depends on FunctionDefinitionVisitor.
+
+**Status**: ✅ Completed - Updated FunctionDefinitionVisitor and related functions to use PositionIndex instead of ClassRegistry. Updated `parse_function_definitions()` and `generate_synthetic_init_methods()` signatures to accept PositionIndex. Updated analyzer.py to pass position_index instead of class_registry. Updated test helpers (`parse_functions_from_source()`, `parse_functions_from_file()`) to use PositionIndex. Updated `test_generate_synthetic_init_methods_directly()` test. All 366 tests pass with 100% coverage, pyright shows no errors, all linting checks pass.
 
 ### Step 11: Integrate NameBindingCollector in analyzer.py with integration tests
 
