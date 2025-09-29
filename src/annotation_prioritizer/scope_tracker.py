@@ -65,6 +65,23 @@ def drop_last_scope(stack: ScopeStack) -> ScopeStack:
     return stack[:-1]
 
 
+def scope_stack_to_qualified_name(scope_stack: ScopeStack) -> QualifiedName:
+    """Convert a scope stack to its qualified name for indexing.
+
+    Module scope is represented as "__module__", and nested scopes are joined with dots.
+    This is used for position-aware name resolution indexing.
+
+    Args:
+        scope_stack: The scope stack to convert
+
+    Returns:
+        A QualifiedName suitable for use as an index key
+    """
+    if not scope_stack or len(scope_stack) == 1:
+        return make_qualified_name("__module__")
+    return make_qualified_name(".".join(s.name for s in scope_stack))
+
+
 def _generate_name_candidates(scope_stack: ScopeStack, name: str) -> tuple[QualifiedName, ...]:
     """Generate all possible qualified names from innermost to outermost scope.
 

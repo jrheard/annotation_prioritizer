@@ -41,6 +41,7 @@ from annotation_prioritizer.models import (
     UnresolvableCall,
     make_qualified_name,
 )
+from annotation_prioritizer.position_index import resolve_name
 from annotation_prioritizer.scope_tracker import (
     add_scope,
     create_initial_stack,
@@ -258,7 +259,7 @@ class CallCountVisitor(ast.NodeVisitor):
             Qualified name if resolvable, None otherwise
         """
         # Use position-aware resolution to handle shadowing correctly
-        binding = self._position_index.resolve(func.id, func.lineno, self._scope_stack)
+        binding = resolve_name(self._position_index, func.id, func.lineno, self._scope_stack)
 
         if binding is None or binding.kind == NameBindingKind.IMPORT:
             # Unresolvable or imported (Phase 1 limitation)
@@ -305,7 +306,7 @@ class CallCountVisitor(ast.NodeVisitor):
             return None
 
         # Look up the name using position-aware resolution
-        binding = self._position_index.resolve(func.value.id, func.lineno, self._scope_stack)
+        binding = resolve_name(self._position_index, func.value.id, func.lineno, self._scope_stack)
 
         if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
             # We know what class the variable refers to
@@ -380,7 +381,7 @@ class CallCountVisitor(ast.NodeVisitor):
         parts.insert(0, current.id)
 
         # Try to resolve the leftmost name
-        binding = self._position_index.resolve(parts[0], lineno, self._scope_stack)
+        binding = resolve_name(self._position_index, parts[0], lineno, self._scope_stack)
 
         if not binding or binding.kind != NameBindingKind.CLASS:
             return None

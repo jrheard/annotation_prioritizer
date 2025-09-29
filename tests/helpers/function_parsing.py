@@ -16,8 +16,8 @@ from annotation_prioritizer.models import (
     PositionIndex,
     QualifiedName,
     UnresolvableCall,
-    build_position_index,
 )
+from annotation_prioritizer.position_index import build_position_index
 
 
 def parse_functions_from_file(file_path: Path) -> tuple[FunctionInfo, ...]:
