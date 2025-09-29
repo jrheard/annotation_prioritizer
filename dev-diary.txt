@@ -1261,3 +1261,14 @@ DONE update plan doc from prototype_findings.md
 TODO remove opus-agent and guidance in CLAUDE.md
 
 TODO simplify simplify simplify
+
+TODO step 9 commit involved a ton of duplication in test code
+
+TODO someday make an issue for this
+
+  def foo():
+    x = Calculator()
+
+  class Calculator: pass
+
+  forward references like that should be OK!!

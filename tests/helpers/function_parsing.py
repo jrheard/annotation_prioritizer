@@ -8,6 +8,7 @@ from annotation_prioritizer.ast_visitors.call_counter import count_function_call
 from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry, build_class_registry
 from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.ast_visitors.import_discovery import build_import_registry
+from annotation_prioritizer.ast_visitors.name_binding_collector import NameBindingCollector
 from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file, parse_ast_from_source
 from annotation_prioritizer.ast_visitors.variable_discovery import VariableRegistry, build_variable_registry
 from annotation_prioritizer.import_registry import ImportRegistry
@@ -15,8 +16,10 @@ from annotation_prioritizer.models import (
     AnalysisResult,
     CallCount,
     FunctionInfo,
+    NameBindingKind,
     QualifiedName,
     UnresolvableCall,
+    build_position_index,
 )
 
 
@@ -34,19 +37,28 @@ def parse_functions_from_file(file_path: Path) -> tuple[FunctionInfo, ...]:
 def count_calls_from_file(
     file_path: Path, known_functions: tuple[FunctionInfo, ...]
 ) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
-    """Count function calls from a file with full AST and registry context."""
+    """Count function calls from a file using position-aware resolution."""
     parse_result = parse_ast_from_file(file_path)
     if not parse_result:
         return ((), ())
 
     tree, source_code = parse_result
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
-    import_registry = build_import_registry(tree)
 
-    return count_function_calls(
-        tree, known_functions, class_registry, variable_registry, import_registry, source_code
-    )
+    # Collect all name bindings in a single pass
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    # Build position-aware index with resolved variable targets
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
+
+    # Extract known classes for __init__ resolution
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
+
+    return count_function_calls(tree, known_functions, position_index, known_classes, source_code)
 
 
 def parse_functions_from_source(source: str) -> tuple[FunctionInfo, ...]:
@@ -105,6 +117,9 @@ def build_registries_from_source(
     source: str,
 ) -> tuple[ast.Module, ClassRegistry, VariableRegistry, ImportRegistry]:
     """Parse source code and build class, variable, and import registries.
+
+    DEPRECATED: This function is kept for backward compatibility with existing tests.
+    New code should use NameBindingCollector and build_position_index instead.
 
     Args:
         source: Python source code as a string

@@ -485,7 +485,7 @@ Tests focusing on shadowing scenarios from issue #31:
 
 **Status**: ✅ Completed - Implemented build_position_index() factory function in models.py with helper functions _build_index_structure(), _resolve_variable_target(), and _resolve_all_variables(). Added scope_stack_to_qualified_name() helper to reduce code duplication. Created comprehensive test file tests/unit/test_build_position_index.py with 16 tests covering all shadowing scenarios, variable resolution, edge cases, and the two-phase resolution process. Refactored to extract helper functions to reduce complexity. Added TODO comment about moving factory logic to a separate file in the future. All 352 tests pass with 100% coverage, pyright shows no errors, all linting checks pass.
 
-### Step 9: Update CallCountVisitor to use PositionIndex with shadowing scenario tests
+### Step 9: Update CallCountVisitor to use PositionIndex with shadowing scenario tests ✅
 
 Modify CallCountVisitor to use the new position-aware resolution, including support for method calls through variables.
 
@@ -579,6 +579,8 @@ Tests will verify all shadowing scenarios work correctly:
 - Test cases directly from issue #31
 - Complex shadowing with multiple redefinitions
 - Shadowing in nested scopes
+
+**Status**: ✅ Completed - Updated CallCountVisitor to use PositionIndex and known_classes instead of registries. Implemented position-aware resolution in _resolve_direct_call() and _resolve_method_call(). Added support for variable.method() calls and compound class references (e.g., Outer.Inner.method()). Updated count_function_calls() factory signature. Updated analyzer.py to use NameBindingCollector and build_position_index(). Fixed all test instantiations (38+ tests across multiple files). Added new test file tests/integration/test_shadowing_resolution.py with 8 tests covering import shadowing, class shadowing, multiple redefinitions, nested scope shadowing, variable reassignment, and edge cases. All 361 tests pass with 100% coverage, pyright shows no errors.
 
 ### Step 10: Update FunctionDefinitionVisitor to work with PositionIndex and add tests
 

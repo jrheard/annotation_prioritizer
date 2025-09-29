@@ -6,10 +6,16 @@ from pathlib import Path
 from annotation_prioritizer.ast_visitors.call_counter import count_function_calls
 from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
 from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
-from annotation_prioritizer.ast_visitors.import_discovery import build_import_registry
+from annotation_prioritizer.ast_visitors.name_binding_collector import NameBindingCollector
 from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file
-from annotation_prioritizer.ast_visitors.variable_discovery import build_variable_registry
-from annotation_prioritizer.models import AnalysisResult, AnnotationScore, FunctionPriority, QualifiedName
+from annotation_prioritizer.models import (
+    AnalysisResult,
+    AnnotationScore,
+    FunctionPriority,
+    NameBindingKind,
+    QualifiedName,
+    build_position_index,
+)
 from annotation_prioritizer.scoring import calculate_annotation_score
 
 
@@ -36,26 +42,37 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
     """
     file_path_obj = Path(filename)
 
-    # Build all registries upfront
-    class_registry = build_class_registry(tree)
-    variable_registry = build_variable_registry(tree, class_registry)
-    import_registry = build_import_registry(tree)
+    # 1. Collect all name bindings in a single pass
+    collector = NameBindingCollector()
+    collector.visit(tree)
 
-    # 1. Parse function definitions with class registry
+    # 2. Build position-aware index with resolved variable targets
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
+
+    # 3. Extract known classes for __init__ resolution
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
+
+    # 4. Parse function definitions (kept separate for detailed parameter info)
+    # Still uses ClassRegistry for now - will be updated in Step 10
+    class_registry = build_class_registry(tree)
     function_infos = parse_function_definitions(tree, file_path_obj, class_registry)
 
     if not function_infos:
         return AnalysisResult(priorities=(), unresolvable_calls=())
 
-    # 2. Count function calls with all dependencies
+    # 5. Count function calls with position-aware resolution
     resolved_counts, unresolvable_calls = count_function_calls(
-        tree, function_infos, class_registry, variable_registry, import_registry, source_code
+        tree, function_infos, position_index, known_classes, source_code
     )
     call_count_map: dict[QualifiedName, int] = {
         cc.function_qualified_name: cc.call_count for cc in resolved_counts
     }
 
-    # 3. Calculate annotation scores and combine into priority rankings
+    # 6. Calculate annotation scores and combine into priority rankings
     priorities: list[FunctionPriority] = []
     for func_info in function_infos:
         annotation_score = calculate_annotation_score(func_info)
@@ -70,7 +87,7 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
         )
         priorities.append(priority)
 
-    # 4. Sort by priority score (highest first) and return complete result
+    # 7. Sort by priority score (highest first) and return complete result
     sorted_priorities = tuple(sorted(priorities, key=lambda p: p.priority_score, reverse=True))
     return AnalysisResult(priorities=sorted_priorities, unresolvable_calls=unresolvable_calls)
 

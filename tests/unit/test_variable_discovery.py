@@ -514,3 +514,19 @@ def process_all_types(
     assert registry.variables[make_qualified_name(f"{prefix}kwargs")].class_name == make_qualified_name(
         "__module__.B"
     )
+
+
+def test_self_parameter_outside_class() -> None:
+    """Test that functions with self parameter outside a class are handled."""
+    code = """
+def free_function(self):
+    '''A function with self parameter but not in a class.'''
+    pass
+"""
+    tree, class_registry, _, _ = build_registries_from_source(code)
+    visitor = VariableDiscoveryVisitor(class_registry)
+    visitor.visit(tree)
+    registry = visitor.get_registry()
+
+    # self shouldn't be registered as a variable (no enclosing class)
+    assert make_qualified_name("__module__.free_function.self") not in registry.variables
