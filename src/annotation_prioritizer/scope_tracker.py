@@ -16,9 +16,7 @@ import ast
 from collections.abc import Iterable
 
 from annotation_prioritizer.iteration import first
-from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, make_qualified_name
-
-type ScopeStack = tuple[Scope, ...]
+from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, ScopeStack, make_qualified_name
 
 
 def create_initial_stack() -> ScopeStack:

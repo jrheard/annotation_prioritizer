@@ -53,6 +53,9 @@ class Scope:
     name: str  # Name of the scope (class name or function name)
 
 
+type ScopeStack = tuple[Scope, ...]
+
+
 @dataclass(frozen=True)
 class ParameterInfo:
     """Information about a function parameter.
