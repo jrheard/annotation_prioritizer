@@ -12,6 +12,7 @@ import dataclasses
 from collections import defaultdict
 
 from annotation_prioritizer.models import (
+    LineBinding,
     NameBinding,
     NameBindingKind,
     PositionIndex,
@@ -80,11 +81,9 @@ def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeS
 
 def _build_index_structure(
     bindings: list[NameBinding],
-) -> dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]]:
+) -> dict[QualifiedName, dict[str, list[LineBinding]]]:
     """Build the internal index structure from bindings."""
-    index: dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]] = defaultdict(
-        lambda: defaultdict(list)
-    )
+    index: dict[QualifiedName, dict[str, list[LineBinding]]] = defaultdict(lambda: defaultdict(list))
 
     for binding in bindings:
         scope_name = scope_stack_to_qualified_name(binding.scope_stack)
