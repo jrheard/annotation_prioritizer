@@ -129,3 +129,91 @@ class NameBindingCollector(ast.NodeVisitor):
                 target_class=None,
             )
             self.bindings.append(binding)
+
+    @override
+    def visit_Assign(self, node: ast.Assign) -> None:
+        """Track assignments like calc = Calculator() or process = sqrt.
+
+        Only tracks assignments that are relevant for method resolution:
+        - Class instantiation: calc = Calculator()
+        - Class/function references: calc = Calculator or process = sqrt
+
+        Simple assignments to literals (x = 5, y = "string") are ignored.
+        The target class/function is resolved later in build_position_index.
+        """
+        # Only handle simple single-target assignments
+        if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+            variable_name = node.targets[0].id
+
+            # Check if it's a class instantiation or reference
+            if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name):
+                # calc = Calculator() - track for later resolution
+                class_name = node.value.func.id
+                binding = NameBinding(
+                    name=variable_name,
+                    line_number=node.lineno,
+                    kind=NameBindingKind.VARIABLE,
+                    qualified_name=build_qualified_name(self.scope_stack, variable_name),
+                    scope_stack=self.scope_stack,
+                    source_module=None,
+                    target_class=None,  # Will be resolved in build_position_index
+                )
+                self.bindings.append(binding)
+                self.unresolved_variables.append((binding, class_name))
+
+            elif isinstance(node.value, ast.Name):
+                # calc = Calculator (class reference) or process = sqrt (function reference)
+                ref_name = node.value.id
+                binding = NameBinding(
+                    name=variable_name,
+                    line_number=node.lineno,
+                    kind=NameBindingKind.VARIABLE,
+                    qualified_name=build_qualified_name(self.scope_stack, variable_name),
+                    scope_stack=self.scope_stack,
+                    source_module=None,
+                    target_class=None,  # Will be resolved in build_position_index
+                )
+                self.bindings.append(binding)
+                self.unresolved_variables.append((binding, ref_name))
+
+    @override
+    def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        """Track annotated assignments like calc: Calculator = Calculator().
+
+        Similar to visit_Assign, only tracks assignments relevant for method resolution.
+        The annotation is ignored since we resolve the actual value.
+        """
+        # Only handle simple single-target assignments with a value
+        if isinstance(node.target, ast.Name) and node.value is not None:
+            variable_name = node.target.id
+
+            # Check if it's a class instantiation or reference
+            if isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name):
+                # calc: Calculator = Calculator() - track for later resolution
+                class_name = node.value.func.id
+                binding = NameBinding(
+                    name=variable_name,
+                    line_number=node.lineno,
+                    kind=NameBindingKind.VARIABLE,
+                    qualified_name=build_qualified_name(self.scope_stack, variable_name),
+                    scope_stack=self.scope_stack,
+                    source_module=None,
+                    target_class=None,  # Will be resolved in build_position_index
+                )
+                self.bindings.append(binding)
+                self.unresolved_variables.append((binding, class_name))
+
+            elif isinstance(node.value, ast.Name):
+                # calc: Calculator = Calculator or process: Callable = sqrt
+                ref_name = node.value.id
+                binding = NameBinding(
+                    name=variable_name,
+                    line_number=node.lineno,
+                    kind=NameBindingKind.VARIABLE,
+                    qualified_name=build_qualified_name(self.scope_stack, variable_name),
+                    scope_stack=self.scope_stack,
+                    source_module=None,
+                    target_class=None,  # Will be resolved in build_position_index
+                )
+                self.bindings.append(binding)
+                self.unresolved_variables.append((binding, ref_name))

@@ -325,7 +325,7 @@ Tests will cover:
 
 **Status**: ✅ Completed - Class binding collection implemented in visit_ClassDef() method. Comprehensive tests added covering top-level classes, nested classes, classes inside functions, class shadowing, multiple classes in same scope, deeply nested classes, classes with multiple methods, and classes in nested functions. Updated existing tests that expected class bindings. All 316 tests pass with 100% coverage, pyright shows no errors.
 
-### Step 7: Add variable binding collection (Assign, AnnAssign) with tests for instance tracking
+### Step 7: Add variable binding collection (Assign, AnnAssign) with tests for instance tracking ✅
 
 Track variable assignments that are relevant for method resolution. Since we can't resolve class names during collection (the index doesn't exist yet), we track unresolved references:
 
@@ -376,6 +376,8 @@ Tests will verify:
 - Variable reassignment (multiple bindings for same name)
 - Annotated assignments: `calc: Calculator = Calculator()`
 - Assignments we ignore: `x = 5`, `y = "string"`
+
+**Status**: ✅ Completed - Variable binding collection implemented with visit_Assign() and visit_AnnAssign() methods. Comprehensive tests added covering class instantiation, class references, function references, variable reassignment, annotated assignments, literal assignments (ignored), complex targets (ignored), variables in different scopes, and various assignment patterns. All 336 tests pass with 100% coverage, pyright shows no errors.
 
 ### Step 8: Implement build_position_index() factory with comprehensive shadowing tests
 
