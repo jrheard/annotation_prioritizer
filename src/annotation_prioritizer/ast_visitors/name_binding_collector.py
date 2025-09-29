@@ -37,15 +37,24 @@ class NameBindingCollector(ast.NodeVisitor):
         self.unresolved_variables: list[tuple[NameBinding, str]] = []
         self.scope_stack: ScopeStack = create_initial_stack()
 
-    @override
-    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        """Track function definitions and their scope."""
-        # Create binding for the function name in the current scope
+    def _track_definition_and_visit_scope(
+        self,
+        node: ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef,
+        kind: NameBindingKind,
+        scope_kind: ScopeKind,
+    ) -> None:
+        """Track a definition (function/class) and visit its scope.
+
+        Args:
+            node: The AST node representing the definition
+            kind: The type of binding (FUNCTION or CLASS)
+            scope_kind: The type of scope to create (FUNCTION or CLASS)
+        """
         qualified = build_qualified_name(self.scope_stack, node.name)
         binding = NameBinding(
             name=node.name,
             line_number=node.lineno,
-            kind=NameBindingKind.FUNCTION,
+            kind=kind,
             qualified_name=qualified,
             scope_stack=self.scope_stack,
             source_module=None,
@@ -54,51 +63,24 @@ class NameBindingCollector(ast.NodeVisitor):
         self.bindings.append(binding)
 
         # Continue traversal with updated scope
-        self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.FUNCTION, node.name))
+        self.scope_stack = add_scope(self.scope_stack, Scope(scope_kind, node.name))
         self.generic_visit(node)
         self.scope_stack = drop_last_scope(self.scope_stack)
+
+    @override
+    def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+        """Track function definitions and their scope."""
+        self._track_definition_and_visit_scope(node, NameBindingKind.FUNCTION, ScopeKind.FUNCTION)
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
         """Track async function definitions and their scope."""
-        # Create binding for the async function name in the current scope
-        qualified = build_qualified_name(self.scope_stack, node.name)
-        binding = NameBinding(
-            name=node.name,
-            line_number=node.lineno,
-            kind=NameBindingKind.FUNCTION,
-            qualified_name=qualified,
-            scope_stack=self.scope_stack,
-            source_module=None,
-            target_class=None,
-        )
-        self.bindings.append(binding)
-
-        # Continue traversal with updated scope
-        self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.FUNCTION, node.name))
-        self.generic_visit(node)
-        self.scope_stack = drop_last_scope(self.scope_stack)
+        self._track_definition_and_visit_scope(node, NameBindingKind.FUNCTION, ScopeKind.FUNCTION)
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         """Track class definitions and their scope."""
-        # Create binding for the class name in the current scope
-        qualified = build_qualified_name(self.scope_stack, node.name)
-        binding = NameBinding(
-            name=node.name,
-            line_number=node.lineno,
-            kind=NameBindingKind.CLASS,
-            qualified_name=qualified,
-            scope_stack=self.scope_stack,
-            source_module=None,
-            target_class=None,
-        )
-        self.bindings.append(binding)
-
-        # Continue traversal with class scope
-        self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.CLASS, node.name))
-        self.generic_visit(node)
-        self.scope_stack = drop_last_scope(self.scope_stack)
+        self._track_definition_and_visit_scope(node, NameBindingKind.CLASS, ScopeKind.CLASS)
 
     @override
     def visit_Import(self, node: ast.Import) -> None:
