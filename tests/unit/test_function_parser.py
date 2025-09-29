@@ -3,13 +3,12 @@
 import ast
 from pathlib import Path
 
-from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
 from annotation_prioritizer.ast_visitors.function_parser import (
     FunctionDefinitionVisitor,
     generate_synthetic_init_methods,
 )
 from annotation_prioritizer.models import make_qualified_name
-from tests.helpers.function_parsing import parse_functions_from_source
+from tests.helpers.function_parsing import build_position_index_from_source, parse_functions_from_source
 
 
 def test_class_with_explicit_init() -> None:
@@ -155,7 +154,7 @@ class B:
         pass
 """
     tree = ast.parse(source)
-    class_registry = build_class_registry(tree)
+    _, position_index, _ = build_position_index_from_source(source)
     file_path = Path("test.py")
 
     # First get the existing functions (just B.__init__)
@@ -164,7 +163,7 @@ class B:
     known_functions = tuple(visitor.functions)
 
     # Generate synthetic __init__ methods
-    synthetic_inits = generate_synthetic_init_methods(known_functions, class_registry, file_path)
+    synthetic_inits = generate_synthetic_init_methods(known_functions, position_index, file_path)
 
     # Should only generate one for A (B already has __init__)
     assert len(synthetic_inits) == 1

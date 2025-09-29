@@ -4,7 +4,6 @@ import ast
 from pathlib import Path
 
 from annotation_prioritizer.ast_visitors.call_counter import count_function_calls
-from annotation_prioritizer.ast_visitors.class_discovery import build_class_registry
 from annotation_prioritizer.ast_visitors.function_parser import parse_function_definitions
 from annotation_prioritizer.ast_visitors.name_binding_collector import NameBindingCollector
 from annotation_prioritizer.ast_visitors.parse_ast import parse_ast_from_file
@@ -57,9 +56,7 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
     }
 
     # 4. Parse function definitions (kept separate for detailed parameter info)
-    # Still uses ClassRegistry for now - will be updated in Step 10
-    class_registry = build_class_registry(tree)
-    function_infos = parse_function_definitions(tree, file_path_obj, class_registry)
+    function_infos = parse_function_definitions(tree, file_path_obj, position_index)
 
     if not function_infos:
         return AnalysisResult(priorities=(), unresolvable_calls=())

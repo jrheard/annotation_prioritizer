@@ -23,16 +23,26 @@ from annotation_prioritizer.models import (
     build_position_index,
 )
 
+# Prevent pyright from complaining about unused imports that are kept for backward compatibility
+_ = (
+    ClassRegistry,
+    VariableRegistry,
+    ImportRegistry,
+    build_class_registry,
+    build_variable_registry,
+    build_import_registry,
+)
+
 
 def parse_functions_from_file(file_path: Path) -> tuple[FunctionInfo, ...]:
-    """Parse functions from a file with full AST and registry context."""
+    """Parse functions from a file with full AST and position index."""
     parse_result = parse_ast_from_file(file_path)
     if not parse_result:
         return ()
 
-    tree, _ = parse_result
-    class_registry = build_class_registry(tree)
-    return parse_function_definitions(tree, file_path, class_registry)
+    tree, source_code = parse_result
+    _, position_index, _ = build_position_index_from_source(source_code)
+    return parse_function_definitions(tree, file_path, position_index)
 
 
 def build_position_index_from_source(
@@ -81,7 +91,7 @@ def count_calls_from_file(
 
 
 def parse_functions_from_source(source: str) -> tuple[FunctionInfo, ...]:
-    """Parse functions from source code string with full AST and registry context.
+    """Parse functions from source code string with full AST and position index.
 
     Useful for tests that need to verify function discovery including synthetic __init__.
 
@@ -93,8 +103,8 @@ def parse_functions_from_source(source: str) -> tuple[FunctionInfo, ...]:
     """
     tree = ast.parse(source)
     file_path = Path("test.py")
-    class_registry = build_class_registry(tree)
-    return parse_function_definitions(tree, file_path, class_registry)
+    _, position_index, _ = build_position_index_from_source(source)
+    return parse_function_definitions(tree, file_path, position_index)
 
 
 def analyze_source(source_code: str) -> AnalysisResult:
