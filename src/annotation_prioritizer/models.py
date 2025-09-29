@@ -56,6 +56,43 @@ class Scope:
 type ScopeStack = tuple[Scope, ...]
 
 
+class NameBindingKind(StrEnum):
+    """Type of name binding in the AST."""
+
+    IMPORT = "import"  # from math import sqrt
+    FUNCTION = "function"  # def foo(): ...
+    CLASS = "class"  # class Calculator: ...
+    VARIABLE = "variable"  # calc = Calculator()
+
+
+@dataclass(frozen=True)
+class NameBinding:
+    """A name binding at a specific position in the code.
+
+    Represents any name that gets bound in Python code, including imports,
+    function definitions, class definitions, and variable assignments.
+    Used to track name bindings with their line numbers for position-aware
+    name resolution.
+
+    Attributes:
+        name: Local name like "sqrt", "Calculator"
+        line_number: Where defined/imported (1-indexed)
+        kind: Type of binding (import, function, class, variable)
+        qualified_name: Full qualified name, None for imports in Phase 1
+        scope_stack: Full scope stack where binding occurs
+        source_module: For imports: "math" from "from math import sqrt"
+        target_class: For variables: class they're instances of
+    """
+
+    name: str  # Local name like "sqrt", "Calculator"
+    line_number: int  # Where defined/imported (1-indexed)
+    kind: NameBindingKind  # Type of binding
+    qualified_name: QualifiedName | None  # None for imports (Phase 1)
+    scope_stack: ScopeStack  # Full scope stack where binding occurs
+    source_module: str | None  # For imports: "math" from "from math import sqrt"
+    target_class: QualifiedName | None  # For variables: class they're instances of
+
+
 @dataclass(frozen=True)
 class ParameterInfo:
     """Information about a function parameter.
