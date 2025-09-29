@@ -9,6 +9,8 @@ Data Flow Through Models:
     6. AnalysisResult: Complete analysis including priorities and unresolvable calls
 """
 
+import bisect
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -91,6 +93,77 @@ class NameBinding:
     scope_stack: ScopeStack  # Full scope stack where binding occurs
     source_module: str | None  # For imports: "math" from "from math import sqrt"
     target_class: QualifiedName | None  # For variables: class they're instances of
+
+
+@dataclass(frozen=True)
+class PositionIndex:
+    """Efficient position-aware name resolution index.
+
+    Provides O(log k) position-aware name resolution using binary search,
+    where k is the number of bindings for a given name in a scope.
+
+    The index structure maps scope qualified names to dictionaries of names,
+    which map to sorted lists of (line_number, binding) tuples. This enables
+    efficient lookup of the most recent binding before a given line number.
+
+    Attributes:
+        _index: Internal mapping from scope -> name -> sorted bindings list
+    """
+
+    _index: Mapping[QualifiedName, dict[str, list[tuple[int, NameBinding]]]]
+
+    # TODO: eventually move this logic out of models.py
+    def resolve(self, name: str, line: int, scope_stack: ScopeStack) -> NameBinding | None:
+        """Resolve a name at a given position using binary search.
+
+        Searches through the scope chain from innermost to outermost scope,
+        finding the most recent binding of the given name that occurs before
+        the specified line number.
+
+        Args:
+            name: The name to resolve (e.g., "sqrt", "Calculator")
+            line: The line number where the name is used (1-indexed)
+            scope_stack: The scope context where the name appears
+
+        Returns:
+            The most recent NameBinding for this name before the given line,
+            or None if no binding is found in any scope.
+        """
+        # Handle empty scope stack as module scope
+        if not scope_stack:
+            scope_stack = (Scope(ScopeKind.MODULE, "__module__"),)
+
+        # Try each scope from innermost to outermost
+        for scope_depth in range(len(scope_stack), 0, -1):
+            # Build scope qualified name for this depth
+            current_scope = scope_stack[:scope_depth]
+
+            if len(current_scope) == 1:
+                scope_name = make_qualified_name("__module__")
+            else:
+                scope_name = make_qualified_name(".".join(s.name for s in current_scope))
+
+            # Look up bindings for this name in this scope
+            if scope_name not in self._index:
+                continue
+
+            scope_dict = self._index[scope_name]
+            if name not in scope_dict:
+                continue
+
+            bindings = scope_dict[name]
+
+            # Use binary search to find the latest binding before this line
+            # We search for bindings with line_number < line (strictly less than)
+            # Extract just the line numbers for comparison
+            line_numbers = [b[0] for b in bindings]
+            idx = bisect.bisect_left(line_numbers, line)
+
+            if idx > 0:
+                _, binding = bindings[idx - 1]
+                return binding
+
+        return None
 
 
 @dataclass(frozen=True)
