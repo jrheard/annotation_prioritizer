@@ -122,7 +122,7 @@ Tests will verify:
 
 **Status**: ✅ Completed - ScopeStack moved to models.py:56, scope_tracker.py updated, all 260 tests pass, pyright shows no errors.
 
-### Step 1: Add NameBindingKind enum and NameBinding dataclass to models.py
+### Step 1: Add NameBindingKind enum and NameBinding dataclass to models.py ✅
 
 Add a new enum to categorize different types of name bindings and the core data structure that represents a name binding at a specific position:
 
@@ -147,6 +147,8 @@ class NameBinding:
 ```
 
 **Note**: `ScopeStack` must be moved to models.py first (Step 0) for this to work.
+
+**Status**: ✅ Completed - NameBindingKind enum and NameBinding dataclass added to models.py:59-93. All 260 tests pass with 100% coverage, pyright shows no errors.
 
 ### Step 2: Implement PositionIndex class with binary search and comprehensive tests
 
