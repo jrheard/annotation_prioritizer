@@ -9,7 +9,12 @@ import ast
 from typing import override
 
 from annotation_prioritizer.models import NameBinding, NameBindingKind, Scope, ScopeKind, ScopeStack
-from annotation_prioritizer.scope_tracker import add_scope, create_initial_stack, drop_last_scope
+from annotation_prioritizer.scope_tracker import (
+    add_scope,
+    build_qualified_name,
+    create_initial_stack,
+    drop_last_scope,
+)
 
 
 class NameBindingCollector(ast.NodeVisitor):
@@ -34,14 +39,42 @@ class NameBindingCollector(ast.NodeVisitor):
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        """Visit a function definition and track the scope."""
+        """Track function definitions and their scope."""
+        # Create binding for the function name in the current scope
+        qualified = build_qualified_name(self.scope_stack, node.name)
+        binding = NameBinding(
+            name=node.name,
+            line_number=node.lineno,
+            kind=NameBindingKind.FUNCTION,
+            qualified_name=qualified,
+            scope_stack=self.scope_stack,
+            source_module=None,
+            target_class=None,
+        )
+        self.bindings.append(binding)
+
+        # Continue traversal with updated scope
         self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.FUNCTION, node.name))
         self.generic_visit(node)
         self.scope_stack = drop_last_scope(self.scope_stack)
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        """Visit an async function definition and track the scope."""
+        """Track async function definitions and their scope."""
+        # Create binding for the async function name in the current scope
+        qualified = build_qualified_name(self.scope_stack, node.name)
+        binding = NameBinding(
+            name=node.name,
+            line_number=node.lineno,
+            kind=NameBindingKind.FUNCTION,
+            qualified_name=qualified,
+            scope_stack=self.scope_stack,
+            source_module=None,
+            target_class=None,
+        )
+        self.bindings.append(binding)
+
+        # Continue traversal with updated scope
         self.scope_stack = add_scope(self.scope_stack, Scope(ScopeKind.FUNCTION, node.name))
         self.generic_visit(node)
         self.scope_stack = drop_last_scope(self.scope_stack)

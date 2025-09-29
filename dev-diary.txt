@@ -1257,3 +1257,5 @@ PROTOTYPE VS ORIGINAL IMPLEMENTATION COMPARISON
 DONE update code review model?
 
 DONE update plan doc from prototype_findings.md
+
+TODO remove opus-agent and guidance in CLAUDE.md
