@@ -35,8 +35,8 @@ async def fetch():
     collector = NameBindingCollector()
     collector.visit(tree)
 
-    # Verify bindings were collected (3 functions)
-    assert len(collector.bindings) == 3
+    # Verify bindings were collected (3 functions + 1 class)
+    assert len(collector.bindings) == 4
     # Verify scope stack is restored to module level
     assert len(collector.scope_stack) == 1
     assert collector.scope_stack[0].kind == ScopeKind.MODULE
@@ -205,13 +205,19 @@ class DataProcessor:
     collector = NameBindingCollector()
     collector.visit(tree)
 
-    # Only the import (class binding comes in Step 6)
-    assert len(collector.bindings) == 1
-    binding = collector.bindings[0]
-    assert binding.name == "ClassVar"
-    assert len(binding.scope_stack) == 2
-    assert binding.scope_stack[1].kind == ScopeKind.CLASS
-    assert binding.scope_stack[1].name == "DataProcessor"
+    assert len(collector.bindings) == 2
+
+    # First binding is the class itself
+    class_binding = collector.bindings[0]
+    assert class_binding.name == "DataProcessor"
+    assert class_binding.kind == NameBindingKind.CLASS
+
+    # Second binding is the import inside the class
+    import_binding = collector.bindings[1]
+    assert import_binding.name == "ClassVar"
+    assert len(import_binding.scope_stack) == 2
+    assert import_binding.scope_stack[1].kind == ScopeKind.CLASS
+    assert import_binding.scope_stack[1].name == "DataProcessor"
 
 
 @pytest.mark.parametrize(
@@ -322,17 +328,25 @@ class Calculator:
     collector = NameBindingCollector()
     collector.visit(tree)
 
-    # Should have 1 binding for the method (class binding comes in Step 6)
-    assert len(collector.bindings) == 1
-    binding = collector.bindings[0]
-    assert binding.name == "add"
-    assert binding.line_number == 3
-    assert binding.kind == NameBindingKind.FUNCTION
-    assert binding.qualified_name == "__module__.Calculator.add"
-    assert len(binding.scope_stack) == 2
-    assert binding.scope_stack[0].kind == ScopeKind.MODULE
-    assert binding.scope_stack[1].kind == ScopeKind.CLASS
-    assert binding.scope_stack[1].name == "Calculator"
+    assert len(collector.bindings) == 2
+
+    # First binding is the class itself
+    class_binding = collector.bindings[0]
+    assert class_binding.name == "Calculator"
+    assert class_binding.line_number == 2
+    assert class_binding.kind == NameBindingKind.CLASS
+    assert class_binding.qualified_name == "__module__.Calculator"
+
+    # Second binding is the method
+    method_binding = collector.bindings[1]
+    assert method_binding.name == "add"
+    assert method_binding.line_number == 3
+    assert method_binding.kind == NameBindingKind.FUNCTION
+    assert method_binding.qualified_name == "__module__.Calculator.add"
+    assert len(method_binding.scope_stack) == 2
+    assert method_binding.scope_stack[0].kind == ScopeKind.MODULE
+    assert method_binding.scope_stack[1].kind == ScopeKind.CLASS
+    assert method_binding.scope_stack[1].name == "Calculator"
 
 
 def test_async_function() -> None:
@@ -364,13 +378,20 @@ class APIClient:
     collector = NameBindingCollector()
     collector.visit(tree)
 
-    assert len(collector.bindings) == 1
-    binding = collector.bindings[0]
-    assert binding.name == "fetch"
-    assert binding.kind == NameBindingKind.FUNCTION
-    assert binding.qualified_name == "__module__.APIClient.fetch"
-    assert len(binding.scope_stack) == 2
-    assert binding.scope_stack[1].kind == ScopeKind.CLASS
+    assert len(collector.bindings) == 2
+
+    # First binding is the class itself
+    class_binding = collector.bindings[0]
+    assert class_binding.name == "APIClient"
+    assert class_binding.kind == NameBindingKind.CLASS
+
+    # Second binding is the async method
+    method_binding = collector.bindings[1]
+    assert method_binding.name == "fetch"
+    assert method_binding.kind == NameBindingKind.FUNCTION
+    assert method_binding.qualified_name == "__module__.APIClient.fetch"
+    assert len(method_binding.scope_stack) == 2
+    assert method_binding.scope_stack[1].kind == ScopeKind.CLASS
 
 
 def test_function_shadows_import() -> None:
@@ -452,11 +473,249 @@ class Outer:
     collector = NameBindingCollector()
     collector.visit(tree)
 
-    # Only the method binding (class bindings come in Step 6)
+    assert len(collector.bindings) == 3
+
+    # First binding is Outer class
+    outer_binding = collector.bindings[0]
+    assert outer_binding.name == "Outer"
+    assert outer_binding.kind == NameBindingKind.CLASS
+
+    # Second binding is Inner class
+    inner_binding = collector.bindings[1]
+    assert inner_binding.name == "Inner"
+    assert inner_binding.kind == NameBindingKind.CLASS
+    assert inner_binding.qualified_name == "__module__.Outer.Inner"
+
+    # Third binding is the method
+    method_binding = collector.bindings[2]
+    assert method_binding.name == "method"
+    assert method_binding.qualified_name == "__module__.Outer.Inner.method"
+    assert len(method_binding.scope_stack) == 3
+    assert method_binding.scope_stack[1].name == "Outer"
+    assert method_binding.scope_stack[2].name == "Inner"
+
+
+# Class binding collection tests
+
+
+def test_top_level_class() -> None:
+    """Top-level classes are tracked with qualified names."""
+    source = """
+class Calculator:
+    pass
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
     assert len(collector.bindings) == 1
     binding = collector.bindings[0]
-    assert binding.name == "method"
-    assert binding.qualified_name == "__module__.Outer.Inner.method"
-    assert len(binding.scope_stack) == 3
-    assert binding.scope_stack[1].name == "Outer"
-    assert binding.scope_stack[2].name == "Inner"
+    assert binding.name == "Calculator"
+    assert binding.line_number == 2
+    assert binding.kind == NameBindingKind.CLASS
+    assert binding.qualified_name == "__module__.Calculator"
+    assert binding.source_module is None
+    assert binding.target_class is None
+    assert len(binding.scope_stack) == 1
+    assert binding.scope_stack[0].kind == ScopeKind.MODULE
+
+
+def test_nested_class() -> None:
+    """Nested classes build correct qualified names."""
+    source = """
+class Outer:
+    class Inner:
+        pass
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 2
+
+    # Outer class
+    outer_binding = collector.bindings[0]
+    assert outer_binding.name == "Outer"
+    assert outer_binding.line_number == 2
+    assert outer_binding.kind == NameBindingKind.CLASS
+    assert outer_binding.qualified_name == "__module__.Outer"
+    assert len(outer_binding.scope_stack) == 1
+
+    # Inner class
+    inner_binding = collector.bindings[1]
+    assert inner_binding.name == "Inner"
+    assert inner_binding.line_number == 3
+    assert inner_binding.kind == NameBindingKind.CLASS
+    assert inner_binding.qualified_name == "__module__.Outer.Inner"
+    assert len(inner_binding.scope_stack) == 2
+    assert inner_binding.scope_stack[0].kind == ScopeKind.MODULE
+    assert inner_binding.scope_stack[1].kind == ScopeKind.CLASS
+    assert inner_binding.scope_stack[1].name == "Outer"
+
+
+def test_class_inside_function() -> None:
+    """Classes defined inside functions track the function scope."""
+    source = """
+def create_class():
+    class LocalClass:
+        pass
+    return LocalClass
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 2
+
+    # Function binding
+    func_binding = collector.bindings[0]
+    assert func_binding.name == "create_class"
+    assert func_binding.kind == NameBindingKind.FUNCTION
+
+    # Class binding inside function
+    class_binding = collector.bindings[1]
+    assert class_binding.name == "LocalClass"
+    assert class_binding.line_number == 3
+    assert class_binding.kind == NameBindingKind.CLASS
+    assert class_binding.qualified_name == "__module__.create_class.LocalClass"
+    assert len(class_binding.scope_stack) == 2
+    assert class_binding.scope_stack[0].kind == ScopeKind.MODULE
+    assert class_binding.scope_stack[1].kind == ScopeKind.FUNCTION
+    assert class_binding.scope_stack[1].name == "create_class"
+
+
+def test_class_shadows_import() -> None:
+    """Classes can shadow imports at the same scope level."""
+    source = """
+from typing import List
+class List:
+    pass
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 2
+
+    # Import comes first
+    import_binding = collector.bindings[0]
+    assert import_binding.name == "List"
+    assert import_binding.line_number == 2
+    assert import_binding.kind == NameBindingKind.IMPORT
+
+    # Class shadows it
+    class_binding = collector.bindings[1]
+    assert class_binding.name == "List"
+    assert class_binding.line_number == 3
+    assert class_binding.kind == NameBindingKind.CLASS
+
+
+def test_multiple_classes_same_scope() -> None:
+    """Multiple classes in the same scope are all tracked."""
+    source = """
+class First:
+    pass
+
+class Second:
+    pass
+
+class Third:
+    pass
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 3
+    names = [b.name for b in collector.bindings]
+    assert names == ["First", "Second", "Third"]
+    line_numbers = [b.line_number for b in collector.bindings]
+    assert line_numbers == [2, 5, 8]
+    assert all(b.kind == NameBindingKind.CLASS for b in collector.bindings)
+
+
+def test_deeply_nested_classes() -> None:
+    """Deeply nested classes build correct qualified names."""
+    source = """
+class Level1:
+    class Level2:
+        class Level3:
+            pass
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 3
+    assert collector.bindings[0].qualified_name == "__module__.Level1"
+    assert collector.bindings[1].qualified_name == "__module__.Level1.Level2"
+    assert collector.bindings[2].qualified_name == "__module__.Level1.Level2.Level3"
+
+
+def test_class_with_multiple_methods() -> None:
+    """Classes with multiple methods track all bindings."""
+    source = """
+class Calculator:
+    def add(self, a, b):
+        return a + b
+
+    def subtract(self, a, b):
+        return a - b
+
+    async def multiply_async(self, a, b):
+        return a * b
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 4
+
+    # Class binding
+    class_binding = collector.bindings[0]
+    assert class_binding.name == "Calculator"
+    assert class_binding.kind == NameBindingKind.CLASS
+
+    # Method bindings
+    method_names = [b.name for b in collector.bindings[1:]]
+    assert method_names == ["add", "subtract", "multiply_async"]
+    assert all(b.kind == NameBindingKind.FUNCTION for b in collector.bindings[1:])
+    assert all(
+        b.qualified_name is not None and b.qualified_name.startswith("__module__.Calculator.")
+        for b in collector.bindings[1:]
+    )
+
+
+def test_class_in_nested_function() -> None:
+    """Classes inside nested functions track the full scope chain."""
+    source = """
+def outer():
+    def inner():
+        class LocalClass:
+            pass
+"""
+    tree = ast.parse(source)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+
+    assert len(collector.bindings) == 3
+
+    # outer function
+    assert collector.bindings[0].name == "outer"
+    assert collector.bindings[0].kind == NameBindingKind.FUNCTION
+
+    # inner function
+    assert collector.bindings[1].name == "inner"
+    assert collector.bindings[1].kind == NameBindingKind.FUNCTION
+
+    # LocalClass
+    class_binding = collector.bindings[2]
+    assert class_binding.name == "LocalClass"
+    assert class_binding.kind == NameBindingKind.CLASS
+    assert class_binding.qualified_name == "__module__.outer.inner.LocalClass"
+    assert len(class_binding.scope_stack) == 3
+    assert class_binding.scope_stack[0].kind == ScopeKind.MODULE
+    assert class_binding.scope_stack[1].kind == ScopeKind.FUNCTION
+    assert class_binding.scope_stack[1].name == "outer"
+    assert class_binding.scope_stack[2].kind == ScopeKind.FUNCTION
+    assert class_binding.scope_stack[2].name == "inner"
