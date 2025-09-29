@@ -1,8 +1,10 @@
 """Integration tests for self/cls resolution in nested class contexts."""
 
+import ast
+
 from annotation_prioritizer.ast_visitors.call_counter import CallCountVisitor
-from annotation_prioritizer.models import make_qualified_name
-from tests.helpers import build_registries_from_source
+from annotation_prioritizer.ast_visitors.name_binding_collector import NameBindingCollector
+from annotation_prioritizer.models import NameBindingKind, build_position_index, make_qualified_name
 from tests.helpers.factories import make_function_info
 
 
@@ -23,8 +25,15 @@ class Outer:
 
         return Inner
 """
-    # Build registries
-    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
+    tree = ast.parse(source_code)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
 
     # Create known functions to track
     known_functions = (
@@ -41,9 +50,7 @@ class Outer:
     )
 
     # Count calls
-    visitor = CallCountVisitor(
-        known_functions, class_registry, source_code, variable_registry, import_registry
-    )
+    visitor = CallCountVisitor(known_functions, position_index, known_classes, source_code)
     visitor.visit(tree)
 
     # Verify that self.foo() in Inner.inner_method resolves to Inner.foo
@@ -75,8 +82,15 @@ class Outer:
 
         return Inner
 """
-    # Build registries
-    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
+    tree = ast.parse(source_code)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
 
     # Create known functions to track
     known_functions = (
@@ -93,9 +107,7 @@ class Outer:
     )
 
     # Count calls
-    visitor = CallCountVisitor(
-        known_functions, class_registry, source_code, variable_registry, import_registry
-    )
+    visitor = CallCountVisitor(known_functions, position_index, known_classes, source_code)
     visitor.visit(tree)
 
     # Verify each self.foo() resolves to its own Inner class
@@ -121,8 +133,15 @@ class A:
 
         return B
 """
-    # Build registries
-    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
+    tree = ast.parse(source_code)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
 
     # Create known functions to track
     known_functions = (
@@ -134,9 +153,7 @@ class A:
     )
 
     # Count calls
-    visitor = CallCountVisitor(
-        known_functions, class_registry, source_code, variable_registry, import_registry
-    )
+    visitor = CallCountVisitor(known_functions, position_index, known_classes, source_code)
     visitor.visit(tree)
 
     # Verify self.foo() in C.call_foo resolves correctly
@@ -163,8 +180,15 @@ class Outer:
 
         return Inner
 """
-    # Build registries
-    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
+    tree = ast.parse(source_code)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
 
     # Create known functions to track
     known_functions = (
@@ -181,9 +205,7 @@ class Outer:
     )
 
     # Count calls
-    visitor = CallCountVisitor(
-        known_functions, class_registry, source_code, variable_registry, import_registry
-    )
+    visitor = CallCountVisitor(known_functions, position_index, known_classes, source_code)
     visitor.visit(tree)
 
     # Verify cls.inner_classmethod() resolves correctly
@@ -206,8 +228,15 @@ class MyClass:
     def method(self):
         self.foo()  # Should resolve to MyClass.foo
 """
-    # Build registries
-    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
+    tree = ast.parse(source_code)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
 
     # Create known functions to track
     known_functions = (
@@ -219,9 +248,7 @@ class MyClass:
     )
 
     # Count calls
-    visitor = CallCountVisitor(
-        known_functions, class_registry, source_code, variable_registry, import_registry
-    )
+    visitor = CallCountVisitor(known_functions, position_index, known_classes, source_code)
     visitor.visit(tree)
 
     # Verify only the self.foo() in MyClass.method resolves
@@ -251,8 +278,15 @@ class MyClass:
     def static_with_self_param(self):  # 'self' is just a regular param here
         self.helper()  # Currently resolves (detecting @staticmethod is a future enhancement)
 """
-    # Build registries
-    tree, class_registry, variable_registry, import_registry = build_registries_from_source(source_code)
+    tree = ast.parse(source_code)
+    collector = NameBindingCollector()
+    collector.visit(tree)
+    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
+    known_classes = {
+        binding.qualified_name
+        for binding in collector.bindings
+        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
+    }
 
     # Create known functions to track
     known_functions = (
@@ -264,9 +298,7 @@ class MyClass:
     )
 
     # Count calls
-    visitor = CallCountVisitor(
-        known_functions, class_registry, source_code, variable_registry, import_registry
-    )
+    visitor = CallCountVisitor(known_functions, position_index, known_classes, source_code)
     visitor.visit(tree)
 
     # Both self.helper() calls resolve (detecting @staticmethod is a future enhancement)

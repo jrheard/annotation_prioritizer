@@ -30,11 +30,11 @@ import ast
 import builtins
 from typing import override
 
-from annotation_prioritizer.ast_visitors.class_discovery import ClassRegistry
-from annotation_prioritizer.import_registry import ImportRegistry
 from annotation_prioritizer.models import (
     CallCount,
     FunctionInfo,
+    NameBindingKind,
+    PositionIndex,
     QualifiedName,
     Scope,
     ScopeKind,
@@ -45,10 +45,7 @@ from annotation_prioritizer.scope_tracker import (
     add_scope,
     create_initial_stack,
     drop_last_scope,
-    extract_attribute_chain,
-    resolve_name_in_scope,
 )
-from annotation_prioritizer.variable_registry import VariableRegistry, lookup_variable
 
 # Maximum length for unresolvable call text before truncation
 MAX_UNRESOLVABLE_CALL_LENGTH = 200
@@ -73,13 +70,11 @@ def _is_builtin_call(node: ast.Call) -> bool:
     return False
 
 
-# TODO: Consider composing the registries into a single (well-named) object
-def count_function_calls(  # noqa: PLR0913
+def count_function_calls(
     tree: ast.Module,
     known_functions: tuple[FunctionInfo, ...],
-    class_registry: ClassRegistry,
-    variable_registry: VariableRegistry,
-    import_registry: ImportRegistry,
+    position_index: PositionIndex,
+    known_classes: set[QualifiedName],
     source_code: str,
 ) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
     """Count calls to known functions in the AST.
@@ -87,17 +82,14 @@ def count_function_calls(  # noqa: PLR0913
     Args:
         tree: Parsed AST module
         known_functions: Functions to count calls for
-        class_registry: Registry of known classes
-        variable_registry: Registry of variable type information
-        import_registry: Registry of imported names
+        position_index: Position-aware index for name resolution
+        known_classes: Set of known class qualified names for __init__ resolution
         source_code: Source code for error context
 
     Returns:
         Tuple of (resolved call counts, unresolvable calls)
     """
-    visitor = CallCountVisitor(
-        known_functions, class_registry, source_code, variable_registry, import_registry
-    )
+    visitor = CallCountVisitor(known_functions, position_index, known_classes, source_code)
     visitor.visit(tree)
 
     resolved = tuple(
@@ -143,28 +135,25 @@ class CallCountVisitor(ast.NodeVisitor):
     def __init__(
         self,
         known_functions: tuple[FunctionInfo, ...],
-        class_registry: ClassRegistry,
+        position_index: PositionIndex,
+        known_classes: set[QualifiedName],
         source_code: str,
-        variable_registry: VariableRegistry,
-        import_registry: ImportRegistry,
     ) -> None:
-        """Initialize visitor with functions to track and registries.
+        """Initialize visitor with functions to track and position index.
 
         Args:
             known_functions: Functions to count calls for
-            class_registry: Registry of known classes for definitive identification
+            position_index: Position-aware index for name resolution
+            known_classes: Set of known class qualified names for __init__ resolution
             source_code: Source code for extracting unresolvable call text
-            variable_registry: Registry of variable types for resolution
-            import_registry: Registry of imported names
         """
         super().__init__()
         # Create internal call count tracking from known functions
         self.call_counts: dict[QualifiedName, int] = {func.qualified_name: 0 for func in known_functions}
-        self._class_registry = class_registry
+        self._position_index = position_index
+        self._known_classes = known_classes
         self._scope_stack = create_initial_stack()
         self._source_code = source_code
-        self._variable_registry = variable_registry
-        self._import_registry = import_registry
         self._unresolvable_calls: list[UnresolvableCall] = []
 
     @override
@@ -246,7 +235,7 @@ class CallCountVisitor(ast.NodeVisitor):
 
         if isinstance(func, ast.Attribute):
             resolved = self._resolve_method_call(func)
-            if resolved and self._class_registry.is_known_class(resolved):
+            if resolved and resolved in self._known_classes:
                 # It's actually a nested class instantiation like Outer.Inner()
                 return make_qualified_name(f"{resolved}.__init__")
             return resolved
@@ -256,7 +245,7 @@ class CallCountVisitor(ast.NodeVisitor):
         return None
 
     def _resolve_direct_call(self, func: ast.Name) -> QualifiedName | None:
-        """Resolve direct function calls and class instantiations.
+        """Resolve direct function calls and class instantiations using position-aware index.
 
         Handles calls like function_name() or ClassName(), where the latter
         is resolved to ClassName.__init__.
@@ -267,77 +256,29 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified name if resolvable, None otherwise
         """
-        # TODO: This "check imports first" approach doesn't match Python's shadowing
-        # semantics. When a local function/class shadows an import, we incorrectly
-        # mark all calls as unresolvable. We need position-aware name resolution.
-        # Example: import sqrt, call sqrt (should be import), define local sqrt,
-        # call sqrt again (should be local function).
-        # See: https://github.com/jrheard/annotation_prioritizer/issues/31
+        # Use position-aware resolution to handle shadowing correctly
+        binding = self._position_index.resolve(func.id, func.lineno, self._scope_stack)
 
-        # First check if it's an imported name
-        import_info = self._import_registry.lookup_import(func.id, self._scope_stack)
-        if import_info:
-            if import_info.is_module_import:
-                # It's a module import like "math" - can't be a direct call
-                # math() would be calling a module, which isn't valid
-                return None
-            # It's an imported function/class like "sqrt" from "from math import sqrt"
-            # For single-file analysis, we can't resolve to the actual function
-            # Mark as unresolvable (will be handled by caller)
+        if binding is None or binding.kind == NameBindingKind.IMPORT:
+            # Unresolvable or imported (Phase 1 limitation)
             return None
 
-        # Try to resolve the name in the current scope
-        resolved = resolve_name_in_scope(
-            self._scope_stack, func.id, self._class_registry.classes | self.call_counts.keys()
-        )
+        if binding.kind == NameBindingKind.CLASS:
+            # Class instantiation - resolve to __init__
+            return make_qualified_name(f"{binding.qualified_name}.__init__")
 
-        if not resolved:
-            return None
+        if binding.kind == NameBindingKind.FUNCTION:
+            # Regular function call
+            return binding.qualified_name
 
-        # Check if it's a class instantiation
-        if self._class_registry.is_known_class(resolved):
-            # It's a class instantiation - resolve to __init__
-            return make_qualified_name(f"{resolved}.__init__")
-
-        # It's a regular function call
-        return resolved
-
-    def _extract_class_name_from_value(self, node: ast.expr) -> str | None:
-        """Extract a class name from an AST node.
-
-        Handles both simple names (ast.Name) and compound names (ast.Attribute).
-        Returns None for unsupported node types or complex expressions.
-
-        Args:
-            node: The AST node to extract from (typically func.value)
-
-        Returns:
-            Class name as string if extractable, None otherwise
-
-        Examples:
-            ast.Name(id="Calculator") -> "Calculator"
-            ast.Attribute chain for Outer.Inner -> "Outer.Inner"
-            ast.Call or other complex nodes -> None
-        """
-        if isinstance(node, ast.Name):
-            return node.id
-
-        if isinstance(node, ast.Attribute):
-            try:
-                chain = extract_attribute_chain(node)
-                return ".".join(chain)
-            except AssertionError:
-                # Complex expressions like foo()[0].bar aren't supported
-                return None
-
-        # Other node types (Call, Subscript, etc.) can't be class references
+        # Variables aren't directly callable
         return None
 
-    def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
-        """Resolve qualified name from a method call (attribute access).
+    def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:  # noqa: C901, PLR0911, PLR0912
+        """Resolve qualified name from a method call using position-aware index.
 
-        Handles self.method(), ClassName.method(), variable.method(), and
-        module.function() calls.
+        Handles self.method(), cls.method(), ClassName.method(), variable.method(),
+        and compound class references like Outer.Inner.method() calls.
 
         Args:
             func: The ast.Attribute node representing the method call
@@ -345,38 +286,97 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified method name if resolvable, None otherwise
         """
-        # Check if it's a call on a variable or module
-        if isinstance(func.value, ast.Name):
-            variable_name = func.value.id
-
-            # Check if it's an imported module
-            import_info = self._import_registry.lookup_import(variable_name, self._scope_stack)
-            if import_info and import_info.is_module_import:
-                # It's a module method like math.sqrt() or pd.DataFrame()
-                # For single-file analysis, mark as unresolvable
-                return None
-
-            # Continue with existing variable lookup logic
-            variable_type = lookup_variable(self._variable_registry, self._scope_stack, variable_name)
-
-            if variable_type:
-                # Build the qualified method name for both instances and class refs
-                return make_qualified_name(f"{variable_type.class_name}.{func.attr}")
-
-        # All other class method calls: extract class name and resolve
-        class_name = self._extract_class_name_from_value(func.value)
-        if not class_name:
-            # Not a resolvable class reference (e.g., complex expression)
+        # FIRST: Handle self.method() calls
+        if isinstance(func.value, ast.Name) and func.value.id == "self":
+            # Find the containing class from scope stack
+            for scope in reversed(self._scope_stack):
+                if scope.kind == ScopeKind.CLASS:
+                    # Build qualified name from scope stack to this class
+                    class_parts: list[str] = []
+                    for s in self._scope_stack:
+                        class_parts.append(s.name)
+                        if s == scope:
+                            break
+                    class_qualified = make_qualified_name(".".join(class_parts))
+                    return make_qualified_name(f"{class_qualified}.{func.attr}")
+            # self outside class context - unresolvable
             return None
 
-        # Try to resolve the class name to its qualified form
-        resolved_class = self._resolve_class_name(class_name)
-        if resolved_class:
-            return make_qualified_name(f"{resolved_class}.{func.attr}")
+        # SECOND: Handle cls.method() calls (classmethods)
+        if isinstance(func.value, ast.Name) and func.value.id == "cls":
+            # Find the containing class from scope stack
+            for scope in reversed(self._scope_stack):
+                if scope.kind == ScopeKind.CLASS:
+                    # Build qualified name from scope stack to this class
+                    class_parts: list[str] = []
+                    for s in self._scope_stack:
+                        class_parts.append(s.name)
+                        if s == scope:
+                            break
+                    class_qualified = make_qualified_name(".".join(class_parts))
+                    return make_qualified_name(f"{class_qualified}.{func.attr}")
+            # cls outside class context - unresolvable
+            return None
 
-        # Class name couldn't be resolved in any scope or registry
+        # THIRD: Handle single-name references (variable.method() or ClassName.method())
+        if isinstance(func.value, ast.Name):
+            # Look up the name using position-aware resolution
+            binding = self._position_index.resolve(func.value.id, func.lineno, self._scope_stack)
+
+            if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
+                # We know what class the variable refers to
+                return make_qualified_name(f"{binding.target_class}.{func.attr}")
+
+            # Check if it's a class reference for ClassName.method() calls
+            if binding and binding.kind == NameBindingKind.CLASS:
+                return make_qualified_name(f"{binding.qualified_name}.{func.attr}")
+
+        # FOURTH: Handle compound attribute access (Outer.Inner.method() or nested class references)
+        if isinstance(func.value, ast.Attribute):
+            # Try to resolve the compound class reference
+            resolved_class = self._resolve_compound_class_reference(func.value, func.lineno)
+            if resolved_class:
+                return make_qualified_name(f"{resolved_class}.{func.attr}")
+
+        # Complex expressions or unresolvable references
         return None
 
-    def _resolve_class_name(self, class_name: str) -> QualifiedName | None:
-        """Resolve a class name to its qualified name."""
-        return resolve_name_in_scope(self._scope_stack, class_name, self._class_registry.classes)
+    def _resolve_compound_class_reference(self, node: ast.Attribute, lineno: int) -> QualifiedName | None:
+        """Resolve a compound class reference like Outer.Inner.
+
+        Args:
+            node: The ast.Attribute node representing the compound reference
+            lineno: Line number for position-aware resolution
+
+        Returns:
+            Qualified name of the class if resolvable, None otherwise
+        """
+        # Build the attribute chain from right to left
+        parts = [node.attr]
+        current = node.value
+
+        while isinstance(current, ast.Attribute):
+            parts.insert(0, current.attr)
+            current = current.value
+
+        # The leftmost part should be a Name
+        if not isinstance(current, ast.Name):
+            return None
+
+        parts.insert(0, current.id)
+
+        # Try to resolve the leftmost name
+        binding = self._position_index.resolve(parts[0], lineno, self._scope_stack)
+
+        if not binding or binding.kind != NameBindingKind.CLASS:
+            return None
+
+        # Build the full qualified name by appending the rest of the parts
+        base_qualified = binding.qualified_name
+        full_qualified = make_qualified_name(f"{base_qualified}.{'.'.join(parts[1:])}")
+
+        # Verify this class actually exists in known_classes
+        if full_qualified in self._known_classes:
+            return full_qualified
+
+        return None
