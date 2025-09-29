@@ -21,6 +21,8 @@ The new architecture:
 ## Out of Scope
 
 The following Python binding scenarios are intentionally NOT supported:
+- **Star imports** (`from math import *`): These are tracked as a single import binding but individual names from the star import are not resolvable
+- **Regular variable assignments** (`x = 5`, `y = "string"`): Only class instantiations and class/function references are tracked. Simple assignments to literals are ignored
 - Decorators (function/class decorators)
 - `global` and `nonlocal` statements
 - Exception handlers (`except E as e:`)
@@ -72,6 +74,16 @@ This pattern appears in multiple places:
 - Resolving names (looking up in each scope level)
 - Converting scope contexts to qualified names
 
+**Recommendation**: Consider extracting this as a helper function to reduce duplication:
+
+```python
+def scope_stack_to_qualified_name(scope_stack: ScopeStack) -> QualifiedName:
+    """Convert a scope stack to its qualified name for indexing."""
+    if not scope_stack or len(scope_stack) == 1:
+        return make_qualified_name("__module__")
+    return make_qualified_name(".".join(s.name for s in scope_stack))
+```
+
 ### Working with Frozen Dataclasses
 
 `NameBinding` uses `@dataclass(frozen=True)` for immutability. To update a field, create a new instance:
@@ -90,6 +102,23 @@ updated_binding = dataclasses.replace(
 ```
 
 ## Implementation Steps
+
+### Step 0: Move ScopeStack type alias from scope_tracker.py to models.py
+
+**Critical prerequisite**: This MUST be done first to avoid circular imports.
+
+Move the line `type ScopeStack = tuple[Scope, ...]` from `scope_tracker.py` to `models.py`, placing it right after the `Scope` dataclass definition.
+
+Then update `scope_tracker.py` to import it:
+```python
+from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, ScopeStack, make_qualified_name
+```
+
+**Why this is necessary**: `NameBinding` (in models.py) needs `ScopeStack` as a field type. Since `scope_tracker.py` imports from `models.py`, keeping `ScopeStack` in scope_tracker.py creates a circular dependency. This move breaks the cycle.
+
+Tests will verify:
+- All existing tests still pass (no behavior changes)
+- No import errors
 
 ### Step 1: Add NameBindingKind enum and NameBinding dataclass to models.py
 
@@ -115,7 +144,7 @@ class NameBinding:
     target_class: QualifiedName | None # For variables: class they're instances of
 ```
 
-**Important**: The `ScopeStack` type alias should be moved from `scope_tracker.py` to `models.py` to avoid circular imports. Since `NameBinding` needs `ScopeStack` and `scope_tracker.py` imports types from `models.py`, keeping the type alias in `scope_tracker.py` creates a circular dependency. Move the `type ScopeStack = tuple[Scope, ...]` definition to `models.py` alongside `Scope` and have `scope_tracker.py` import it.
+**Note**: `ScopeStack` must be moved to models.py first (Step 0) for this to work.
 
 ### Step 2: Implement PositionIndex class with binary search and comprehensive tests
 
@@ -326,7 +355,18 @@ Tests will verify:
 
 ### Step 8: Implement build_position_index() factory with comprehensive shadowing tests
 
-Create the factory function that builds a PositionIndex from collected bindings and resolves variable targets:
+Create the factory function that builds a PositionIndex from collected bindings and resolves variable targets.
+
+**Why two-phase resolution is necessary**: During AST traversal, we encounter variable assignments like `calc = Calculator()` where we need to resolve what `Calculator` refers to. However, we can't resolve names until we have an index to look them up in. This creates a chicken-and-egg problem:
+1. We need the index to resolve class names
+2. We need to resolve class names to build complete bindings
+3. We need complete bindings to build the index
+
+The solution is two phases:
+- **Phase 1**: Build basic index from all bindings (with unresolved variable targets)
+- **Phase 2**: Use that index to resolve variable targets, then rebuild the index with complete bindings
+
+This approach ensures all variable targets are correctly resolved based on position-aware shadowing rules.
 
 ```python
 def build_position_index(
@@ -419,7 +459,29 @@ Tests focusing on shadowing scenarios from issue #31:
 
 ### Step 9: Update CallCountVisitor to use PositionIndex with shadowing scenario tests
 
-Modify CallCountVisitor to use the new position-aware resolution, including support for method calls through variables:
+Modify CallCountVisitor to use the new position-aware resolution, including support for method calls through variables.
+
+**Registry Dependencies to Remove**:
+- Remove `ImportRegistry` parameter and all import resolution logic
+- Remove `ClassRegistry` parameter (replaced by `known_classes` set)
+- Remove `VariableRegistry` parameter
+- Remove all calls to registry methods
+
+**New Dependencies**:
+- Add `position_index: PositionIndex` parameter to `__init__`
+- Add `known_classes: set[QualifiedName]` parameter (for `__init__` resolution)
+- Update all resolution methods to use `position_index.resolve()`
+
+**Signature Changes**:
+```python
+# Old
+def __init__(self, function_infos, import_registry, class_registry, variable_registry, source_code):
+    ...
+
+# New
+def __init__(self, function_infos, position_index, known_classes, source_code):
+    ...
+```
 
 ```python
 class CallCountVisitor(ast.NodeVisitor):
@@ -490,7 +552,25 @@ Tests will verify all shadowing scenarios work correctly:
 - Complex shadowing with multiple redefinitions
 - Shadowing in nested scopes
 
-### Step 10: Integrate NameBindingCollector in analyzer.py with integration tests
+### Step 10: Update FunctionDefinitionVisitor to work with PositionIndex and add tests
+
+Since FunctionDefinitionVisitor remains separate but previously depended on ClassRegistry, update it to work with PositionIndex:
+
+```python
+class FunctionDefinitionVisitor(ast.NodeVisitor):
+    def __init__(self, file_path: Path, position_index: PositionIndex):
+        self._position_index = position_index
+        # Use position_index for any class resolution needs
+```
+
+Tests will verify:
+- Function parsing still works correctly
+- Class method detection works with new index
+- All parameter extraction functionality preserved
+
+**Note**: This must be done BEFORE Step 11 (integration) because analyzer.py depends on FunctionDefinitionVisitor.
+
+### Step 11: Integrate NameBindingCollector in analyzer.py with integration tests
 
 Update the main analysis pipeline to use the new collector:
 
@@ -514,7 +594,7 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
     }
 
     # Parse function definitions (kept separate for detailed info)
-    # Note: FunctionDefinitionVisitor might need minor updates to work without ClassRegistry
+    # FunctionDefinitionVisitor was updated in Step 10 to use PositionIndex
     function_infos = parse_function_definitions(tree, file_path_obj, position_index)
 
     if not function_infos:
@@ -535,7 +615,7 @@ Integration tests will verify:
 - Performance is acceptable
 - All existing functionality preserved
 
-### Step 11: Remove old visitors and registries with test cleanup
+### Step 12: Remove old visitors and registries with test cleanup
 
 Clean up the codebase by removing obsolete components:
 
@@ -554,22 +634,6 @@ Updates needed:
 **Test Migration Strategy**: Before deleting test files, review them to ensure all test scenarios are covered by the new NameBindingCollector tests. Create a checklist of important test cases to verify we don't lose coverage.
 
 This step confirms the refactor is complete and the old code is no longer needed.
-
-### Step 12: Update FunctionDefinitionVisitor to work with PositionIndex and add tests
-
-Since FunctionDefinitionVisitor remains separate but previously depended on ClassRegistry, update it to work with PositionIndex:
-
-```python
-class FunctionDefinitionVisitor(ast.NodeVisitor):
-    def __init__(self, file_path: Path, position_index: PositionIndex):
-        self._position_index = position_index
-        # Use position_index for any class resolution needs
-```
-
-Tests will verify:
-- Function parsing still works correctly
-- Class method detection works with new index
-- All parameter extraction functionality preserved
 
 ## Testing Strategy
 

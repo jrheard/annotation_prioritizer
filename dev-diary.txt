@@ -1254,4 +1254,6 @@ PROTOTYPE VS ORIGINAL IMPLEMENTATION COMPARISON
 
 9/29
 
-NVM update code review model?
+TODO update code review model?
+
+TODO update plan doc from prototype_findings.md
