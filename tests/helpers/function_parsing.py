@@ -17,6 +17,7 @@ from annotation_prioritizer.models import (
     CallCount,
     FunctionInfo,
     NameBindingKind,
+    PositionIndex,
     QualifiedName,
     UnresolvableCall,
     build_position_index,
@@ -34,15 +35,18 @@ def parse_functions_from_file(file_path: Path) -> tuple[FunctionInfo, ...]:
     return parse_function_definitions(tree, file_path, class_registry)
 
 
-def count_calls_from_file(
-    file_path: Path, known_functions: tuple[FunctionInfo, ...]
-) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
-    """Count function calls from a file using position-aware resolution."""
-    parse_result = parse_ast_from_file(file_path)
-    if not parse_result:
-        return ((), ())
+def build_position_index_from_source(
+    source: str,
+) -> tuple[ast.Module, PositionIndex, set[QualifiedName]]:
+    """Build position index and known classes from source code.
 
-    tree, source_code = parse_result
+    Args:
+        source: Python source code as a string
+
+    Returns:
+        Tuple of (tree, position_index, known_classes)
+    """
+    tree = ast.parse(source)
 
     # Collect all name bindings in a single pass
     collector = NameBindingCollector()
@@ -57,6 +61,21 @@ def count_calls_from_file(
         for binding in collector.bindings
         if binding.kind == NameBindingKind.CLASS and binding.qualified_name
     }
+
+    return tree, position_index, known_classes
+
+
+def count_calls_from_file(
+    file_path: Path, known_functions: tuple[FunctionInfo, ...]
+) -> tuple[tuple[CallCount, ...], tuple[UnresolvableCall, ...]]:
+    """Count function calls from a file using position-aware resolution."""
+    parse_result = parse_ast_from_file(file_path)
+    if not parse_result:
+        return ((), ())
+
+    tree, source_code = parse_result
+
+    _, position_index, known_classes = build_position_index_from_source(source_code)
 
     return count_function_calls(tree, known_functions, position_index, known_classes, source_code)
 

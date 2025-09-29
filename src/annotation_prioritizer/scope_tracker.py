@@ -130,6 +130,34 @@ def build_qualified_name(scope_stack: ScopeStack, name: str) -> QualifiedName:
     return make_qualified_name(".".join(parts))
 
 
+def get_containing_class_qualified_name(scope_stack: ScopeStack) -> QualifiedName | None:
+    """Get the qualified name of the containing class from the scope stack.
+
+    Searches backward through the scope stack to find the first class scope,
+    then builds the qualified name from all scopes up to and including that class.
+
+    Args:
+        scope_stack: Current scope context
+
+    Returns:
+        Qualified name of the containing class, or None if not in a class context
+
+    Example:
+        With scope stack [MODULE("__module__"), CLASS("Outer"), FUNCTION("method")]:
+        Returns "__module__.Outer"
+    """
+    for scope in reversed(scope_stack):
+        if scope.kind == ScopeKind.CLASS:
+            # Build qualified name from all scopes up to and including this class
+            class_parts: list[str] = []
+            for s in scope_stack:
+                class_parts.append(s.name)
+                if s == scope:
+                    break
+            return make_qualified_name(".".join(class_parts))
+    return None
+
+
 def resolve_name_in_scope(
     scope_stack: ScopeStack, name: str, registry: Iterable[QualifiedName]
 ) -> QualifiedName | None:

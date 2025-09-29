@@ -16,6 +16,7 @@ from annotation_prioritizer.scope_tracker import (
     create_initial_stack,
     drop_last_scope,
     extract_attribute_chain,
+    get_containing_class_qualified_name,
     resolve_name_in_scope,
 )
 
@@ -301,3 +302,66 @@ def test_extract_attribute_chain_various_names(code: str, expected_chain: tuple[
 
     result = extract_attribute_chain(attr_node)
     assert result == expected_chain
+
+
+def test_get_containing_class_qualified_name_no_class() -> None:
+    """Test get_containing_class_qualified_name returns None when not in a class."""
+    # Just module scope
+    scope_stack = (Scope(kind=ScopeKind.MODULE, name="__module__"),)
+    result = get_containing_class_qualified_name(scope_stack)
+    assert result is None
+
+    # Module + function scope (no class)
+    scope_stack = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.FUNCTION, name="helper"),
+    )
+    result = get_containing_class_qualified_name(scope_stack)
+    assert result is None
+
+
+def test_get_containing_class_qualified_name_simple_class() -> None:
+    """Test get_containing_class_qualified_name with a simple class context."""
+    scope_stack = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.CLASS, name="Calculator"),
+    )
+    result = get_containing_class_qualified_name(scope_stack)
+    assert result == make_qualified_name("__module__.Calculator")
+
+
+def test_get_containing_class_qualified_name_class_with_method() -> None:
+    """Test get_containing_class_qualified_name from within a method."""
+    scope_stack = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.CLASS, name="Calculator"),
+        Scope(kind=ScopeKind.FUNCTION, name="add"),
+    )
+    result = get_containing_class_qualified_name(scope_stack)
+    assert result == make_qualified_name("__module__.Calculator")
+
+
+def test_get_containing_class_qualified_name_nested_class() -> None:
+    """Test get_containing_class_qualified_name with nested classes."""
+    # Innermost class should be returned
+    scope_stack = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.CLASS, name="Outer"),
+        Scope(kind=ScopeKind.FUNCTION, name="method"),
+        Scope(kind=ScopeKind.CLASS, name="Inner"),
+    )
+    result = get_containing_class_qualified_name(scope_stack)
+    assert result == make_qualified_name("__module__.Outer.method.Inner")
+
+
+def test_get_containing_class_qualified_name_nested_class_with_method() -> None:
+    """Test get_containing_class_qualified_name from within nested class method."""
+    scope_stack = (
+        Scope(kind=ScopeKind.MODULE, name="__module__"),
+        Scope(kind=ScopeKind.CLASS, name="Outer"),
+        Scope(kind=ScopeKind.FUNCTION, name="create_inner"),
+        Scope(kind=ScopeKind.CLASS, name="Inner"),
+        Scope(kind=ScopeKind.FUNCTION, name="inner_method"),
+    )
+    result = get_containing_class_qualified_name(scope_stack)
+    assert result == make_qualified_name("__module__.Outer.create_inner.Inner")

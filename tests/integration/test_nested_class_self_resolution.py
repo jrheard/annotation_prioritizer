@@ -1,11 +1,9 @@
 """Integration tests for self/cls resolution in nested class contexts."""
 
-import ast
-
 from annotation_prioritizer.ast_visitors.call_counter import CallCountVisitor
-from annotation_prioritizer.ast_visitors.name_binding_collector import NameBindingCollector
-from annotation_prioritizer.models import NameBindingKind, build_position_index, make_qualified_name
+from annotation_prioritizer.models import make_qualified_name
 from tests.helpers.factories import make_function_info
+from tests.helpers.function_parsing import build_position_index_from_source
 
 
 def test_nested_class_in_method_self_resolution() -> None:
@@ -25,15 +23,7 @@ class Outer:
 
         return Inner
 """
-    tree = ast.parse(source_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -82,15 +72,7 @@ class Outer:
 
         return Inner
 """
-    tree = ast.parse(source_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -133,15 +115,7 @@ class A:
 
         return B
 """
-    tree = ast.parse(source_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -180,15 +154,7 @@ class Outer:
 
         return Inner
 """
-    tree = ast.parse(source_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -228,15 +194,7 @@ class MyClass:
     def method(self):
         self.foo()  # Should resolve to MyClass.foo
 """
-    tree = ast.parse(source_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
@@ -278,15 +236,7 @@ class MyClass:
     def static_with_self_param(self):  # 'self' is just a regular param here
         self.helper()  # Currently resolves (detecting @staticmethod is a future enhancement)
 """
-    tree = ast.parse(source_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(source_code)
 
     # Create known functions to track
     known_functions = (
