@@ -602,7 +602,7 @@ Tests will verify:
 
 **Status**: ✅ Completed - Updated FunctionDefinitionVisitor and related functions to use PositionIndex instead of ClassRegistry. Updated `parse_function_definitions()` and `generate_synthetic_init_methods()` signatures to accept PositionIndex. Updated analyzer.py to pass position_index instead of class_registry. Updated test helpers (`parse_functions_from_source()`, `parse_functions_from_file()`) to use PositionIndex. Updated `test_generate_synthetic_init_methods_directly()` test. All 366 tests pass with 100% coverage, pyright shows no errors, all linting checks pass.
 
-### Step 11: Integrate NameBindingCollector in analyzer.py with integration tests
+### Step 11: Integrate NameBindingCollector in analyzer.py with integration tests ✅
 
 Update the main analysis pipeline to use the new collector:
 
@@ -647,7 +647,9 @@ Integration tests will verify:
 - Performance is acceptable
 - All existing functionality preserved
 
-### Step 12: Remove old visitors and registries with test cleanup
+**Status**: ✅ Completed - The integration was already completed in Step 9 when analyzer.py was updated to use NameBindingCollector and build_position_index(). Comprehensive integration tests exist in test_end_to_end.py (end-to-end analysis, variable tracking) and test_shadowing_resolution.py (shadowing scenarios from issue #31). All 366 tests pass with 100% coverage, confirming the full integration works correctly.
+
+### Step 12: Remove old visitors and registries with test cleanup ✅
 
 Clean up the codebase by removing obsolete components:
 
@@ -666,6 +668,8 @@ Updates needed:
 **Test Migration Strategy**: Before deleting test files, review them to ensure all test scenarios are covered by the new NameBindingCollector tests. Create a checklist of important test cases to verify we don't lose coverage.
 
 This step confirms the refactor is complete and the old code is no longer needed.
+
+**Status**: ✅ Completed - Deleted obsolete source files (import_discovery.py, class_discovery.py, variable_discovery.py, import_registry.py, variable_registry.py) and their test files (test_import_discovery.py, test_class_discovery.py, test_variable_discovery.py, test_import_registry.py, test_variable_registry.py, test_class_discovery.py integration). Updated test helpers to remove references to deleted modules. Added test for positional-only parameters to maintain 100% coverage. All 282 tests pass with 100% coverage, pyright shows no errors, all linting checks pass. Verified that all important test scenarios are covered by the new NameBindingCollector tests and position-aware resolution tests.
 
 ## Testing Strategy
 

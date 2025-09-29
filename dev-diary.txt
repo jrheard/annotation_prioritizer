@@ -1272,3 +1272,6 @@ TODO someday make an issue for this
   class Calculator: pass
 
   forward references like that should be OK!!
+
+TODO also someday this
+  calc: Calculator # just a definition with no assignment
