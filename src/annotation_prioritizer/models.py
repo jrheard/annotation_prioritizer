@@ -10,6 +10,8 @@ Data Flow Through Models:
 """
 
 import bisect
+import dataclasses
+from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -56,6 +58,24 @@ class Scope:
 
 
 type ScopeStack = tuple[Scope, ...]
+
+
+def scope_stack_to_qualified_name(scope_stack: ScopeStack) -> QualifiedName:
+    """Convert a scope stack to its qualified name for indexing.
+
+    This helper function converts a scope stack into the qualified name format
+    used for indexing in PositionIndex. Module scope is represented as "__module__",
+    and nested scopes are joined with dots.
+
+    Args:
+        scope_stack: The scope stack to convert
+
+    Returns:
+        A QualifiedName suitable for use as an index key
+    """
+    if not scope_stack or len(scope_stack) == 1:
+        return make_qualified_name("__module__")
+    return make_qualified_name(".".join(s.name for s in scope_stack))
 
 
 class NameBindingKind(StrEnum):
@@ -281,3 +301,102 @@ class AnalysisResult:
 
     priorities: tuple[FunctionPriority, ...]
     unresolvable_calls: tuple[UnresolvableCall, ...]
+
+
+# TODO: Move build_position_index() and helpers to a separate file
+# These factory functions have complex logic that doesn't belong in models.py
+def _build_index_structure(
+    bindings: list[NameBinding],
+) -> dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]]:
+    """Build the internal index structure from bindings."""
+    index: dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
+
+    for binding in bindings:
+        scope_name = scope_stack_to_qualified_name(binding.scope_stack)
+        index[scope_name][binding.name].append((binding.line_number, binding))
+
+    # Sort each name's bindings by line number for binary search
+    for scope_dict in index.values():
+        for binding_list in scope_dict.values():
+            binding_list.sort(key=lambda x: x[0])
+
+    return index
+
+
+def _resolve_variable_target(
+    binding: NameBinding, target_name: str, temp_index: PositionIndex
+) -> NameBinding:
+    """Resolve a variable's target class using the temporary index."""
+    resolved = temp_index.resolve(target_name, binding.line_number, binding.scope_stack)
+
+    if resolved and resolved.kind == NameBindingKind.CLASS:
+        # Create NEW binding with resolved target_class
+        return dataclasses.replace(binding, target_class=resolved.qualified_name)
+
+    # Couldn't resolve or not a class - keep original
+    return binding
+
+
+def _resolve_all_variables(
+    bindings: list[NameBinding],
+    unresolved_variables: list[tuple[NameBinding, str]],
+    temp_index: PositionIndex,
+) -> list[NameBinding]:
+    """Resolve all unresolved variables and return the complete list of bindings."""
+    resolved_bindings: list[NameBinding] = []
+
+    for binding in bindings:
+        # Check if this binding is an unresolved variable
+        found = False
+        for var_binding, target_name in unresolved_variables:
+            if binding == var_binding:
+                found = True
+                resolved_bindings.append(_resolve_variable_target(binding, target_name, temp_index))
+                break
+
+        if not found:
+            resolved_bindings.append(binding)
+
+    return resolved_bindings
+
+
+def build_position_index(
+    bindings: list[NameBinding],
+    unresolved_variables: list[tuple[NameBinding, str]] | None = None,
+) -> PositionIndex:
+    """Build an efficient position-aware index from bindings and resolve variable targets.
+
+    This factory function creates a PositionIndex from collected name bindings. It uses
+    a two-phase resolution approach to handle variable assignments that reference other
+    names (e.g., calc = Calculator()):
+
+    Phase 1: Build basic index from all bindings (with unresolved variable targets)
+    Phase 2: Use that index to resolve variable targets, then rebuild with complete bindings
+
+    This ensures all variable targets are correctly resolved based on position-aware
+    shadowing rules.
+
+    Args:
+        bindings: List of all name bindings collected from AST traversal
+        unresolved_variables: Optional list of (binding, target_name) tuples for
+            variables that reference other names. If provided, these will be resolved
+            using position-aware lookup.
+
+    Returns:
+        A PositionIndex with resolved bindings, ready for efficient O(log k) lookup
+    """
+    # Phase 1: Build the basic index
+    index = _build_index_structure(bindings)
+
+    # Phase 2: If we have unresolved variables, resolve their targets and rebuild
+    if unresolved_variables:
+        # Create temporary index for resolution
+        temp_index = PositionIndex(_index=dict(index))
+
+        # Resolve all variables and rebuild index
+        resolved_bindings = _resolve_all_variables(bindings, unresolved_variables, temp_index)
+        index = _build_index_structure(resolved_bindings)
+
+    return PositionIndex(_index=dict(index))

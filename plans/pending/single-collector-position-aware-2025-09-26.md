@@ -379,7 +379,7 @@ Tests will verify:
 
 **Status**: ✅ Completed - Variable binding collection implemented with visit_Assign() and visit_AnnAssign() methods. Comprehensive tests added covering class instantiation, class references, function references, variable reassignment, annotated assignments, literal assignments (ignored), complex targets (ignored), variables in different scopes, and various assignment patterns. All 336 tests pass with 100% coverage, pyright shows no errors.
 
-### Step 8: Implement build_position_index() factory with comprehensive shadowing tests
+### Step 8: Implement build_position_index() factory with comprehensive shadowing tests ✅
 
 Create the factory function that builds a PositionIndex from collected bindings and resolves variable targets.
 
@@ -482,6 +482,8 @@ Tests focusing on shadowing scenarios from issue #31:
 - Variable reassignments
 - Class shadowing import
 - Multiple shadows in same scope
+
+**Status**: ✅ Completed - Implemented build_position_index() factory function in models.py with helper functions _build_index_structure(), _resolve_variable_target(), and _resolve_all_variables(). Added scope_stack_to_qualified_name() helper to reduce code duplication. Created comprehensive test file tests/unit/test_build_position_index.py with 16 tests covering all shadowing scenarios, variable resolution, edge cases, and the two-phase resolution process. Refactored to extract helper functions to reduce complexity. Added TODO comment about moving factory logic to a separate file in the future. All 352 tests pass with 100% coverage, pyright shows no errors, all linting checks pass.
 
 ### Step 9: Update CallCountVisitor to use PositionIndex with shadowing scenario tests
 

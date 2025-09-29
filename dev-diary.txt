@@ -1259,3 +1259,5 @@ DONE update code review model?
 DONE update plan doc from prototype_findings.md
 
 TODO remove opus-agent and guidance in CLAUDE.md
+
+TODO simplify simplify simplify
