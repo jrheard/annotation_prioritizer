@@ -45,6 +45,7 @@ from annotation_prioritizer.scope_tracker import (
     add_scope,
     create_initial_stack,
     drop_last_scope,
+    get_containing_class_qualified_name,
 )
 
 # Maximum length for unresolvable call text before truncation
@@ -274,7 +275,68 @@ class CallCountVisitor(ast.NodeVisitor):
         # Variables aren't directly callable
         return None
 
-    def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:  # noqa: C901, PLR0911, PLR0912
+    def _resolve_self_or_cls_method_call(self, func: ast.Attribute) -> QualifiedName | None:
+        """Resolve self.method() or cls.method() calls to their qualified names.
+
+        Args:
+            func: The ast.Attribute node representing the method call
+
+        Returns:
+            Qualified method name if this is a self/cls method call, None otherwise
+        """
+        if not isinstance(func.value, ast.Name) or func.value.id not in ("self", "cls"):
+            return None
+
+        class_qualified = get_containing_class_qualified_name(self._scope_stack)
+        if class_qualified:
+            return make_qualified_name(f"{class_qualified}.{func.attr}")
+        return None
+
+    def _resolve_single_name_method_call(self, func: ast.Attribute) -> QualifiedName | None:
+        """Resolve variable.method() or ClassName.method() calls.
+
+        Args:
+            func: The ast.Attribute node representing the method call
+
+        Returns:
+            Qualified method name if resolvable, None otherwise
+        """
+        if not isinstance(func.value, ast.Name):
+            return None
+
+        # Look up the name using position-aware resolution
+        binding = self._position_index.resolve(func.value.id, func.lineno, self._scope_stack)
+
+        if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
+            # We know what class the variable refers to
+            return make_qualified_name(f"{binding.target_class}.{func.attr}")
+
+        # Check if it's a class reference for ClassName.method() calls
+        if binding and binding.kind == NameBindingKind.CLASS:
+            return make_qualified_name(f"{binding.qualified_name}.{func.attr}")
+
+        return None
+
+    def _resolve_compound_method_call(self, func: ast.Attribute) -> QualifiedName | None:
+        """Resolve compound method calls like Outer.Inner.method().
+
+        Args:
+            func: The ast.Attribute node representing the method call
+
+        Returns:
+            Qualified method name if resolvable, None otherwise
+        """
+        if not isinstance(func.value, ast.Attribute):
+            return None
+
+        # Try to resolve the compound class reference
+        resolved_class = self._resolve_compound_class_reference(func.value, func.lineno)
+        if resolved_class:
+            return make_qualified_name(f"{resolved_class}.{func.attr}")
+
+        return None
+
+    def _resolve_method_call(self, func: ast.Attribute) -> QualifiedName | None:
         """Resolve qualified name from a method call using position-aware index.
 
         Handles self.method(), cls.method(), ClassName.method(), variable.method(),
@@ -286,60 +348,12 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified method name if resolvable, None otherwise
         """
-        # FIRST: Handle self.method() calls
-        if isinstance(func.value, ast.Name) and func.value.id == "self":
-            # Find the containing class from scope stack
-            for scope in reversed(self._scope_stack):
-                if scope.kind == ScopeKind.CLASS:
-                    # Build qualified name from scope stack to this class
-                    class_parts: list[str] = []
-                    for s in self._scope_stack:
-                        class_parts.append(s.name)
-                        if s == scope:
-                            break
-                    class_qualified = make_qualified_name(".".join(class_parts))
-                    return make_qualified_name(f"{class_qualified}.{func.attr}")
-            # self outside class context - unresolvable
-            return None
-
-        # SECOND: Handle cls.method() calls (classmethods)
-        if isinstance(func.value, ast.Name) and func.value.id == "cls":
-            # Find the containing class from scope stack
-            for scope in reversed(self._scope_stack):
-                if scope.kind == ScopeKind.CLASS:
-                    # Build qualified name from scope stack to this class
-                    class_parts: list[str] = []
-                    for s in self._scope_stack:
-                        class_parts.append(s.name)
-                        if s == scope:
-                            break
-                    class_qualified = make_qualified_name(".".join(class_parts))
-                    return make_qualified_name(f"{class_qualified}.{func.attr}")
-            # cls outside class context - unresolvable
-            return None
-
-        # THIRD: Handle single-name references (variable.method() or ClassName.method())
-        if isinstance(func.value, ast.Name):
-            # Look up the name using position-aware resolution
-            binding = self._position_index.resolve(func.value.id, func.lineno, self._scope_stack)
-
-            if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
-                # We know what class the variable refers to
-                return make_qualified_name(f"{binding.target_class}.{func.attr}")
-
-            # Check if it's a class reference for ClassName.method() calls
-            if binding and binding.kind == NameBindingKind.CLASS:
-                return make_qualified_name(f"{binding.qualified_name}.{func.attr}")
-
-        # FOURTH: Handle compound attribute access (Outer.Inner.method() or nested class references)
-        if isinstance(func.value, ast.Attribute):
-            # Try to resolve the compound class reference
-            resolved_class = self._resolve_compound_class_reference(func.value, func.lineno)
-            if resolved_class:
-                return make_qualified_name(f"{resolved_class}.{func.attr}")
-
-        # Complex expressions or unresolvable references
-        return None
+        # Try each resolution strategy in order
+        return (
+            self._resolve_self_or_cls_method_call(func)
+            or self._resolve_single_name_method_call(func)
+            or self._resolve_compound_method_call(func)
+        )
 
     def _resolve_compound_class_reference(self, node: ast.Attribute, lineno: int) -> QualifiedName | None:
         """Resolve a compound class reference like Outer.Inner.

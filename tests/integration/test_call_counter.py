@@ -11,15 +11,14 @@ from annotation_prioritizer.ast_visitors.call_counter import (
     CallCountVisitor,
     UnresolvableCall,
 )
-from annotation_prioritizer.ast_visitors.name_binding_collector import NameBindingCollector
 from annotation_prioritizer.iteration import first
-from annotation_prioritizer.models import (
-    NameBindingKind,
-    build_position_index,
-    make_qualified_name,
-)
+from annotation_prioritizer.models import make_qualified_name
 from tests.helpers.factories import make_function_info, make_parameter
-from tests.helpers.function_parsing import count_calls_from_file, parse_functions_from_file
+from tests.helpers.function_parsing import (
+    build_position_index_from_source,
+    count_calls_from_file,
+    parse_functions_from_file,
+)
 from tests.helpers.temp_files import temp_python_file
 
 
@@ -343,15 +342,7 @@ self.method()
 """
 
     # Parse the code to get real AST nodes
-    tree = ast.parse(edge_case_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(edge_case_code)
 
     # Find the self.method() call node in the AST
     def is_self_method_call(node: ast.AST) -> bool:
@@ -396,15 +387,7 @@ outer.inner.method()
 """
 
     # Parse the code to get real AST nodes
-    tree = ast.parse(complex_call_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(complex_call_code)
 
     # Find the outer.inner.method() call node in the AST
     def is_outer_inner_method_call(node: ast.AST) -> bool:
@@ -675,15 +658,7 @@ getattr(obj, 'method')()
 """
 
     # Parse the code to get real AST nodes
-    tree = ast.parse(dynamic_call_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(dynamic_call_code)
 
     # Find the getattr(obj, 'method')() call node in the AST
     def is_getattr_dynamic_call(node: ast.AST) -> bool:
@@ -714,14 +689,7 @@ class Outer:
         class Nested:
             pass
 """
-    tree = ast.parse(source)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    _, _, known_classes = build_position_index_from_source(source)
     # The _resolve_class_name method no longer exists in the refactored CallCountVisitor
     # These tests verified internal implementation details that are now handled differently
     # through the PositionIndex. The compound class resolution is now tested implicitly
@@ -745,15 +713,7 @@ def my_function():
     # This compound call should be resolved
     Outer.Inner.method()
 """
-    tree = ast.parse(source)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    tree, position_index, known_classes = build_position_index_from_source(source)
 
     # Create a visitor with the Inner.method as a known function
     known_functions = (
@@ -1065,15 +1025,7 @@ def _create_visitor_and_visit_call(
     code: str, call_node: ast.Call
 ) -> tuple[CallCountVisitor, tuple[UnresolvableCall, ...]]:
     """Create a visitor and visit a call node, returning visitor and unresolvable calls."""
-    tree = ast.parse(code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    _, position_index, known_classes = build_position_index_from_source(code)
     visitor = CallCountVisitor((), position_index, known_classes, code)
     visitor.visit_Call(call_node)
     return visitor, visitor.get_unresolvable_calls()
@@ -1102,15 +1054,7 @@ def test_unresolvable_call_when_source_segment_fails(return_value: str | None) -
     simple_code = "unknown_func()"
     call_node = _get_first_call_node(simple_code)
 
-    tree = ast.parse(simple_code)
-    collector = NameBindingCollector()
-    collector.visit(tree)
-    position_index = build_position_index(collector.bindings, collector.unresolved_variables)
-    known_classes = {
-        binding.qualified_name
-        for binding in collector.bindings
-        if binding.kind == NameBindingKind.CLASS and binding.qualified_name
-    }
+    _, position_index, known_classes = build_position_index_from_source(simple_code)
     visitor = CallCountVisitor((), position_index, known_classes, simple_code)
 
     with patch.object(ast, "get_source_segment", return_value=return_value):
