@@ -5,6 +5,7 @@ including shadowing scenarios, scope chain resolution, and edge cases.
 """
 
 from annotation_prioritizer.models import (
+    LineBinding,
     NameBinding,
     NameBindingKind,
     PositionIndex,
@@ -39,7 +40,7 @@ def create_binding(
 
 def build_index(bindings: list[NameBinding]) -> PositionIndex:
     """Build a PositionIndex from a list of bindings."""
-    index: dict[QualifiedName, dict[str, list[tuple[int, NameBinding]]]] = {}
+    index: dict[QualifiedName, dict[str, list[LineBinding]]] = {}
 
     for binding in bindings:
         scope_name = scope_stack_to_qualified_name(binding.scope_stack)

@@ -94,7 +94,16 @@ class NameBinding:
     target_class: QualifiedName | None  # For variables: class they're instances of
 
 
-PositionIndex = Mapping[QualifiedName, dict[str, list[tuple[int, NameBinding]]]]
+type LineBinding = tuple[int, NameBinding]
+"""A name binding at a specific line number.
+
+Used in PositionIndex for binary search: the int is the line number where
+the binding occurs, and the NameBinding contains the binding information.
+These are kept sorted by line number for efficient lookup.
+"""
+
+
+type PositionIndex = Mapping[QualifiedName, dict[str, list[LineBinding]]]
 """Position-aware name resolution index.
 
 Maps scope qualified names to dictionaries of names, which map to sorted lists
