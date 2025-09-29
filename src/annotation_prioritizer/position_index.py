@@ -119,6 +119,9 @@ def _resolve_all_variables(
     """Resolve all unresolved variables and return the complete list of bindings."""
     resolved_bindings: list[NameBinding] = []
 
+    # NOTE: This nested loop is O(n*m) where n=len(bindings) and m=len(unresolved_variables).
+    # Could optimize to O(n) using: unresolved_map = dict(unresolved_variables)
+    # Consider optimizing if profiling shows this as a bottleneck.
     for binding in bindings:
         # Check if this binding is an unresolved variable
         found = False
