@@ -1373,3 +1373,14 @@ DONE prevent claude from using `git reset --hard`, `git push` with hooks
   3. Position-aware resolution: Binary search within the list to find the correct binding before a given line
 
   The lookup pattern index[scope][local_name] directly implements Python's LEGB (Local, Enclosing, Global, Built-in) scoping rules.
+
+cool neat
+
+hm
+
+what do i think about having an execution_context_stack in _addition_ to a scope stack?
+maybe this is fine??
+i'm not 100% sure yet
+it might be fine
+
+TODO evaluate this critically

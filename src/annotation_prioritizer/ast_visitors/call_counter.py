@@ -32,6 +32,7 @@ from typing import override
 
 from annotation_prioritizer.models import (
     CallCount,
+    ExecutionContext,
     FunctionInfo,
     NameBindingKind,
     QualifiedName,
@@ -179,28 +180,46 @@ class CallCountVisitor(ast.NodeVisitor):
         self._position_index = position_index
         self._known_classes = known_classes
         self._scope_stack = create_initial_stack()
+        self._execution_context_stack: list[ExecutionContext] = [ExecutionContext.IMMEDIATE]
         self._source_code = source_code
         self._unresolvable_calls: list[UnresolvableCall] = []
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        """Visit class definition to track scope context for method calls."""
+        """Visit a class definition, tracking it as a scope.
+
+        Class bodies execute IMMEDIATELY when the class is defined, even if
+        the class definition is nested inside a function.
+        """
         self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.CLASS, name=node.name))
+        self._execution_context_stack.append(ExecutionContext.IMMEDIATE)
         self.generic_visit(node)
+        self._execution_context_stack.pop()
         self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        """Visit function definition to track scope context for nested function calls."""
+        """Visit a function definition, tracking it as a scope.
+
+        Function bodies execute DEFERRED - only when the function is called,
+        not when it's defined. This allows forward references.
+        """
         self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._execution_context_stack.append(ExecutionContext.DEFERRED)
         self.generic_visit(node)
+        self._execution_context_stack.pop()
         self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
-        """Visit async function definition to track scope context for nested function calls."""
+        """Visit an async function definition, tracking it as a scope.
+
+        Async function bodies also execute DEFERRED.
+        """
         self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
+        self._execution_context_stack.append(ExecutionContext.DEFERRED)
         self.generic_visit(node)
+        self._execution_context_stack.pop()
         self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
@@ -282,7 +301,13 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified name if resolvable, None otherwise
         """
-        binding = resolve_name(self._position_index, func.id, func.lineno, self._scope_stack)
+        binding = resolve_name(
+            self._position_index,
+            func.id,
+            func.lineno,
+            self._scope_stack,
+            ExecutionContext.IMMEDIATE,
+        )
 
         if binding is None or binding.kind == NameBindingKind.IMPORT:
             # Unresolvable or imported (Phase 1 limitation)
@@ -328,7 +353,13 @@ class CallCountVisitor(ast.NodeVisitor):
         if not isinstance(func.value, ast.Name):
             return None
 
-        binding = resolve_name(self._position_index, func.value.id, func.lineno, self._scope_stack)
+        binding = resolve_name(
+            self._position_index,
+            func.value.id,
+            func.lineno,
+            self._scope_stack,
+            ExecutionContext.IMMEDIATE,
+        )
 
         if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
             # We know what class the variable refers to
@@ -397,7 +428,13 @@ class CallCountVisitor(ast.NodeVisitor):
             return None
 
         # Resolve the leftmost name
-        binding = resolve_name(self._position_index, parts[0], lineno, self._scope_stack)
+        binding = resolve_name(
+            self._position_index,
+            parts[0],
+            lineno,
+            self._scope_stack,
+            ExecutionContext.IMMEDIATE,
+        )
         if not binding:
             return None
 
