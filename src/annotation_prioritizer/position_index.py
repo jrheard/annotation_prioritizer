@@ -31,6 +31,7 @@ from collections import defaultdict
 from collections.abc import Mapping
 
 from annotation_prioritizer.models import (
+    ExecutionContext,
     NameBinding,
     NameBindingKind,
     QualifiedName,
@@ -87,25 +88,48 @@ Example for this code:
 type _MutablePositionIndex = dict[QualifiedName, dict[str, list[LineBinding]]]
 
 
-def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeStack) -> NameBinding | None:
-    """Resolve a name at a given position using binary search.
+def resolve_name(
+    index: PositionIndex,
+    name: str,
+    line: int,
+    scope_stack: ScopeStack,
+    execution_context: ExecutionContext,
+) -> NameBinding | None:
+    """Resolve a name at a given position using binary search with execution context awareness.
 
     Searches through the scope chain from innermost to outermost scope,
-    finding the most recent binding of the given name that occurs before
-    the specified line number.
+    finding the most recent binding of the given name. Resolution strategy
+    depends on execution context:
+
+    - IMMEDIATE context: Only looks backward (definitions before usage)
+    - DEFERRED context: Tries backward first, then forward for FUNCTION/CLASS bindings
+
+    This matches Python's actual execution model where function bodies (deferred)
+    can reference functions defined later in the scope, but module-level code
+    (immediate) executes top-to-bottom.
 
     Args:
         index: The position index to search in
         name: The name to resolve (e.g., "sqrt", "Calculator")
         line: The line number where the name is used (1-indexed)
         scope_stack: The scope context where the name appears
+        execution_context: Whether code executes immediately or is deferred
 
     Returns:
-        The most recent NameBinding for this name before the given line,
-        or None if no binding is found in any scope.
+        The most recent NameBinding for this name, or None if not found.
+        In DEFERRED context, may return a binding defined after the usage line.
 
     Raises:
         ValueError: If scope_stack is empty
+
+    Examples:
+        # Module-level code (IMMEDIATE) - backward only:
+        >>> resolve_name(index, "helper", line=2, scope_stack, ExecutionContext.IMMEDIATE)
+        None  # helper defined at line 5, so not found
+
+        # Function body (DEFERRED) - can find forward references:
+        >>> resolve_name(index, "helper", line=2, scope_stack, ExecutionContext.DEFERRED)
+        NameBinding(...)  # helper found even though defined at line 5
     """
     if not scope_stack:
         msg = "scope_stack must not be empty"
@@ -127,17 +151,21 @@ def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeS
 
         bindings = scope_dict[name]
 
-        # Use binary search to find the latest binding before this line
-        # We search for bindings with line_number < line (strictly less than)
+        # ALWAYS try backward first (preserves shadowing semantics)
         idx = bisect.bisect_left(bindings, line, key=lambda x: x[0])
-
         if idx > 0:
             return bindings[idx - 1][1]
+
+        # If in deferred context and not found backward, try forward
+        if execution_context == ExecutionContext.DEFERRED:
+            forward_binding = _search_forward_in_scope(scope_dict, name, line)
+            if forward_binding is not None:
+                return forward_binding
 
     return None
 
 
-def _search_forward_in_scope(  # pyright: ignore[reportUnusedFunction]
+def _search_forward_in_scope(
     scope_dict: Mapping[str, list[LineBinding]],
     name: str,
     line: int,
@@ -195,7 +223,14 @@ def _resolve_variable_target(
     binding: NameBinding, target_name: str, temp_index: PositionIndex
 ) -> NameBinding:
     """Resolve a variable's target class using the temporary index."""
-    resolved = resolve_name(temp_index, target_name, binding.line_number, binding.scope_stack)
+    # Use IMMEDIATE context - variable assignments execute at definition time
+    resolved = resolve_name(
+        temp_index,
+        target_name,
+        binding.line_number,
+        binding.scope_stack,
+        ExecutionContext.IMMEDIATE,
+    )
 
     if resolved and resolved.kind == NameBindingKind.CLASS:
         # Create NEW binding with resolved target_class
