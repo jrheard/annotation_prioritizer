@@ -19,12 +19,13 @@ def is_dangerous_command(command: str) -> tuple[bool, str | None]:
         - is_dangerous: True if command should be blocked
         - reason: Description of why it's blocked, or None if safe
     """
-    # Pattern for git reset --hard (with optional refs/paths after)
-    if re.search(r"\bgit\s+reset\s+--hard\b", command):
+    # Pattern for git reset --hard at start of command or after command separator
+    # Matches: ^git reset --hard, or after &&, ||, ; with optional whitespace
+    if re.search(r"(^|&&|\|\||;)\s*git\s+reset\s+--hard\b", command):
         return True, "git reset --hard discards uncommitted changes and is destructive"
 
-    # Pattern for git push (including variations like push -f, push --force, etc.)
-    if re.search(r"\bgit\s+push\b", command):
+    # Pattern for git push at start of command or after command separator
+    if re.search(r"(^|&&|\|\||;)\s*git\s+push\b", command):
         return True, "git push modifies remote repository state"
 
     return False, None
