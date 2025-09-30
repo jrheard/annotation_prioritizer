@@ -117,21 +117,13 @@ def _resolve_all_variables(
     temp_index: PositionIndex,
 ) -> list[NameBinding]:
     """Resolve all unresolved variables and return the complete list of bindings."""
+    unresolved_map = dict(unresolved_variables)
+
     resolved_bindings: list[NameBinding] = []
-
-    # NOTE: This nested loop is O(n*m) where n=len(bindings) and m=len(unresolved_variables).
-    # Could optimize to O(n) using: unresolved_map = dict(unresolved_variables)
-    # Consider optimizing if profiling shows this as a bottleneck.
     for binding in bindings:
-        # Check if this binding is an unresolved variable
-        found = False
-        for var_binding, target_name in unresolved_variables:
-            if binding == var_binding:
-                found = True
-                resolved_bindings.append(_resolve_variable_target(binding, target_name, temp_index))
-                break
-
-        if not found:
+        if binding in unresolved_map:
+            resolved_bindings.append(_resolve_variable_target(binding, unresolved_map[binding], temp_index))
+        else:
             resolved_bindings.append(binding)
 
     return resolved_bindings
@@ -167,11 +159,7 @@ def build_position_index(
 
     # Phase 2: If we have unresolved variables, resolve their targets and rebuild
     if unresolved_variables:
-        # Create temporary index for resolution
-        temp_index: PositionIndex = dict(index)
-
-        # Resolve all variables and rebuild index
-        resolved_bindings = _resolve_all_variables(bindings, unresolved_variables, temp_index)
+        resolved_bindings = _resolve_all_variables(bindings, unresolved_variables, index)
         index = _build_index_structure(resolved_bindings)
 
-    return dict(index)
+    return index
