@@ -156,8 +156,16 @@ def resolve_name(
         if idx > 0:
             return bindings[idx - 1][1]
 
-        # If in deferred context and not found backward, try forward
-        if execution_context == ExecutionContext.DEFERRED:
+    # If in deferred context and not found backward in any scope, try forward in each scope
+    if execution_context == ExecutionContext.DEFERRED:
+        for scope_depth in range(len(scope_stack), 0, -1):
+            current_scope = scope_stack[:scope_depth]
+            scope_name = scope_stack_to_qualified_name(current_scope)
+
+            if scope_name not in index:
+                continue
+
+            scope_dict = index[scope_name]
             forward_binding = _search_forward_in_scope(scope_dict, name, line)
             if forward_binding is not None:
                 return forward_binding

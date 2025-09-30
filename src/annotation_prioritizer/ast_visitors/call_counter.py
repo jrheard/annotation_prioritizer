@@ -306,7 +306,7 @@ class CallCountVisitor(ast.NodeVisitor):
             func.id,
             func.lineno,
             self._scope_stack,
-            ExecutionContext.IMMEDIATE,
+            self._execution_context_stack[-1],
         )
 
         if binding is None or binding.kind == NameBindingKind.IMPORT:
@@ -358,7 +358,7 @@ class CallCountVisitor(ast.NodeVisitor):
             func.value.id,
             func.lineno,
             self._scope_stack,
-            ExecutionContext.IMMEDIATE,
+            self._execution_context_stack[-1],
         )
 
         if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
@@ -433,7 +433,7 @@ class CallCountVisitor(ast.NodeVisitor):
             parts[0],
             lineno,
             self._scope_stack,
-            ExecutionContext.IMMEDIATE,
+            self._execution_context_stack[-1],
         )
         if not binding:
             return None

@@ -870,7 +870,9 @@ def outer():
 
 **Commit:** "feat: add execution context tracking to CallCountVisitor"
 
-### Step 6: Update CallCountVisitor resolve_name() Call Sites
+### Step 6: Update CallCountVisitor resolve_name() Call Sites ✅
+
+**Implementation Note:** Completed successfully. Updated all three `resolve_name()` call sites in `_resolve_direct_call()`, `_resolve_single_name_method_call()`, and `_resolve_compound_class_reference()` to pass `self._execution_context_stack[-1]` instead of `ExecutionContext.IMMEDIATE`. Updated 6 existing integration tests to reflect new forward reference behavior (changed assertions and comments from "NOT counted" to "counted"). Added 3 new edge case tests: `test_class_body_in_function_executes_immediately`, `test_module_level_forward_reference_not_resolved`, and `test_forward_reference_with_shadowing`. Discovered and fixed subtle issue with forward lookup scope resolution: forward lookup must be attempted at each scope level (innermost to outermost), not just the innermost scope, to properly handle nested function references to module-level functions. All 312 tests pass with 100% coverage.
 
 **File:** `src/annotation_prioritizer/ast_visitors/call_counter.py`
 
