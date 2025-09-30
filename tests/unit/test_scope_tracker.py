@@ -185,7 +185,7 @@ def test_resolve_name_in_scope() -> None:
         Scope(kind=ScopeKind.CLASS, name="Outer"),
         Scope(kind=ScopeKind.FUNCTION, name="method"),
     )
-    registry = frozenset(
+    known_names = frozenset(
         {
             make_qualified_name("__module__.Outer.method.Helper"),
             make_qualified_name("__module__.Outer.Helper"),
@@ -195,21 +195,21 @@ def test_resolve_name_in_scope() -> None:
     )
 
     # Test resolution finds innermost match first
-    result = resolve_name_in_scope(scope_stack, "Helper", registry)
+    result = resolve_name_in_scope(scope_stack, "Helper", known_names)
     assert result == make_qualified_name("__module__.Outer.method.Helper")
 
-    # Test resolution with name not in registry
-    result = resolve_name_in_scope(scope_stack, "NotFound", registry)
+    # Test resolution with name not in known names
+    result = resolve_name_in_scope(scope_stack, "NotFound", known_names)
     assert result is None
 
     # Test resolution with compound name
-    registry_with_compound = frozenset(
+    known_names_with_compound = frozenset(
         {
             make_qualified_name("__module__.Outer.Inner.method"),
             make_qualified_name("__module__.Inner.method"),
         }
     )
-    result = resolve_name_in_scope(scope_stack, "Inner.method", registry_with_compound)
+    result = resolve_name_in_scope(scope_stack, "Inner.method", known_names_with_compound)
     assert result == make_qualified_name("__module__.Outer.Inner.method")
 
 

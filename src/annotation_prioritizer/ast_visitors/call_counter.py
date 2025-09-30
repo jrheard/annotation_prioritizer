@@ -15,9 +15,9 @@ Key Design Decisions:
 
 Relationship to Other Modules:
     - function_parser.py: Provides the FunctionInfo definitions to count calls for
-    - analyzer.py: Orchestrates analysis, provides AST and registries
+    - analyzer.py: Orchestrates analysis, provides AST and PositionIndex
     - models.py: Defines CallCount data structure
-    - variable_registry.py: Provides utilities for variable type lookup
+    - position_index.py: Provides position-aware name resolution for variable type lookup
 
 Limitations:
     - Intentional: No support for star imports (from module import *)
@@ -138,7 +138,7 @@ class CallCountVisitor(ast.NodeVisitor):
         After calling visit() on an AST tree, access the 'call_counts' dictionary
         to retrieve the updated call counts for each function:
 
-        >>> visitor = CallCountVisitor(known_functions, class_registry)
+        >>> visitor = CallCountVisitor(known_functions, position_index, known_classes, source_code)
         >>> visitor.visit(tree)
         >>> call_counts = visitor.call_counts
 

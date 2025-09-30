@@ -1294,7 +1294,7 @@ DONE is there a cleaner way to implement get_containing_class_qualified_name()?
 
 DONE verify that _resolve_compound_class_reference() is correct - look for edge cases
 
-TODO look for places in the code that talks about registries
+DONE look for places in the code that talks about registries
 
 TODO should resolve_name() assert that the scopestack is non-empty?
 
@@ -1304,7 +1304,7 @@ TODO look through tests for references to "limitation", particularly in test_cal
 
 TODO look at the "no longer exists" comment in test_call_counter
 
-TODO does test_unsupported need to be updated?
+DONE does test_unsupported need to be updated?
 
 DONE prevent claude from using `git reset --hard`, `git push` with hooks
 

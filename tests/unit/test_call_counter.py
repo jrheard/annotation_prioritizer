@@ -162,8 +162,8 @@ getattr(obj, 'method')()
     assert result is None
 
 
-def test_resolve_compound_class_not_in_registry() -> None:
-    """Test compound class resolution when class not in registry."""
+def test_compound_class_detection() -> None:
+    """Test that nested classes are detected and tracked in known_classes."""
     source = """
 class Outer:
     class Inner:

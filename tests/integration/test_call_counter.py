@@ -875,9 +875,9 @@ class Helper:
 
 def test():
     obj = Calculator()
-    obj.add(1, 2)  # Registry will have obj as Helper (final type)
+    obj.add(1, 2)  # Resolves to Helper.add (uses final assignment of obj)
     obj = Helper()
-    obj.add(3, 4)  # Registry will have obj as Helper (final type)
+    obj.add(3, 4)  # Resolves to Helper.add (uses final assignment of obj)
 """
 
     with temp_python_file(code) as temp_path:
