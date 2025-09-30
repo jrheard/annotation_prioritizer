@@ -382,11 +382,10 @@ def top_level_caller():
         assert call_counts[make_qualified_name("__module__.outer_function.another_inner")] == 1
 
         # helper_function() called:
-        # - The call from another_inner is NOT counted due to position-aware resolution limitation:
-        #   helper_function is defined at line 11 but called at line 7, so it appears undefined
-        # - once from top_level_caller (line 15, after helper_function is defined)
-        # Total: 1 call
-        assert call_counts[make_qualified_name("__module__.helper_function")] == 1
+        # - once from another_inner (forward reference in deferred context)
+        # - once from top_level_caller
+        # Total: 2 calls
+        assert call_counts[make_qualified_name("__module__.helper_function")] == 2
 
 
 def test_method_calls_in_nested_functions() -> None:
@@ -493,9 +492,8 @@ def module_function():
         # self.helper_method() called once from level3_function
         assert call_counts[make_qualified_name("__module__.OuterClass.helper_method")] == 1
 
-        # module_function() called from level2_function but NOT counted due to position-aware
-        # resolution limitation: module_function is defined at line 13 but called at line 8
-        assert call_counts[make_qualified_name("__module__.module_function")] == 0
+        # module_function() called once from level2_function (forward reference in deferred context)
+        assert call_counts[make_qualified_name("__module__.module_function")] == 1
 
 
 def test_nested_class_with_function_calls() -> None:
@@ -537,9 +535,8 @@ def module_helper():
         # self.other_inner_method() called once from inner_method
         assert call_counts[make_qualified_name("__module__.Outer.Inner.other_inner_method")] == 1
 
-        # module_helper() called from nested_function but NOT counted due to position-aware
-        # resolution limitation: module_helper is defined at line 11 but called at line 5
-        assert call_counts[make_qualified_name("__module__.module_helper")] == 0
+        # module_helper() called once from nested_function (forward reference in deferred context)
+        assert call_counts[make_qualified_name("__module__.module_helper")] == 1
 
 
 def test_async_function_calls() -> None:
@@ -597,11 +594,10 @@ async def top_level_async():
         assert call_counts[make_qualified_name("__module__.async_outer.async_inner")] == 1
 
         # regular_helper() called:
-        # - The call from sync_inner is NOT counted due to position-aware resolution limitation:
-        #   regular_helper is defined at line 12 but called at line 7, so it appears undefined
-        # - once from top_level_async (line 15, after regular_helper is defined)
-        # Total: 1 call
-        assert call_counts[make_qualified_name("__module__.regular_helper")] == 1
+        # - once from sync_inner (forward reference in deferred context)
+        # - once from top_level_async
+        # Total: 2 calls
+        assert call_counts[make_qualified_name("__module__.regular_helper")] == 2
 
 
 def test_builtin_shadowing() -> None:
@@ -755,16 +751,13 @@ def custom_function(x):
         result, unresolvable_calls = count_calls_from_file(temp_path, known_functions)
         call_counts = {call.function_qualified_name: call.call_count for call in result}
 
-        # custom_function called from process_data but NOT counted due to position-aware
-        # resolution limitation: custom_function is defined at line 18 but called at line 11
-        assert call_counts[make_qualified_name("__module__.custom_function")] == 0
+        # custom_function called once from process_data (forward reference in deferred context)
+        assert call_counts[make_qualified_name("__module__.custom_function")] == 1
 
-        # Both unknown_obj.method() and custom_function() should be unresolvable
+        # Only unknown_obj.method() should be unresolvable
         # Built-in functions (print, len, sum, sorted, max, min) should NOT be unresolvable
-        assert len(unresolvable_calls) == 2
-        unresolvable_texts = [call.call_text for call in unresolvable_calls]
-        assert any("custom_function" in text for text in unresolvable_texts)
-        assert any("unknown_obj.method" in text for text in unresolvable_texts)
+        assert len(unresolvable_calls) == 1
+        assert "unknown_obj.method" in unresolvable_calls[0].call_text
 
 
 def test_classmethod_cls_calls() -> None:
@@ -986,3 +979,90 @@ def outer():
 
         # Inner function's use of calc.add() should be counted
         assert call_counts[make_qualified_name("__module__.Calculator.add")] == 1
+
+
+def test_class_body_in_function_executes_immediately() -> None:
+    """Test that class bodies execute immediately even when nested in functions."""
+    code = """
+def outer():
+    class Inner:
+        x = helper()  # Class body executes immediately, helper not yet defined
+    return Inner
+
+def helper():
+    return 42
+
+result = outer()
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (
+            make_function_info("outer", line_number=2, file_path=temp_path),
+            make_function_info("helper", line_number=7, file_path=temp_path),
+        )
+
+        result, unresolvable = count_calls_from_file(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # helper() called in class body is not resolved
+        # (class body executes immediately, before helper is defined)
+        assert call_counts[make_qualified_name("__module__.helper")] == 0
+
+        # Should appear in unresolvable calls
+        assert len(unresolvable) == 1
+        assert "helper()" in unresolvable[0].call_text
+
+
+def test_module_level_forward_reference_not_resolved() -> None:
+    """Test that module-level forward references are correctly not resolved."""
+    code = """
+result = helper()  # Module level - executes immediately, should NOT resolve
+
+def helper():
+    return 42
+"""
+
+    with temp_python_file(code) as temp_path:
+        known_functions = (make_function_info("helper", line_number=4, file_path=temp_path),)
+
+        result, unresolvable = count_calls_from_file(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # helper() at module level is not resolved (would fail at runtime)
+        assert call_counts[make_qualified_name("__module__.helper")] == 0
+
+        # Should be unresolvable
+        assert len(unresolvable) == 1
+        assert "helper()" in unresolvable[0].call_text
+
+
+def test_forward_reference_with_shadowing() -> None:
+    """Test that forward references respect shadowing."""
+    code = """
+def early():
+    return helper()  # Resolves to helper at line 5 (forward)
+
+def helper():
+    return "first"
+
+def late():
+    return helper()  # Resolves to helper at line 5 (backward)
+
+def helper():  # Shadows the first helper
+    return "second"
+"""
+
+    with temp_python_file(code) as temp_path:
+        # Only register the FIRST helper function
+        known_functions = (
+            make_function_info("early", line_number=2, file_path=temp_path),
+            make_function_info("helper", line_number=5, file_path=temp_path),
+            make_function_info("late", line_number=8, file_path=temp_path),
+        )
+
+        result, _ = count_calls_from_file(temp_path, known_functions)
+        call_counts = {call.function_qualified_name: call.call_count for call in result}
+
+        # Both early() and late() find the first helper (at line 5)
+        # early() uses forward resolution, late() uses backward resolution
+        assert call_counts[make_qualified_name("__module__.helper")] == 2
