@@ -3,6 +3,7 @@
 
 import ast
 from pathlib import Path
+from typing import override
 from unittest.mock import patch
 
 import pytest
@@ -12,7 +13,7 @@ from annotation_prioritizer.ast_visitors.call_counter import (
     UnresolvableCall,
 )
 from annotation_prioritizer.iteration import first
-from annotation_prioritizer.models import make_qualified_name
+from annotation_prioritizer.models import ExecutionContext, make_qualified_name
 from tests.helpers.factories import make_function_info, make_parameter
 from tests.helpers.function_parsing import build_position_index_from_source
 
@@ -314,3 +315,132 @@ def test():
     # obj.Inner.method() should resolve through compound reference resolution
     # obj has target_class=__module__.Outer, so obj.Inner should resolve to __module__.Outer.Inner
     assert visitor.call_counts[make_qualified_name("__module__.Outer.Inner.method")] == 1
+
+
+def test_execution_context_stack_module_level() -> None:
+    """Test that module level starts with IMMEDIATE context."""
+    source = """
+x = 1
+"""
+    tree = ast.parse(source)
+    _, position_index, known_classes = build_position_index_from_source(source)
+    visitor = CallCountVisitor((), position_index, known_classes, source)
+
+    # Before visiting, should be at module level (IMMEDIATE)
+    assert visitor._execution_context_stack == [ExecutionContext.IMMEDIATE]
+
+    visitor.visit(tree)
+
+    # After visiting, should still be at module level
+    assert visitor._execution_context_stack == [ExecutionContext.IMMEDIATE]
+
+
+def test_execution_context_stack_function() -> None:
+    """Test that function bodies have DEFERRED context."""
+    source = """
+def foo():
+    pass
+"""
+    tree = ast.parse(source)
+    _, position_index, known_classes = build_position_index_from_source(source)
+
+    # Track context when we're inside the function
+    contexts_seen: list[ExecutionContext] = []
+
+    class ContextTrackingVisitor(CallCountVisitor):
+        @override
+        def visit_Pass(self, node: ast.Pass) -> None:
+            contexts_seen.append(self._execution_context_stack[-1])
+            self.generic_visit(node)
+
+    visitor = ContextTrackingVisitor((), position_index, known_classes, source)
+    visitor.visit(tree)
+
+    # Inside function body, context should be DEFERRED
+    assert ExecutionContext.DEFERRED in contexts_seen
+
+
+def test_execution_context_stack_class() -> None:
+    """Test that class bodies have IMMEDIATE context."""
+    source = """
+class Foo:
+    x = 1
+"""
+    tree = ast.parse(source)
+    _, position_index, known_classes = build_position_index_from_source(source)
+
+    # Track context when we're inside the class
+    contexts_seen: list[ExecutionContext] = []
+
+    class ContextTrackingVisitor(CallCountVisitor):
+        @override
+        def visit_Assign(self, node: ast.Assign) -> None:
+            contexts_seen.append(self._execution_context_stack[-1])
+            self.generic_visit(node)
+
+    visitor = ContextTrackingVisitor((), position_index, known_classes, source)
+    visitor.visit(tree)
+
+    # Inside class body, context should be IMMEDIATE
+    assert ExecutionContext.IMMEDIATE in contexts_seen
+
+
+def test_execution_context_stack_nested() -> None:
+    """Test that context stack handles nested scopes correctly."""
+    source = """
+class Outer:
+    def method(self):
+        pass
+"""
+    tree = ast.parse(source)
+    _, position_index, known_classes = build_position_index_from_source(source)
+
+    contexts_seen: list[list[ExecutionContext]] = []
+
+    class ContextTrackingVisitor(CallCountVisitor):
+        @override
+        def visit_Pass(self, node: ast.Pass) -> None:
+            # Should have: [IMMEDIATE (module), IMMEDIATE (class), DEFERRED (method)]
+            contexts_seen.append(list(self._execution_context_stack))
+            self.generic_visit(node)
+
+    visitor = ContextTrackingVisitor((), position_index, known_classes, source)
+    visitor.visit(tree)
+
+    # Inside method, should have all three contexts
+    assert len(contexts_seen) == 1
+    assert contexts_seen[0] == [
+        ExecutionContext.IMMEDIATE,  # module
+        ExecutionContext.IMMEDIATE,  # class
+        ExecutionContext.DEFERRED,  # method
+    ]
+
+
+def test_execution_context_stack_class_in_function() -> None:
+    """Test that class bodies are IMMEDIATE even when nested in functions."""
+    source = """
+def outer():
+    class Inner:
+        x = 1
+"""
+    tree = ast.parse(source)
+    _, position_index, known_classes = build_position_index_from_source(source)
+
+    contexts_seen: list[list[ExecutionContext]] = []
+
+    class ContextTrackingVisitor(CallCountVisitor):
+        @override
+        def visit_Assign(self, node: ast.Assign) -> None:
+            contexts_seen.append(list(self._execution_context_stack))
+            self.generic_visit(node)
+
+    visitor = ContextTrackingVisitor((), position_index, known_classes, source)
+    visitor.visit(tree)
+
+    # Inside class body (which is inside function)
+    assert len(contexts_seen) == 1
+    assert contexts_seen[0] == [
+        ExecutionContext.IMMEDIATE,  # module
+        ExecutionContext.DEFERRED,  # outer function
+        ExecutionContext.IMMEDIATE,  # Inner class body
+    ]

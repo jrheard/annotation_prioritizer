@@ -662,7 +662,9 @@ def build_position_index(bindings: list[NameBinding]) -> PositionIndex:
 
 **Commit:** "refactor: update internal resolve_name calls to use ExecutionContext.IMMEDIATE"
 
-### Step 5: Add Context Tracking to CallCountVisitor
+### Step 5: Add Context Tracking to CallCountVisitor ✅
+
+**Implementation Note:** Completed successfully. Added ExecutionContext import, initialized `_execution_context_stack` with `[ExecutionContext.IMMEDIATE]`, updated all three visitor methods (`visit_ClassDef`, `visit_FunctionDef`, `visit_AsyncFunctionDef`) to push/pop appropriate execution contexts. Added 5 comprehensive unit tests verifying context stack management in module-level, function, class, nested scopes, and class-in-function scenarios. Temporarily updated all `resolve_name()` calls to pass `ExecutionContext.IMMEDIATE` to maintain compatibility (will be updated to use actual context in Step 6). All tests pass with 100% coverage.
 
 **File:** `src/annotation_prioritizer/ast_visitors/call_counter.py`
 
