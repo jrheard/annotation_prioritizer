@@ -625,7 +625,9 @@ class Calculator:
 
 **Commit:** "feat: implement execution context-aware name resolution with forward lookup"
 
-### Step 4: Update position_index.py Internal Calls
+### Step 4: Update position_index.py Internal Calls ✅
+
+**Implementation Note:** This step was already completed as part of Step 3. The `_resolve_variable_target()` function (which is called by `build_position_index()`) already passes `ExecutionContext.IMMEDIATE` to `resolve_name()` at line 232. All 57 unit tests in `test_position_index.py` pass successfully.
 
 **File:** `src/annotation_prioritizer/position_index.py`
 
