@@ -24,6 +24,9 @@ from annotation_prioritizer.models import (
 )
 from annotation_prioritizer.scope_tracker import scope_stack_to_qualified_name
 
+# Mutable version of PositionIndex used internally during construction
+type _MutablePositionIndex = dict[QualifiedName, dict[str, list[LineBinding]]]
+
 
 def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeStack) -> NameBinding | None:
     """Resolve a name at a given position using binary search.
@@ -81,9 +84,9 @@ def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeS
 
 def _build_index_structure(
     bindings: list[NameBinding],
-) -> dict[QualifiedName, dict[str, list[LineBinding]]]:
+) -> _MutablePositionIndex:
     """Build the internal index structure from bindings."""
-    index: dict[QualifiedName, dict[str, list[LineBinding]]] = defaultdict(lambda: defaultdict(list))
+    index: _MutablePositionIndex = defaultdict(lambda: defaultdict(list))
 
     for binding in bindings:
         scope_name = scope_stack_to_qualified_name(binding.scope_stack)
