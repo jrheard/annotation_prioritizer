@@ -29,7 +29,7 @@
         ]
       },
       {
-        "matcher": "Bash(git reset:*)|Bash(git push:*)",
+        "matcher": "Bash",
         "hooks": [
           {
             "type": "command",
