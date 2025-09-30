@@ -171,12 +171,7 @@ class Outer:
             pass
 """
     _, _, known_classes = build_position_index_from_source(source)
-    # The _resolve_class_name method no longer exists in the refactored CallCountVisitor
-    # These tests verified internal implementation details that are now handled differently
-    # through the PositionIndex. The compound class resolution is now tested implicitly
-    # through other tests that verify actual function calls are resolved correctly.
 
-    # Verify that the known_classes set was built correctly
     assert "__module__.Outer" in known_classes
     assert "__module__.Outer.Inner" in known_classes
     assert "__module__.Outer.Inner.Nested" in known_classes

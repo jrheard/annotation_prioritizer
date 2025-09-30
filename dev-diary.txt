@@ -1296,7 +1296,7 @@ DONE verify that _resolve_compound_class_reference() is correct - look for edge 
 
 DONE look for places in the code that talks about registries
 
-TODO should resolve_name() assert that the scopestack is non-empty?
+DONE should resolve_name() assert that the scopestack is non-empty?
 
 NVM expand docstrings in position_index.py?
 
