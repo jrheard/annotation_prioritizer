@@ -1,21 +1,38 @@
 """Position-aware name resolution for Python code analysis.
 
-This module provides efficient position-aware name resolution using binary search.
-The PositionIndex maps scope qualified names to dictionaries of names, which map to
-sorted lists of (line_number, binding) tuples. This enables O(log k) lookup of the
-most recent binding before a given line number, where k is the number of bindings
-for a given name in a scope.
+This module provides efficient position-aware name resolution using binary search
+to mirror Python's lexical scoping rules.
+
+Design Rationale - Why Two-Level Dictionary Structure:
+    Name resolution looks up UNQUALIFIED local names (e.g., "sqrt") from specific
+    scopes, not qualified names. When resolving a name reference, we know:
+    - The local name being referenced (e.g., "sqrt")
+    - The current scope (e.g., "__module__.Calculator.add")
+    - The line number where it's used
+
+    But we DON'T know the qualified name of the binding we're looking for. We must
+    search through the scope chain to discover which binding the name refers to.
+
+    The two-level structure enables lookups like:
+        index[scope_qualified_name][local_name] -> list of bindings
+
+    An alternative structure like dict[QualifiedName, list[LineBinding]] would index
+    by the binding's full qualified name, but that doesn't help during resolution
+    since we only have the unqualified name.
+
+Performance:
+    The PositionIndex enables O(log k) lookup of the most recent binding before a
+    given line number, where k is the number of bindings for a given name in a scope.
 """
 
 import bisect
 import dataclasses
 from collections import defaultdict
+from collections.abc import Mapping
 
 from annotation_prioritizer.models import (
-    LineBinding,
     NameBinding,
     NameBindingKind,
-    PositionIndex,
     QualifiedName,
     Scope,
     ScopeKind,
@@ -23,6 +40,51 @@ from annotation_prioritizer.models import (
     make_qualified_name,
 )
 from annotation_prioritizer.scope_tracker import scope_stack_to_qualified_name
+
+type LineBinding = tuple[int, NameBinding]
+"""A name binding at a specific line number.
+
+Used in PositionIndex for binary search: the int is the line number where
+the binding occurs, and the NameBinding contains the binding information.
+These are kept sorted by line number for efficient lookup.
+"""
+
+
+type PositionIndex = Mapping[QualifiedName, dict[str, list[LineBinding]]]
+"""Position-aware name resolution index.
+
+Structure:
+    Mapping[QualifiedName, dict[str, list[LineBinding]]]
+
+    - Outer dict key (QualifiedName): Which scope contains the bindings
+      Examples: "__module__", "__module__.Calculator"
+
+    - Inner dict key (str): Local name within that scope
+      Examples: "sqrt", "Calculator", "add", "math"
+
+    - Value (list[LineBinding]): All bindings for that name in that scope,
+      sorted by line number for binary search
+
+Example for this code:
+    import math                  # line 1
+
+    class Calculator:            # line 5
+        def add(self, a, b):     # line 6
+            return a + b
+        def multiply(self, a, b): # line 9
+            return a * b
+
+    {
+        "__module__": {
+            "math": [(1, NameBinding(..., kind=IMPORT))],
+            "Calculator": [(5, NameBinding(..., kind=CLASS))]
+        },
+        "__module__.Calculator": {
+            "add": [(6, NameBinding(..., kind=FUNCTION))],
+            "multiply": [(9, NameBinding(..., kind=FUNCTION))]
+        }
+    }
+"""
 
 # Mutable version of PositionIndex used internally during construction
 type _MutablePositionIndex = dict[QualifiedName, dict[str, list[LineBinding]]]

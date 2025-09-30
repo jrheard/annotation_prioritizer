@@ -9,7 +9,6 @@ Data Flow Through Models:
     6. AnalysisResult: Complete analysis including priorities and unresolvable calls
 """
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -92,46 +91,6 @@ class NameBinding:
     scope_stack: ScopeStack  # Full scope stack where binding occurs
     source_module: str | None  # For imports: "math" from "from math import sqrt"
     target_class: QualifiedName | None  # For variables: class they're instances of
-
-
-type LineBinding = tuple[int, NameBinding]
-"""A name binding at a specific line number.
-
-Used in PositionIndex for binary search: the int is the line number where
-the binding occurs, and the NameBinding contains the binding information.
-These are kept sorted by line number for efficient lookup.
-"""
-
-
-type PositionIndex = Mapping[QualifiedName, dict[str, list[LineBinding]]]
-"""Position-aware name resolution index.
-
-Maps scope qualified names to dictionaries of names, which map to sorted lists
-of (line_number, binding) tuples for binary search lookup.
-
-Example structure for this code:
-    import math                  # line 1
-
-    class Calculator:            # line 5
-        def add(self, a, b):     # line 6
-            return a + b
-        def multiply(self, a, b): # line 9
-            return a * b
-
-    {
-        "__module__": {
-            "math": [(1, NameBinding(..., kind=IMPORT))],
-            "Calculator": [(5, NameBinding(..., kind=CLASS))]
-        },
-        "__module__.Calculator": {
-            "add": [(6, NameBinding(..., kind=FUNCTION))],
-            "multiply": [(9, NameBinding(..., kind=FUNCTION))]
-        }
-    }
-
-Create with build_position_index() from position_index module.
-Use with resolve_name() for position-aware name resolution.
-"""
 
 
 @dataclass(frozen=True)

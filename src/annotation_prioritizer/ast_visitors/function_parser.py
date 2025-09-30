@@ -42,11 +42,11 @@ from annotation_prioritizer.models import (
     FunctionInfo,
     NameBindingKind,
     ParameterInfo,
-    PositionIndex,
     Scope,
     ScopeKind,
     make_qualified_name,
 )
+from annotation_prioritizer.position_index import PositionIndex
 from annotation_prioritizer.scope_tracker import (
     ScopeStack,
     add_scope,

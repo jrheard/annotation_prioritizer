@@ -319,13 +319,13 @@ DONE think about when to implement import support. should we do this before or a
 
 DONE is there any way to simplify / condense _resolve_class_name and _resolve_compound_class_name?
 
-TODO make sure test filenames match the prod filenames; add this to claude.md
+DONE make sure test filenames match the prod filenames; add this to claude.md
 
 ok man i am way down into a rabbit hole
 
 LESSON LEARNED: SERIOUSLY ONLY LET IT DO ONE COMMIT AT A TIME
 
-TODO i feel like the code in count_function_calls() is duplicated in multiple places
+DONE i feel like the code in count_function_calls() is duplicated in multiple places
 
 TODO add asserts in some places where we currently have to-dos??
 
@@ -333,7 +333,7 @@ DONE QualifiedName newtype?? could be useful for prod AND test code???
 
 DONE resolve_function_call and resolve_class_name are identical
 
-TODO helper for making a qualified name from a scope stack?
+DONE helper for making a qualified name from a scope stack?
 
 hm apparently the "class improvements" plan is done now??
 
@@ -665,7 +665,7 @@ what next? unresolvability?
 
 ok DONE start on unresolvability
 
-TODO update project_status doc
+DONE update project_status doc
 
 ===
 
@@ -1022,14 +1022,14 @@ ok let's make a new branch and start work
 
 DONE move test to test_unsupported, not test_call_count
 
-TODO why check imports FIRST rather than LAST?
+DONE why check imports FIRST rather than LAST?
   actually last would be wrong too
   it's more complicated than that
 
 TODO instead of QualifiedName strings, should we passing around lists of scope tuples??
 
-TODO fix position-sensitive name support
-  TODO https://github.com/jrheard/annotation_prioritizer/issues/31
+DONE fix position-sensitive name support
+  DONE https://github.com/jrheard/annotation_prioritizer/issues/31
 
   this is a can of worms!!!
 
@@ -1041,13 +1041,13 @@ DONE   4. Inconsistent Import Handling: Plan says imports have qualified_name=No
 TODO someday - distant future - comprehension variables?
   we should at least track this in test_unsupported.py
 
-TODO reread doc from scratch on monday
+DONE reread doc from scratch on monday
 
-TODO make sure i understand the proposed shape of PositionIndex. why is it dict[qualified_name][str] instead of dict[qualified_name]?
+DONE make sure i understand the proposed shape of PositionIndex. why is it dict[qualified_name][str] instead of dict[qualified_name]?
 
-TODO /review-plan on this single-pass doc at _least_ one more time
+DONE /review-plan on this single-pass doc at _least_ one more time
 
-TODO as part of the final PR review phase, we should run both main and the new branch on the demo files to verify we didn't lose functionality
+NVM as part of the final PR review phase, we should run both main and the new branch on the demo files to verify we didn't lose functionality
 
 TODO do a perf/memory investigation about the behavior/characeristics of using ScopeStacks everywhere vs using strings everywhere
 
@@ -1056,7 +1056,7 @@ TODO the main operation we're performing is prefix-based lookups - would a trie 
 
 TODO investigate using a format like 'm:foo.c:bar.f:baz:v.quux' for qualified names, so it's not lossy compared to scopestack
 
-TODO consider a /make-prototype command that takes a plan file as input, spins up a new branch, and makes a quick prototype of it
+DONE consider a /make-prototype command that takes a plan file as input, spins up a new branch, and makes a quick prototype of it
   to validate that the plan can work as written, to look for surprise missing prereqs, etc
 
   including a prototype_findings.md file at the end maybe, or maybe that can be a separate command to serve as a checkpoint
@@ -1161,7 +1161,7 @@ Bash(python test_prototype.py)
 
      Function call count changes:
 
-TODO use prototype_findings.md to update the doc
+DONE use prototype_findings.md to update the doc
 
 and honestly maybe do this prototype approach _again_ once the doc feels like it's in a good state, seems valuable
 
@@ -1259,11 +1259,11 @@ DONE update code review model?
 
 DONE update plan doc from prototype_findings.md
 
-TODO remove opus-agent and guidance in CLAUDE.md
+DONE remove opus-agent and guidance in CLAUDE.md
 
-TODO simplify simplify simplify
+DONE simplify simplify simplify
 
-TODO step 9 commit involved a ton of duplication in test code
+DONE step 9 commit involved a ton of duplication in test code
 
 TODO someday make an issue for this
 
@@ -1277,7 +1277,7 @@ TODO someday make an issue for this
 TODO also someday this
   calc: Calculator # just a definition with no assignment
 
-TODO review diff and start refactoring/improving
+DONE review diff and start refactoring/improving
 
 ===
 
@@ -1307,3 +1307,69 @@ TODO look at the "no longer exists" comment in test_call_counter
 TODO does test_unsupported need to be updated?
 
 DONE prevent claude from using `git reset --hard`, `git push` with hooks
+
+ Why PositionIndex Uses a Two-Level Dictionary Structure
+
+  The PositionIndex type is defined as:
+  type PositionIndex = Mapping[QualifiedName, dict[str, list[LineBinding]]]
+
+  This creates a two-level lookup structure instead of a simpler single-level dictionary. Here's why:
+
+  The Structure's Purpose
+
+  The two levels represent different aspects of name resolution:
+
+  1. Outer dict key (QualifiedName): The scope where bindings exist
+    - Examples: "__module__", "__module__.Calculator", "__module__.Calculator.add"
+  2. Inner dict key (str): The local name within that scope
+    - Examples: "sqrt", "Calculator", "add", "math"
+  3. Value (list[LineBinding]): All bindings for that name in that scope, sorted by line number
+
+  Example Structure
+
+  {
+      "__module__": {                          # Module scope
+          "math": [(1, NameBinding(...))],     # import math at line 1
+          "Calculator": [(5, NameBinding(...))] # class Calculator at line 5
+      },
+      "__module__.Calculator": {               # Calculator class scope
+          "add": [(6, NameBinding(...))],      # def add at line 6
+          "multiply": [(9, NameBinding(...))]  # def multiply at line 9
+      }
+  }
+
+  Why Not Just dict[QualifiedName, list[LineBinding]]?
+
+  The key insight is how name resolution works. When code references a name like sqrt, the resolver has:
+
+  - Input: An unqualified local name ("sqrt"), a line number, and the current scope
+  - Goal: Find which binding "sqrt" refers to
+
+  The resolve_name function in position_index.py:31 walks the scope chain from innermost to outermost:
+
+  # Try each scope from innermost to outermost
+  for scope_depth in range(len(scope_stack), 0, -1):
+      current_scope = scope_stack[:scope_depth]
+      scope_name = ...  # Build scope qualified name
+
+      # Look up bindings for this name in this scope
+      scope_dict = index[scope_name]
+      bindings = scope_dict[name]  # ← Need to lookup by local name!
+
+  The Critical Difference
+
+  - Alternative structure dict[QualifiedName, list[LineBinding]] would index by the binding's full qualified name (e.g., "__module__.sqrt")
+  - Problem: During resolution, we don't know the qualified name yet - we only know the unqualified local name ("sqrt")
+  - Solution: The two-level structure lets us query: "In scope X, are there any bindings for local name Y?"
+
+  This mirrors Python's lexical scoping: when you reference sqrt in code, Python searches through nested scopes for that local name, not for some pre-qualified name.
+
+  Enabling Shadowing and Scope Chain Resolution
+
+  The structure naturally handles:
+
+  1. Shadowing within a scope: Multiple bindings of "sqrt" at different lines in "__module__" scope
+  2. Scope chain lookup: Search for "sqrt" in nested scopes without knowing which scope contains it
+  3. Position-aware resolution: Binary search within the list to find the correct binding before a given line
+
+  The lookup pattern index[scope][local_name] directly implements Python's LEGB (Local, Enclosing, Global, Built-in) scoping rules.

@@ -34,14 +34,13 @@ from annotation_prioritizer.models import (
     CallCount,
     FunctionInfo,
     NameBindingKind,
-    PositionIndex,
     QualifiedName,
     Scope,
     ScopeKind,
     UnresolvableCall,
     make_qualified_name,
 )
-from annotation_prioritizer.position_index import resolve_name
+from annotation_prioritizer.position_index import PositionIndex, resolve_name
 from annotation_prioritizer.scope_tracker import (
     add_scope,
     create_initial_stack,

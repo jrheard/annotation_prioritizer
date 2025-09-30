@@ -7,16 +7,19 @@ creating indexes from collected name bindings.
 """
 
 from annotation_prioritizer.models import (
-    LineBinding,
     NameBinding,
-    PositionIndex,
     QualifiedName,
     Scope,
     ScopeKind,
     ScopeStack,
     make_qualified_name,
 )
-from annotation_prioritizer.position_index import build_position_index, resolve_name
+from annotation_prioritizer.position_index import (
+    LineBinding,
+    PositionIndex,
+    build_position_index,
+    resolve_name,
+)
 from annotation_prioritizer.scope_tracker import scope_stack_to_qualified_name
 from tests.helpers.factories import (
     make_class_binding,
