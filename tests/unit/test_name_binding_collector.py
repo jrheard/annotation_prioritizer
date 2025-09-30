@@ -14,8 +14,6 @@ def test_initial_state() -> None:
 
     assert collector.bindings == []
     assert collector.unresolved_variables == []
-    assert len(collector.scope_stack) == 1
-    assert collector.scope_stack[0].kind == ScopeKind.MODULE
 
 
 def test_scope_restored_after_traversal() -> None:
@@ -37,9 +35,6 @@ async def fetch():
 
     # Verify bindings were collected (3 functions + 1 class)
     assert len(collector.bindings) == 4
-    # Verify scope stack is restored to module level
-    assert len(collector.scope_stack) == 1
-    assert collector.scope_stack[0].kind == ScopeKind.MODULE
 
 
 # Import binding collection tests

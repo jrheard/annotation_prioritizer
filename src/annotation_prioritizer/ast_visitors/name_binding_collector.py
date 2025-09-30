@@ -35,7 +35,7 @@ class NameBindingCollector(ast.NodeVisitor):
         super().__init__()
         self.bindings: list[NameBinding] = []
         self.unresolved_variables: list[tuple[NameBinding, str]] = []
-        self.scope_stack: ScopeStack = create_initial_stack()
+        self._scope_stack: ScopeStack = create_initial_stack()
 
     def _track_definition_and_visit_scope(
         self,
@@ -50,22 +50,22 @@ class NameBindingCollector(ast.NodeVisitor):
             kind: The type of binding (FUNCTION or CLASS)
             scope_kind: The type of scope to create (FUNCTION or CLASS)
         """
-        qualified = build_qualified_name(self.scope_stack, node.name)
+        qualified = build_qualified_name(self._scope_stack, node.name)
         binding = NameBinding(
             name=node.name,
             line_number=node.lineno,
             kind=kind,
             qualified_name=qualified,
-            scope_stack=self.scope_stack,
+            scope_stack=self._scope_stack,
             source_module=None,
             target_class=None,
         )
         self.bindings.append(binding)
 
         # Continue traversal with updated scope
-        self.scope_stack = add_scope(self.scope_stack, Scope(scope_kind, node.name))
+        self._scope_stack = add_scope(self._scope_stack, Scope(scope_kind, node.name))
         self.generic_visit(node)
-        self.scope_stack = drop_last_scope(self.scope_stack)
+        self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -91,7 +91,7 @@ class NameBindingCollector(ast.NodeVisitor):
                 line_number=node.lineno,
                 kind=NameBindingKind.IMPORT,
                 qualified_name=None,  # Unresolvable in Phase 1
-                scope_stack=self.scope_stack,
+                scope_stack=self._scope_stack,
                 source_module=alias.name,  # Track for Phase 2
                 target_class=None,
             )
@@ -106,7 +106,7 @@ class NameBindingCollector(ast.NodeVisitor):
                 line_number=node.lineno,
                 kind=NameBindingKind.IMPORT,
                 qualified_name=None,  # Unresolvable in Phase 1
-                scope_stack=self.scope_stack,
+                scope_stack=self._scope_stack,
                 source_module=node.module,  # Track for Phase 2
                 target_class=None,
             )
@@ -135,8 +135,8 @@ class NameBindingCollector(ast.NodeVisitor):
                 name=variable_name,
                 line_number=line_number,
                 kind=NameBindingKind.VARIABLE,
-                qualified_name=build_qualified_name(self.scope_stack, variable_name),
-                scope_stack=self.scope_stack,
+                qualified_name=build_qualified_name(self._scope_stack, variable_name),
+                scope_stack=self._scope_stack,
                 source_module=None,
                 target_class=None,  # Will be resolved in build_position_index
             )
@@ -150,8 +150,8 @@ class NameBindingCollector(ast.NodeVisitor):
                 name=variable_name,
                 line_number=line_number,
                 kind=NameBindingKind.VARIABLE,
-                qualified_name=build_qualified_name(self.scope_stack, variable_name),
-                scope_stack=self.scope_stack,
+                qualified_name=build_qualified_name(self._scope_stack, variable_name),
+                scope_stack=self._scope_stack,
                 source_module=None,
                 target_class=None,  # Will be resolved in build_position_index
             )
