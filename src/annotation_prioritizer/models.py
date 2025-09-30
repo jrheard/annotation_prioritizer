@@ -65,6 +65,24 @@ class NameBindingKind(StrEnum):
     VARIABLE = "variable"  # calc = Calculator()
 
 
+class ExecutionContext(StrEnum):
+    """Execution context for name resolution.
+
+    Distinguishes code that executes immediately when encountered (module level,
+    class bodies) from code that executes later (function bodies).
+
+    This mirrors Python's actual execution model:
+    - IMMEDIATE: Code runs when the interpreter reaches it (module statements, class bodies)
+    - DEFERRED: Code runs later when called (function/method bodies)
+
+    Used for forward reference resolution - deferred contexts can reference
+    names defined later in the same scope.
+    """
+
+    IMMEDIATE = "immediate"  # Executes when encountered
+    DEFERRED = "deferred"  # Executes later when called
+
+
 @dataclass(frozen=True)
 class NameBinding:
     """A name binding at a specific position in the code.
