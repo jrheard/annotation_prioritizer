@@ -354,7 +354,10 @@ class CallCountVisitor(ast.NodeVisitor):
         )
 
     def _resolve_compound_class_reference(self, node: ast.Attribute, lineno: int) -> QualifiedName | None:
-        """Resolve a compound class reference like Outer.Inner.
+        """Resolve a compound class reference like Outer.Inner or obj.Inner.
+
+        Handles both direct class references (Outer.Inner) and references through
+        instance variables (obj.Inner where obj is an instance of Outer).
 
         Args:
             node: The ast.Attribute node representing the compound reference
@@ -380,11 +383,18 @@ class CallCountVisitor(ast.NodeVisitor):
         # Try to resolve the leftmost name
         binding = resolve_name(self._position_index, parts[0], lineno, self._scope_stack)
 
-        if not binding or binding.kind != NameBindingKind.CLASS:
+        if not binding:
+            return None
+
+        # Get base qualified name from either CLASS or VARIABLE with target_class
+        if binding.kind == NameBindingKind.CLASS:
+            base_qualified = binding.qualified_name
+        elif binding.kind == NameBindingKind.VARIABLE and binding.target_class is not None:
+            base_qualified = binding.target_class
+        else:
             return None
 
         # Build the full qualified name by appending the rest of the parts
-        base_qualified = binding.qualified_name
         full_qualified = make_qualified_name(f"{base_qualified}.{'.'.join(parts[1:])}")
 
         # Verify this class actually exists in known_classes

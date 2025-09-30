@@ -214,6 +214,40 @@ def my_function():
     assert visitor.call_counts[make_qualified_name("__module__.my_function.Outer.Inner.method")] == 1
 
 
+def test_compound_reference_through_function_not_resolved() -> None:
+    """Test that compound references through functions are not resolved."""
+    code = """
+def my_function():
+    pass
+
+def test():
+    # Attempt to access an attribute through a function (invalid)
+    my_function.Inner.method()
+"""
+
+    tree, position_index, known_classes = build_position_index_from_source(code)
+
+    known_functions = (
+        make_function_info(
+            "my_function",
+            qualified_name=make_qualified_name("__module__.my_function"),
+            line_number=2,
+            file_path=Path("test.py"),
+        ),
+    )
+
+    visitor = CallCountVisitor(known_functions, position_index, known_classes, code)
+    visitor.visit(tree)
+
+    # The call should not be resolved since my_function is a FUNCTION, not a CLASS
+    # my_function itself is in call_counts with 0 (it's a known function)
+    assert visitor.call_counts[make_qualified_name("__module__.my_function")] == 0
+    # The compound call my_function.Inner.method() should be unresolvable
+    unresolvable = visitor.get_unresolvable_calls()
+    assert len(unresolvable) == 1
+    assert "my_function.Inner.method()" in unresolvable[0].call_text
+
+
 def test_unresolvable_call_text_truncation() -> None:
     """Test that very long unresolvable calls are truncated to 200 chars + ellipsis."""
     # Create a call with more than 200 characters
@@ -248,7 +282,6 @@ def test_unresolvable_call_when_source_segment_fails(return_value: str | None) -
         assert unresolvable_calls[0].call_text == "<unable to extract call text>"
 
 
-@pytest.mark.skip(reason="Edge case: compound class references through variables not yet supported")
 def test_compound_class_reference_through_instantiated_variable() -> None:
     """Test compound class references using a variable holding an instance.
 

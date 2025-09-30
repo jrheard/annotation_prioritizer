@@ -1292,7 +1292,7 @@ TODO make tests/ file structure have more directories, to match prod dirs?
 
 DONE is there a cleaner way to implement get_containing_class_qualified_name()?
 
-TODO verify that _resolve_compound_class_reference() is correct - look for edge cases
+DONE verify that _resolve_compound_class_reference() is correct - look for edge cases
 
 TODO look for places in the code that talks about registries
 

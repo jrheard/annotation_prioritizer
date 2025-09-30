@@ -511,6 +511,19 @@ def use_attribute_chains():
 
 
 # ===========================================================================
+# STORED ATTRIBUTE REFERENCES
+# ===========================================================================
+# Storing class references from attributes in variables is not tracked.
+
+def use_stored_references():
+    obj = Outer()
+    # Store the nested class reference from an instance
+    inner_class_ref = obj.Inner
+    instance = inner_class_ref()  # Not tracked - requires tracking attribute-to-variable flow
+    instance.inner_method()  # Not tracked
+
+
+# ===========================================================================
 # GENERIC TYPE ANNOTATIONS
 # ===========================================================================
 # Complex type hints with generics aren't fully parsed yet.
@@ -680,6 +693,9 @@ def use_query_builder():
     assert counts.get(make_qualified_name("__module__.Application.__init__"), 0) == 1
     # But query() calls through attribute chains are not tracked
     assert counts.get(make_qualified_name("__module__.Database.query"), 0) == 0
+
+    # Stored attribute references: storing class from instance attribute not tracked
+    # Note: Outer instantiation already counted in nested class section
 
     # Dataclass field attributes: Configuration instantiations tracked
     assert counts.get(make_qualified_name("__module__.Configuration.__init__"), 0) == 2
