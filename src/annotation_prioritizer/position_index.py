@@ -35,7 +35,6 @@ from annotation_prioritizer.models import (
     NameBindingKind,
     QualifiedName,
     ScopeStack,
-    make_qualified_name,
 )
 from annotation_prioritizer.scope_tracker import scope_stack_to_qualified_name
 
@@ -116,11 +115,7 @@ def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeS
     for scope_depth in range(len(scope_stack), 0, -1):
         # Build scope qualified name for this depth
         current_scope = scope_stack[:scope_depth]
-
-        if len(current_scope) == 1:
-            scope_name = make_qualified_name("__module__")
-        else:
-            scope_name = make_qualified_name(".".join(s.name for s in current_scope))
+        scope_name = scope_stack_to_qualified_name(current_scope)
 
         # Look up bindings for this name in this scope
         if scope_name not in index:
@@ -134,13 +129,10 @@ def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeS
 
         # Use binary search to find the latest binding before this line
         # We search for bindings with line_number < line (strictly less than)
-        # Extract just the line numbers for comparison
-        line_numbers = [b[0] for b in bindings]
-        idx = bisect.bisect_left(line_numbers, line)
+        idx = bisect.bisect_left(bindings, line, key=lambda x: x[0])
 
         if idx > 0:
-            _, binding = bindings[idx - 1]
-            return binding
+            return bindings[idx - 1][1]
 
     return None
 
