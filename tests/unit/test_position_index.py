@@ -10,6 +10,7 @@ creating indexes from collected name bindings.
 import pytest
 
 from annotation_prioritizer.models import (
+    ExecutionContext,
     NameBinding,
     NameBindingKind,
     QualifiedName,
@@ -69,7 +70,7 @@ class TestPositionIndexBasicResolution:
         index = build_index([binding])
 
         # Should resolve at line 10 (after binding)
-        result = resolve_name(index, "sqrt", 10, make_module_scope())
+        result = resolve_name(index, "sqrt", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == binding
 
     def test_resolve_returns_none_for_unknown_name(self) -> None:
@@ -77,7 +78,7 @@ class TestPositionIndexBasicResolution:
         binding = make_import_binding("sqrt", "math", line_number=5)
         index = build_index([binding])
 
-        result = resolve_name(index, "cos", 10, make_module_scope())
+        result = resolve_name(index, "cos", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is None
 
     def test_resolve_returns_none_before_binding(self) -> None:
@@ -86,7 +87,7 @@ class TestPositionIndexBasicResolution:
         index = build_index([binding])
 
         # Query at line 5 (before binding at line 10)
-        result = resolve_name(index, "sqrt", 5, make_module_scope())
+        result = resolve_name(index, "sqrt", 5, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is None
 
     def test_resolve_at_exact_binding_line(self) -> None:
@@ -96,7 +97,7 @@ class TestPositionIndexBasicResolution:
 
         # Query at exact line 10 (binding itself)
         # Should return None because we want bindings BEFORE this line
-        result = resolve_name(index, "sqrt", 10, make_module_scope())
+        result = resolve_name(index, "sqrt", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is None
 
 
@@ -114,11 +115,11 @@ class TestPositionIndexShadowing:
         index = build_index([import_binding, function_binding])
 
         # At line 8, should resolve to import (line 5)
-        result = resolve_name(index, "sqrt", 8, make_module_scope())
+        result = resolve_name(index, "sqrt", 8, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import_binding
 
         # At line 15, should resolve to function (line 10)
-        result = resolve_name(index, "sqrt", 15, make_module_scope())
+        result = resolve_name(index, "sqrt", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == function_binding
 
     def test_shadowing_three_bindings_same_name(self) -> None:
@@ -130,9 +131,9 @@ class TestPositionIndexShadowing:
         index = build_index([binding_5, binding_10, binding_15])
 
         # Test resolution at different points
-        assert resolve_name(index, "x", 7, make_module_scope()) == binding_5
-        assert resolve_name(index, "x", 12, make_module_scope()) == binding_10
-        assert resolve_name(index, "x", 20, make_module_scope()) == binding_15
+        assert resolve_name(index, "x", 7, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_5
+        assert resolve_name(index, "x", 12, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_10
+        assert resolve_name(index, "x", 20, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_15
 
     def test_shadowing_reverse_order_insertion(self) -> None:
         """Binary search works regardless of insertion order."""
@@ -144,9 +145,9 @@ class TestPositionIndexShadowing:
         index = build_index([binding_15, binding_10, binding_5])
 
         # Should still resolve correctly
-        assert resolve_name(index, "x", 7, make_module_scope()) == binding_5
-        assert resolve_name(index, "x", 12, make_module_scope()) == binding_10
-        assert resolve_name(index, "x", 20, make_module_scope()) == binding_15
+        assert resolve_name(index, "x", 7, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_5
+        assert resolve_name(index, "x", 12, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_10
+        assert resolve_name(index, "x", 20, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_15
 
 
 class TestPositionIndexScopeChain:
@@ -170,11 +171,11 @@ class TestPositionIndexScopeChain:
         index = build_index([module_binding, function_binding])
 
         # In module scope at line 20, should resolve to module binding
-        result = resolve_name(index, "x", 20, make_module_scope())
+        result = resolve_name(index, "x", 20, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == module_binding
 
         # In function scope at line 15, should resolve to function binding
-        result = resolve_name(index, "x", 15, function_scope)
+        result = resolve_name(index, "x", 15, function_scope, ExecutionContext.IMMEDIATE)
         assert result == function_binding
 
     def test_resolve_falls_back_to_outer_scope(self) -> None:
@@ -187,7 +188,7 @@ class TestPositionIndexScopeChain:
         index = build_index([module_binding])
 
         # In function scope, should fall back to module scope
-        result = resolve_name(index, "sqrt", 15, function_scope)
+        result = resolve_name(index, "sqrt", 15, function_scope, ExecutionContext.IMMEDIATE)
         assert result == module_binding
 
     def test_inner_scope_shadows_outer_scope(self) -> None:
@@ -208,11 +209,11 @@ class TestPositionIndexScopeChain:
         index = build_index([module_binding, class_binding])
 
         # In class scope at line 15, should resolve to class binding
-        result = resolve_name(index, "sqrt", 15, class_scope)
+        result = resolve_name(index, "sqrt", 15, class_scope, ExecutionContext.IMMEDIATE)
         assert result == class_binding
 
         # In module scope at line 15, should resolve to module binding
-        result = resolve_name(index, "sqrt", 15, make_module_scope())
+        result = resolve_name(index, "sqrt", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == module_binding
 
 
@@ -223,7 +224,7 @@ class TestPositionIndexEdgeCases:
         """Resolve returns None for empty index."""
         index = build_index([])
 
-        result = resolve_name(index, "sqrt", 10, make_module_scope())
+        result = resolve_name(index, "sqrt", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is None
 
     def test_empty_scope_stack_raises_error(self) -> None:
@@ -233,14 +234,14 @@ class TestPositionIndexEdgeCases:
         index = build_index([binding])
 
         with pytest.raises(ValueError, match="scope_stack must not be empty"):
-            resolve_name(index, "x", 10, empty_scope)
+            resolve_name(index, "x", 10, empty_scope, ExecutionContext.IMMEDIATE)
 
     def test_single_scope_in_stack(self) -> None:
         """Handle scope stack with only module scope."""
         binding = make_import_binding("x", "foo", line_number=5)
         index = build_index([binding])
 
-        result = resolve_name(index, "x", 10, make_module_scope())
+        result = resolve_name(index, "x", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == binding
 
     def test_deeply_nested_scope(self) -> None:
@@ -257,7 +258,7 @@ class TestPositionIndexEdgeCases:
         index = build_index([module_binding])
 
         # Should find binding from module scope even in deeply nested scope
-        result = resolve_name(index, "x", 50, deeply_nested_scope)
+        result = resolve_name(index, "x", 50, deeply_nested_scope, ExecutionContext.IMMEDIATE)
         assert result == module_binding
 
     def test_multiple_names_same_scope(self) -> None:
@@ -269,9 +270,11 @@ class TestPositionIndexEdgeCases:
         index = build_index([sqrt_binding, cos_binding, sin_binding])
 
         # Each name should resolve independently
-        assert resolve_name(index, "sqrt", 10, make_module_scope()) == sqrt_binding
-        assert resolve_name(index, "cos", 10, make_module_scope()) == cos_binding
-        assert resolve_name(index, "sin", 10, make_module_scope()) == sin_binding
+        assert (
+            resolve_name(index, "sqrt", 10, make_module_scope(), ExecutionContext.IMMEDIATE) == sqrt_binding
+        )
+        assert resolve_name(index, "cos", 10, make_module_scope(), ExecutionContext.IMMEDIATE) == cos_binding
+        assert resolve_name(index, "sin", 10, make_module_scope(), ExecutionContext.IMMEDIATE) == sin_binding
 
 
 class TestPositionIndexBinarySearchEfficiency:
@@ -286,11 +289,16 @@ class TestPositionIndexBinarySearchEfficiency:
         index = build_index(bindings)
 
         # Test resolution at various points
-        assert resolve_name(index, "x", 15, make_module_scope()) == bindings[0]  # Line 10
-        assert resolve_name(index, "x", 35, make_module_scope()) == bindings[2]  # Line 30
-        assert resolve_name(index, "x", 55, make_module_scope()) == bindings[4]  # Line 50
-        assert resolve_name(index, "x", 95, make_module_scope()) == bindings[8]  # Line 90
-        assert resolve_name(index, "x", 105, make_module_scope()) == bindings[9]  # Line 100
+        # Line 10
+        assert resolve_name(index, "x", 15, make_module_scope(), ExecutionContext.IMMEDIATE) == bindings[0]
+        # Line 30
+        assert resolve_name(index, "x", 35, make_module_scope(), ExecutionContext.IMMEDIATE) == bindings[2]
+        # Line 50
+        assert resolve_name(index, "x", 55, make_module_scope(), ExecutionContext.IMMEDIATE) == bindings[4]
+        # Line 90
+        assert resolve_name(index, "x", 95, make_module_scope(), ExecutionContext.IMMEDIATE) == bindings[8]
+        # Line 100
+        assert resolve_name(index, "x", 105, make_module_scope(), ExecutionContext.IMMEDIATE) == bindings[9]
 
     def test_binary_search_boundary_conditions(self) -> None:
         """Binary search handles boundary conditions correctly."""
@@ -300,16 +308,16 @@ class TestPositionIndexBinarySearchEfficiency:
         index = build_index([binding_10, binding_20])
 
         # Just before first binding
-        assert resolve_name(index, "x", 9, make_module_scope()) is None
+        assert resolve_name(index, "x", 9, make_module_scope(), ExecutionContext.IMMEDIATE) is None
 
         # Just after first binding
-        assert resolve_name(index, "x", 11, make_module_scope()) == binding_10
+        assert resolve_name(index, "x", 11, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_10
 
         # Just before second binding
-        assert resolve_name(index, "x", 19, make_module_scope()) == binding_10
+        assert resolve_name(index, "x", 19, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_10
 
         # Just after second binding
-        assert resolve_name(index, "x", 21, make_module_scope()) == binding_20
+        assert resolve_name(index, "x", 21, make_module_scope(), ExecutionContext.IMMEDIATE) == binding_20
 
 
 class TestPositionIndexIssueShadowingScenarios:
@@ -326,12 +334,12 @@ class TestPositionIndexIssueShadowingScenarios:
         index = build_index([import_sqrt, function_sqrt])
 
         # Before shadowing: sqrt() at line 5 should resolve to import
-        result = resolve_name(index, "sqrt", 5, make_module_scope())
+        result = resolve_name(index, "sqrt", 5, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import_sqrt
         assert result is not None
 
         # After shadowing: sqrt() at line 15 should resolve to local function
-        result = resolve_name(index, "sqrt", 15, make_module_scope())
+        result = resolve_name(index, "sqrt", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == function_sqrt
         assert result is not None
 
@@ -346,12 +354,12 @@ class TestPositionIndexIssueShadowingScenarios:
         index = build_index([function_sqrt, import_sqrt])
 
         # Before import: sqrt() at line 10 resolves to local function
-        result = resolve_name(index, "sqrt", 10, make_module_scope())
+        result = resolve_name(index, "sqrt", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == function_sqrt
         assert result is not None
 
         # After import: sqrt() at line 20 resolves to import
-        result = resolve_name(index, "sqrt", 20, make_module_scope())
+        result = resolve_name(index, "sqrt", 20, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import_sqrt
         assert result is not None
 
@@ -366,11 +374,11 @@ class TestPositionIndexIssueShadowingScenarios:
         index = build_index([import_list, class_list])
 
         # Before class: List at line 5 resolves to import
-        result = resolve_name(index, "List", 5, make_module_scope())
+        result = resolve_name(index, "List", 5, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import_list
 
         # After class: List at line 15 resolves to class
-        result = resolve_name(index, "List", 15, make_module_scope())
+        result = resolve_name(index, "List", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == class_list
 
 
@@ -382,7 +390,7 @@ class TestBuildPositionIndex:
         index = build_position_index([])
 
         # Should resolve to None for any name
-        result = resolve_name(index, "foo", 10, make_module_scope())
+        result = resolve_name(index, "foo", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is None
 
     def test_build_index_with_single_binding(self) -> None:
@@ -391,11 +399,11 @@ class TestBuildPositionIndex:
         index = build_position_index([binding])
 
         # Should resolve sqrt after line 1
-        result = resolve_name(index, "sqrt", 10, make_module_scope())
+        result = resolve_name(index, "sqrt", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == binding
 
         # Should not resolve before line 1
-        result = resolve_name(index, "sqrt", 1, make_module_scope())
+        result = resolve_name(index, "sqrt", 1, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is None
 
     def test_build_index_sorts_bindings_by_line_number(self) -> None:
@@ -408,11 +416,11 @@ class TestBuildPositionIndex:
         index = build_position_index([binding2, binding1])
 
         # At line 15, should resolve to the import (line 10)
-        result = resolve_name(index, "foo", 15, make_module_scope())
+        result = resolve_name(index, "foo", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == binding1
 
         # At line 25, should resolve to the function (line 20)
-        result = resolve_name(index, "foo", 25, make_module_scope())
+        result = resolve_name(index, "foo", 25, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == binding2
 
     def test_build_index_resolves_variable_to_class(self) -> None:
@@ -424,7 +432,7 @@ class TestBuildPositionIndex:
         index = build_position_index([class_binding, var_binding], [(var_binding, "Calculator")])
 
         # The variable should now have target_class resolved
-        result = resolve_name(index, "calc", 15, make_module_scope())
+        result = resolve_name(index, "calc", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is not None
         assert result.target_class == make_qualified_name("__module__.Calculator")
 
@@ -444,7 +452,7 @@ class TestBuildPositionIndex:
         )
 
         # Variable should resolve to the LOCAL class, not the import
-        result = resolve_name(index, "calc", 25, make_module_scope())
+        result = resolve_name(index, "calc", 25, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is not None
         assert result.target_class == make_qualified_name("__module__.Calculator")
 
@@ -455,7 +463,7 @@ class TestBuildPositionIndex:
         # Try to resolve to a class that doesn't exist
         index = build_position_index([var_binding], [(var_binding, "NonexistentClass")])
 
-        result = resolve_name(index, "calc", 15, make_module_scope())
+        result = resolve_name(index, "calc", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is not None
         assert result.target_class is None
 
@@ -467,7 +475,7 @@ class TestBuildPositionIndex:
         # Variable references a function, not a class
         index = build_position_index([func_binding, var_binding], [(var_binding, "process")])
 
-        result = resolve_name(index, "p", 15, make_module_scope())
+        result = resolve_name(index, "p", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is not None
         assert result.target_class is None  # Should not resolve to function
 
@@ -479,7 +487,7 @@ class TestBuildPositionIndex:
         # Variable references an import, not a class
         index = build_position_index([import_binding, var_binding], [(var_binding, "math")])
 
-        result = resolve_name(index, "m", 15, make_module_scope())
+        result = resolve_name(index, "m", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is not None
         assert result.target_class is None  # Should not resolve to import
 
@@ -494,11 +502,11 @@ class TestBuildPositionIndex:
         index = build_position_index([import_binding, func_binding])
 
         # Before function definition: should resolve to import
-        result = resolve_name(index, "sqrt", 5, make_module_scope())
+        result = resolve_name(index, "sqrt", 5, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import_binding
 
         # After function definition: should resolve to function
-        result = resolve_name(index, "sqrt", 15, make_module_scope())
+        result = resolve_name(index, "sqrt", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == func_binding
 
     def test_build_index_shadowing_function_by_import(self) -> None:
@@ -512,11 +520,11 @@ class TestBuildPositionIndex:
         index = build_position_index([func_binding, import_binding])
 
         # Before import: should resolve to function
-        result = resolve_name(index, "sqrt", 5, make_module_scope())
+        result = resolve_name(index, "sqrt", 5, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == func_binding
 
         # After import: should resolve to import
-        result = resolve_name(index, "sqrt", 15, make_module_scope())
+        result = resolve_name(index, "sqrt", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import_binding
 
     def test_build_index_variable_reassignment(self) -> None:
@@ -536,13 +544,13 @@ class TestBuildPositionIndex:
         )
 
         # At line 15: should resolve to first assignment
-        result = resolve_name(index, "calc", 15, make_module_scope())
+        result = resolve_name(index, "calc", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is not None
         assert result.line_number == 10
         assert result.target_class == make_qualified_name("__module__.Calculator")
 
         # At line 25: should resolve to second assignment
-        result = resolve_name(index, "calc", 25, make_module_scope())
+        result = resolve_name(index, "calc", 25, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result is not None
         assert result.line_number == 20
         assert result.target_class == make_qualified_name("__module__.AdvancedCalculator")
@@ -561,15 +569,15 @@ class TestBuildPositionIndex:
         index = build_position_index([import1, func, import2])
 
         # Line 5: should resolve to math.sqrt
-        result = resolve_name(index, "sqrt", 5, make_module_scope())
+        result = resolve_name(index, "sqrt", 5, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import1
 
         # Line 15: should resolve to local function
-        result = resolve_name(index, "sqrt", 15, make_module_scope())
+        result = resolve_name(index, "sqrt", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == func
 
         # Line 25: should resolve to numpy.sqrt
-        result = resolve_name(index, "sqrt", 25, make_module_scope())
+        result = resolve_name(index, "sqrt", 25, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import2
 
     def test_build_index_class_shadows_import(self) -> None:
@@ -583,11 +591,11 @@ class TestBuildPositionIndex:
         index = build_position_index([import_binding, class_binding])
 
         # Before class: resolves to import
-        result = resolve_name(index, "Calculator", 5, make_module_scope())
+        result = resolve_name(index, "Calculator", 5, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == import_binding
 
         # After class: resolves to local class
-        result = resolve_name(index, "Calculator", 15, make_module_scope())
+        result = resolve_name(index, "Calculator", 15, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == class_binding
 
     def test_build_index_variables_in_nested_scope(self) -> None:
@@ -608,7 +616,7 @@ class TestBuildPositionIndex:
         index = build_position_index([class_binding, var_binding], [(var_binding, "Calculator")])
 
         # Variable in function scope should resolve to module-level class
-        result = resolve_name(index, "calc", 15, func_scope)
+        result = resolve_name(index, "calc", 15, func_scope, ExecutionContext.IMMEDIATE)
         assert result is not None
         assert result.target_class == make_qualified_name("__module__.Calculator")
 
@@ -619,7 +627,7 @@ class TestBuildPositionIndex:
         # Call with unresolved_variables=None (default)
         index = build_position_index([binding])
 
-        result = resolve_name(index, "foo", 10, make_module_scope())
+        result = resolve_name(index, "foo", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == binding
 
     def test_build_index_with_empty_unresolved_list(self) -> None:
@@ -629,7 +637,7 @@ class TestBuildPositionIndex:
         # Call with empty list
         index = build_position_index([binding], [])
 
-        result = resolve_name(index, "foo", 10, make_module_scope())
+        result = resolve_name(index, "foo", 10, make_module_scope(), ExecutionContext.IMMEDIATE)
         assert result == binding
 
 
@@ -744,3 +752,163 @@ class TestSearchForwardInScope:
         assert binding is not None
         assert binding.line_number == 10
         assert binding.kind == NameBindingKind.FUNCTION
+
+
+class TestExecutionContextAwareResolution:
+    """Tests for execution context-aware name resolution (Step 3)."""
+
+    def test_immediate_context_backward_only(self) -> None:
+        """IMMEDIATE context only looks backward (current behavior)."""
+        helper_binding = make_function_binding("helper", line_number=5)
+        index = build_index([helper_binding])
+
+        # In IMMEDIATE context, helper is not found (defined after usage)
+        scope_stack = make_module_scope()
+        binding = resolve_name(index, "helper", 3, scope_stack, ExecutionContext.IMMEDIATE)
+        assert binding is None
+
+    def test_deferred_context_forward_lookup(self) -> None:
+        """DEFERRED context allows forward lookup for functions."""
+        helper_binding = make_function_binding("helper", line_number=5)
+        index = build_index([helper_binding])
+
+        # In DEFERRED context, helper IS found (forward reference allowed)
+        scope_stack = make_module_scope()
+        binding = resolve_name(index, "helper", 3, scope_stack, ExecutionContext.DEFERRED)
+        assert binding is not None
+        assert binding.name == "helper"
+        assert binding.kind == NameBindingKind.FUNCTION
+        assert binding.line_number == 5
+
+    def test_deferred_context_backward_preferred(self) -> None:
+        """Backward bindings take precedence even in deferred context."""
+        early_binding = make_function_binding("helper", line_number=2)
+        late_binding = make_function_binding("helper", line_number=8)
+        index = build_index([early_binding, late_binding])
+
+        scope_stack = make_module_scope()
+
+        # At line 3 (after early_binding), should find early binding backward
+        binding = resolve_name(index, "helper", 3, scope_stack, ExecutionContext.DEFERRED)
+        assert binding is not None
+        assert binding.line_number == 2
+
+        # At line 6 (between bindings), should find early binding backward
+        binding = resolve_name(index, "helper", 6, scope_stack, ExecutionContext.DEFERRED)
+        assert binding is not None
+        assert binding.line_number == 2
+
+    def test_deferred_context_shadowing_still_works(self) -> None:
+        """Shadowing works correctly in deferred context."""
+        first_helper = make_function_binding("helper", line_number=2)
+        second_helper = make_function_binding("helper", line_number=8)
+        index = build_index([first_helper, second_helper])
+
+        scope_stack = make_module_scope()
+
+        # At line 6 (inside caller between helpers), should find first helper backward
+        binding = resolve_name(index, "helper", 6, scope_stack, ExecutionContext.DEFERRED)
+        assert binding is not None
+        assert binding.line_number == 2
+
+    def test_deferred_context_variables_not_forward(self) -> None:
+        """Variables can't be forward-referenced even in deferred context."""
+        var_binding = make_variable_binding("var", line_number=4)
+        index = build_index([var_binding])
+
+        scope_stack = make_module_scope()
+
+        # Even in DEFERRED context, variables are not forward-resolvable
+        binding = resolve_name(index, "var", 3, scope_stack, ExecutionContext.DEFERRED)
+        assert binding is None
+
+    def test_deferred_context_imports_not_forward(self) -> None:
+        """Imports can't be forward-referenced even in deferred context."""
+        import_binding = make_import_binding("math", "math", line_number=4)
+        index = build_index([import_binding])
+
+        scope_stack = make_module_scope()
+
+        # Even in DEFERRED context, imports are not forward-resolvable
+        binding = resolve_name(index, "math", 3, scope_stack, ExecutionContext.DEFERRED)
+        assert binding is None
+
+    def test_deferred_context_classes_forward(self) -> None:
+        """Classes can be forward-referenced in deferred context."""
+        class_binding = make_class_binding("Calculator", line_number=5)
+        index = build_index([class_binding])
+
+        scope_stack = make_module_scope()
+
+        # In DEFERRED context, classes CAN be forward-referenced
+        binding = resolve_name(index, "Calculator", 3, scope_stack, ExecutionContext.DEFERRED)
+        assert binding is not None
+        assert binding.name == "Calculator"
+        assert binding.kind == NameBindingKind.CLASS
+        assert binding.line_number == 5
+
+    def test_immediate_context_no_forward_for_functions(self) -> None:
+        """Functions cannot be forward-referenced in immediate context."""
+        func_binding = make_function_binding("helper", line_number=5)
+        index = build_index([func_binding])
+
+        scope_stack = make_module_scope()
+
+        # In IMMEDIATE context, forward references not allowed
+        binding = resolve_name(index, "helper", 3, scope_stack, ExecutionContext.IMMEDIATE)
+        assert binding is None
+
+    def test_immediate_context_no_forward_for_classes(self) -> None:
+        """Classes cannot be forward-referenced in immediate context."""
+        class_binding = make_class_binding("Calculator", line_number=5)
+        index = build_index([class_binding])
+
+        scope_stack = make_module_scope()
+
+        # In IMMEDIATE context, forward references not allowed
+        binding = resolve_name(index, "Calculator", 3, scope_stack, ExecutionContext.IMMEDIATE)
+        assert binding is None
+
+    def test_deferred_context_nested_scope(self) -> None:
+        """Forward references work in deferred context with nested scopes."""
+        function_scope = make_function_scope("outer")
+
+        # Module-level function defined later
+        func_binding = make_function_binding("helper", line_number=10)
+        index = build_index([func_binding])
+
+        # In function scope (DEFERRED), can find module-level function forward
+        binding = resolve_name(index, "helper", 3, function_scope, ExecutionContext.DEFERRED)
+        assert binding is not None
+        assert binding.line_number == 10
+
+    def test_immediate_vs_deferred_same_code(self) -> None:
+        """Same code with different context gives different resolution."""
+        helper_binding = make_function_binding("helper", line_number=5)
+        index = build_index([helper_binding])
+
+        scope_stack = make_module_scope()
+
+        # In immediate context, binding is not found
+        binding_immediate = resolve_name(index, "helper", 3, scope_stack, ExecutionContext.IMMEDIATE)
+        assert binding_immediate is None
+
+        # In deferred context, binding is found
+        binding_deferred = resolve_name(index, "helper", 3, scope_stack, ExecutionContext.DEFERRED)
+        assert binding_deferred is not None
+        assert binding_deferred.line_number == 5
+
+    def test_deferred_context_falls_back_to_outer_scope_forward(self) -> None:
+        """Forward lookup works when falling back to outer scope."""
+        function_scope = make_function_scope("inner")
+
+        # Module-level function defined later
+        module_func = make_function_binding("helper", line_number=10)
+
+        index = build_index([module_func])
+
+        # In inner function, should find module-level function via forward lookup
+        binding = resolve_name(index, "helper", 3, function_scope, ExecutionContext.DEFERRED)
+        assert binding is not None
+        assert binding.line_number == 10
+        assert binding.name == "helper"
