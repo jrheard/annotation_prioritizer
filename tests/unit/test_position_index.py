@@ -1,3 +1,4 @@
+# pyright: reportPrivateUsage=false
 """Tests for position-aware name resolution.
 
 Tests verify position-aware name resolution with binary search,
@@ -10,6 +11,7 @@ import pytest
 
 from annotation_prioritizer.models import (
     NameBinding,
+    NameBindingKind,
     QualifiedName,
     Scope,
     ScopeKind,
@@ -19,6 +21,7 @@ from annotation_prioritizer.models import (
 from annotation_prioritizer.position_index import (
     LineBinding,
     PositionIndex,
+    _search_forward_in_scope,
     build_position_index,
     resolve_name,
 )
@@ -628,3 +631,116 @@ class TestBuildPositionIndex:
 
         result = resolve_name(index, "foo", 10, make_module_scope())
         assert result == binding
+
+
+class TestSearchForwardInScope:
+    """Tests for _search_forward_in_scope() helper function."""
+
+    def test_find_function_after_usage_line(self) -> None:
+        """Find function binding after the usage line."""
+        scope_dict = {
+            "helper": [
+                (5, make_function_binding("helper", line_number=5)),
+            ],
+        }
+
+        binding = _search_forward_in_scope(scope_dict, "helper", line=3)
+        assert binding is not None
+        assert binding.line_number == 5
+        assert binding.kind == NameBindingKind.FUNCTION
+
+    def test_find_class_after_usage_line(self) -> None:
+        """Find class binding after the usage line."""
+        scope_dict = {
+            "Calculator": [
+                (10, make_class_binding("Calculator", line_number=10)),
+            ],
+        }
+
+        binding = _search_forward_in_scope(scope_dict, "Calculator", line=2)
+        assert binding is not None
+        assert binding.line_number == 10
+        assert binding.kind == NameBindingKind.CLASS
+
+    def test_multiple_bindings_returns_first_after_line(self) -> None:
+        """When multiple bindings exist, return the first one after the line."""
+        scope_dict = {
+            "helper": [
+                (5, make_function_binding("helper", line_number=5)),
+                (15, make_function_binding("helper", line_number=15)),
+            ],
+        }
+
+        binding = _search_forward_in_scope(scope_dict, "helper", line=7)
+        assert binding is not None
+        assert binding.line_number == 15
+
+    def test_no_binding_after_line_returns_none(self) -> None:
+        """Return None when no binding exists after the line."""
+        scope_dict = {
+            "helper": [
+                (5, make_function_binding("helper", line_number=5)),
+            ],
+        }
+
+        binding = _search_forward_in_scope(scope_dict, "helper", line=20)
+        assert binding is None
+
+    def test_imports_not_returned(self) -> None:
+        """Imports cannot be forward-referenced, return None."""
+        scope_dict = {
+            "imported": [
+                (10, make_import_binding("imported", "math", line_number=10)),
+            ],
+        }
+
+        binding = _search_forward_in_scope(scope_dict, "imported", line=5)
+        assert binding is None
+
+    def test_variables_not_returned(self) -> None:
+        """Variables cannot be forward-referenced, return None."""
+        scope_dict = {
+            "var": [
+                (8, make_variable_binding("var", line_number=8)),
+            ],
+        }
+
+        binding = _search_forward_in_scope(scope_dict, "var", line=2)
+        assert binding is None
+
+    def test_name_not_in_scope_returns_none(self) -> None:
+        """Return None when the name doesn't exist in the scope."""
+        scope_dict = {
+            "helper": [
+                (5, make_function_binding("helper", line_number=5)),
+            ],
+        }
+
+        binding = _search_forward_in_scope(scope_dict, "nonexistent", line=5)
+        assert binding is None
+
+    def test_empty_scope_dict_returns_none(self) -> None:
+        """Return None for empty scope dictionary."""
+        scope_dict: dict[str, list[LineBinding]] = {}
+
+        binding = _search_forward_in_scope(scope_dict, "helper", line=5)
+        assert binding is None
+
+    def test_mixed_binding_types_returns_only_function_or_class(self) -> None:
+        """When bindings include mixed types, only return function or class."""
+        scope_dict = {
+            "name": [
+                (5, make_import_binding("name", "module", line_number=5)),
+                (10, make_function_binding("name", line_number=10)),
+            ],
+        }
+
+        # At line 3, should NOT return import (imports can't be forward-referenced)
+        binding = _search_forward_in_scope(scope_dict, "name", line=3)
+        assert binding is None
+
+        # At line 7, should return function (skipping import at line 5)
+        binding = _search_forward_in_scope(scope_dict, "name", line=7)
+        assert binding is not None
+        assert binding.line_number == 10
+        assert binding.kind == NameBindingKind.FUNCTION
