@@ -1306,4 +1306,4 @@ TODO look at the "no longer exists" comment in test_call_counter
 
 TODO does test_unsupported need to be updated?
 
-TODO prevent claude from using `git reset --hard`, `git push --force` with hooks
+TODO prevent claude from using `git reset --hard`, `git push` with hooks

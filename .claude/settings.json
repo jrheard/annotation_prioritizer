@@ -29,6 +29,15 @@
         ]
       },
       {
+        "matcher": "Bash(git reset:*)|Bash(git push:*)",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $CLAUDE_PROJECT_DIR/.claude/hooks/block_dangerous_git.py"
+          }
+        ]
+      },
+      {
         "matcher": "Write(*.py)",
         "hooks": [
           {
