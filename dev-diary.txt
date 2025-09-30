@@ -1286,3 +1286,5 @@ ok let's review this diff
 eh i'll just /make-pr
 
 TODO update project_status - did i have a command for this?
+
+TODO make tests/ file structure have more directories, to match prod dirs?
