@@ -1,5 +1,7 @@
 # Project Status: Type Annotation Priority Analyzer
 
+**Last Updated:** 2025-09-30
+
 ## Project Overview
 
 The Type Annotation Priority Analyzer is a Python tool that identifies high-impact functions needing type annotations. It analyzes Python codebases with partial type annotation coverage and prioritizes which functions should be annotated first based on usage frequency and annotation completeness.
@@ -19,7 +21,11 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
   - Return type annotations
   - Proper qualified names with full scope hierarchy (e.g., `__module__.Calculator.add`)
 - **Type Safety**: QualifiedName type wrapper with make_qualified_name() factory for type-safe qualified name handling
-- **Class Detection**: AST-based ClassRegistry that definitively identifies all classes, eliminating false positives
+- **Position-Aware Name Resolution**: NameBindingCollector and PositionIndex provide efficient, position-aware resolution:
+  - Single-pass collection of all name bindings (imports, functions, classes, variables)
+  - O(log k) binary search lookup where k is the number of bindings for a name in a scope
+  - Correctly handles Python's shadowing semantics (later definitions shadow earlier ones)
+  - Two-phase resolution for variable target classes
 
 ### Analysis Capabilities
 - **Annotation Scoring**: Weighted completeness scoring (75% parameters, 25% return type)
@@ -29,16 +35,22 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
   - Static/class method calls (`Calculator.static_method()`)
   - Nested function calls (functions defined inside other functions)
   - Class instantiations (`Calculator()` counts as call to `Calculator.__init__`)
-- **Variable Tracking**: VariableRegistry for tracking variable-to-type mappings:
-  - Builds registry upfront from AST analysis
+- **Variable Tracking**: Position-aware variable resolution through PositionIndex:
   - Direct instantiation: `calc = Calculator(); calc.add()`
-  - Parameter annotations: `def foo(calc: Calculator): calc.add()`
-  - Variable annotations: `calc: Calculator = ...`
-  - Variable reassignment tracking (most recent type)
-  - Scope isolation with parent scope access
+  - Variable reassignment tracking with position-aware shadowing
+  - Scope-aware resolution (checks current scope, then parent scopes)
+  - Two-phase resolution: collect bindings first, then resolve variable targets
+  - Note: Parameter annotations (`def foo(calc: Calculator)`) not yet tracked for variable resolution
 - **Priority Calculation**: Combined metric based on call frequency × annotation incompleteness
 - **Conservative Methodology**: Only tracks function calls that can be confidently resolved, avoiding uncertain inferences
 - **Scope-Aware Tracking**: Complete scope hierarchy tracking (module/class/function) with typed `Scope` dataclass
+- **Import Tracking (Phase 1 Complete)**: Tracks all import statements with source module information:
+  - Module imports: `import math`, `import pandas as pd`
+  - From imports: `from typing import List`
+  - Relative imports: `from . import utils`
+  - Scope-aware visibility (imports in functions only visible in that function)
+  - Foundation for future multi-file analysis (Phase 2)
+  - Note: Imported names are tracked but not resolved in single-file analysis
 - **Unresolvable Call Reporting**: Full transparency for calls that cannot be resolved statically:
   - UnresolvableCall model with line number and call text
   - Accurate multi-line call text extraction using ast.get_source_segment()
@@ -70,8 +82,11 @@ The Type Annotation Priority Analyzer is a Python tool that identifies high-impa
 ### Current Limitations
 
 #### Analysis Scope
-- **Single File Only**: No directory or project-wide analysis (temporary limitation)
-- **No Import Support**: Imported classes and functions not tracked
+- **Single File Only**: No directory or project-wide analysis (Phase 2 future work)
+- **Import Resolution Not Implemented**: Imports are tracked but not resolved
+  - Tool knows `sqrt` was imported from `math`
+  - Cannot resolve what `math.sqrt` refers to without analyzing math module
+  - Calls to imported functions are tracked as unresolvable
 
 #### Call Tracking Limitations
 The following patterns are not yet supported for call counting:
@@ -80,32 +95,32 @@ The following patterns are not yet supported for call counting:
 - **Indexing operations**: `calculators[0].add()` - requires collection content tracking
 - **Attribute access chains**: `self.calc.add()` - requires object attribute type tracking
 - **Collection type annotations**: `calculators: list[Calculator]` - generics not handled
-- **Cross-module types**: `from module import Calculator` - import resolution not implemented
+- **Cross-module types**: `from module import Calculator` - imports tracked but not resolved (Phase 2 work)
 - **Duplicate function definitions**: Functions redefined with the same name in the same file will share call counts (intentionally unsupported - uncommon pattern)
 
 ### Fixed Issues
 - ✅ **Instance Method Calls Not Counted**: Previously `calc = Calculator(); calc.add()` showed 0 calls (FIXED via variable tracking)
-- ✅ **False Positives with Constants**: Previously treated constants like `MAX_SIZE` as classes (FIXED via ClassRegistry)
+- ✅ **False Positives with Constants**: Previously treated constants like `MAX_SIZE` as classes (FIXED via position-aware resolution)
+- ✅ **Import Shadowing Bugs**: Previously failed to handle cases where imports were shadowed by local definitions (FIXED via PositionIndex with position-aware binary search resolution, issue #31)
 
 ### Import and Multi-File Support Status
 
-**Current State:**
+**Current State (Phase 1 Complete):**
 - Tool analyzes one file at a time in isolation
-- Cannot resolve imports (`from typing import List`, `import math`, etc.)
-- Cannot track calls to imported functions or class methods
-- Limited effectiveness on import-heavy codebases
+- **Import tracking**: All imports are tracked with source module information
+  - Knows that `sqrt` was imported from `math`
+  - Distinguishes imported names from unknown names
+  - Tracks scope visibility of imports
+- **Import resolution**: Not yet implemented (Phase 2 work)
+  - Cannot resolve what `math.sqrt` refers to without analyzing math module
+  - Calls to imported functions are tracked as unresolvable
+- Limited effectiveness on import-heavy codebases (will improve with Phase 2)
 
 **Future Implementation Path:**
-1. **Phase 1: Import Resolution** (Single File)
-   - Parse import statements within the analyzed file
-   - Build import registry mapping names to modules
-   - Resolve imported class/function references
-   - Handle common patterns (aliased imports, from imports)
-   - Still single-file, but with much better call attribution
-
-2. **Phase 2: Multi-File Analysis** (Directory Support)
+1. **Phase 2: Multi-File Analysis** (Directory Support) - NEXT GOAL
    - Analyze entire directories/projects
    - Build cross-file dependency graphs
+   - Resolve imports by analyzing imported modules
    - Track calls across module boundaries
    - Aggregate metrics at project level
    - This is the ultimate goal for maximum value
@@ -117,14 +132,13 @@ None currently.
 ## Planned Features 📋
 
 ### High Priority
-1. **Import Resolution** (Phase 1 - Single File)
-   - Parse and track import statements
-   - Resolve imported names to their modules
-   - Support common import patterns:
-     - `import math` → `math.sqrt()`
-     - `from typing import List` → `List.append()`
-     - `import pandas as pd` → `pd.DataFrame()`
-   - Still single-file analysis, but much more effective
+1. **Multi-File Analysis** (Phase 2 - Directory Support)
+   - Analyze entire directories/projects
+   - Build cross-file dependency graphs
+   - Resolve imports by analyzing imported modules
+   - Track calls across module boundaries
+   - Aggregate metrics at project level
+   - Builds on Phase 1 import tracking (already complete)
 
 2. **Inheritance Resolution**
    - Track class inheritance hierarchies
@@ -134,12 +148,18 @@ None currently.
 
 ### Medium Priority
 
-3. **Return Type Inference**
+3. **Parameter Type Annotation Tracking**
+   - Track parameter type annotations for variable resolution
+   - Support patterns like `def foo(calc: Calculator): calc.add()`
+   - Currently only tracks direct instantiation (`calc = Calculator()`)
+   - Would enable more comprehensive variable resolution
+
+4. **Return Type Inference**
    - Track function return types to enable method chaining
    - Support patterns like `get_calc().add()`
    - Would require significant type inference infrastructure
 
-4. **@property Support**
+5. **@property Support**
    - Distinguish properties from regular attributes
    - Count property access as method calls
    - Properties are already discovered, just need to track access
