@@ -258,7 +258,6 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified name if resolvable, None otherwise
         """
-        # Use position-aware resolution to handle shadowing correctly
         binding = resolve_name(self._position_index, func.id, func.lineno, self._scope_stack)
 
         if binding is None or binding.kind == NameBindingKind.IMPORT:
@@ -305,7 +304,6 @@ class CallCountVisitor(ast.NodeVisitor):
         if not isinstance(func.value, ast.Name):
             return None
 
-        # Look up the name using position-aware resolution
         binding = resolve_name(self._position_index, func.value.id, func.lineno, self._scope_stack)
 
         if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:

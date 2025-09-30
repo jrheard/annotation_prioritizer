@@ -61,7 +61,7 @@ def analyze_ast(tree: ast.Module, source_code: str, filename: str = "test.py") -
     if not function_infos:
         return AnalysisResult(priorities=(), unresolvable_calls=())
 
-    # 5. Count function calls with position-aware resolution
+    # 5. Count function calls
     resolved_counts, unresolvable_calls = count_function_calls(
         tree, function_infos, position_index, known_classes, source_code
     )

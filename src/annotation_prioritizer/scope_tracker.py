@@ -163,15 +163,9 @@ def get_containing_class_qualified_name(scope_stack: ScopeStack) -> QualifiedNam
         With scope stack [MODULE("__module__"), CLASS("Outer"), FUNCTION("method")]:
         Returns "__module__.Outer"
     """
-    for scope in reversed(scope_stack):
-        if scope.kind == ScopeKind.CLASS:
-            # Build qualified name from all scopes up to and including this class
-            class_parts: list[str] = []
-            for s in scope_stack:
-                class_parts.append(s.name)
-                if s == scope:
-                    break
-            return make_qualified_name(".".join(class_parts))
+    for i in range(len(scope_stack) - 1, -1, -1):
+        if scope_stack[i].kind == ScopeKind.CLASS:
+            return make_qualified_name(".".join(s.name for s in scope_stack[: i + 1]))
     return None
 
 
