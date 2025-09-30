@@ -71,6 +71,31 @@ def _is_builtin_call(node: ast.Call) -> bool:
     return False
 
 
+def _extract_attribute_chain(node: ast.Attribute) -> list[str] | None:
+    """Extract attribute chain from compound reference like Outer.Inner.
+
+    Args:
+        node: The ast.Attribute node representing the compound reference
+
+    Returns:
+        List of attribute parts like ['Outer', 'Inner'], or None if the chain
+        doesn't start with a simple name (e.g., starts with a function call)
+    """
+    parts = [node.attr]
+    current = node.value
+
+    while isinstance(current, ast.Attribute):
+        parts.insert(0, current.attr)
+        current = current.value
+
+    # The leftmost part should be a Name
+    if not isinstance(current, ast.Name):
+        return None
+
+    parts.insert(0, current.id)
+    return parts
+
+
 def count_function_calls(
     tree: ast.Module,
     known_functions: tuple[FunctionInfo, ...],
@@ -366,23 +391,13 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified name of the class if resolvable, None otherwise
         """
-        # Build the attribute chain from right to left
-        parts = [node.attr]
-        current = node.value
-
-        while isinstance(current, ast.Attribute):
-            parts.insert(0, current.attr)
-            current = current.value
-
-        # The leftmost part should be a Name
-        if not isinstance(current, ast.Name):
+        # Extract attribute chain (e.g., ['Outer', 'Inner'])
+        parts = _extract_attribute_chain(node)
+        if not parts:
             return None
 
-        parts.insert(0, current.id)
-
-        # Try to resolve the leftmost name
+        # Resolve the leftmost name
         binding = resolve_name(self._position_index, parts[0], lineno, self._scope_stack)
-
         if not binding:
             return None
 
