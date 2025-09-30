@@ -137,6 +137,42 @@ def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeS
     return None
 
 
+def _search_forward_in_scope(  # pyright: ignore[reportUnusedFunction]
+    scope_dict: Mapping[str, list[LineBinding]],
+    name: str,
+    line: int,
+) -> NameBinding | None:
+    """Search for a binding after the given line in a single scope.
+
+    Used for forward reference resolution in deferred execution contexts.
+    Only returns FUNCTION or CLASS bindings - variables and imports must
+    be defined before use even in deferred contexts.
+
+    Args:
+        scope_dict: The scope's name -> bindings mapping
+        name: The name to search for
+        line: The line number to search after (1-indexed)
+
+    Returns:
+        The first FUNCTION or CLASS binding after the line, or None
+    """
+    if name not in scope_dict:
+        return None
+
+    bindings = scope_dict[name]
+
+    # Find first binding AFTER the line (strictly greater than)
+    for line_num, binding in bindings:
+        if line_num > line:
+            # Only return function/class bindings for forward refs
+            if binding.kind in {NameBindingKind.FUNCTION, NameBindingKind.CLASS}:
+                return binding
+            # Variables and imports can't be forward-referenced
+            return None
+
+    return None
+
+
 def _build_index_structure(
     bindings: list[NameBinding],
 ) -> _MutablePositionIndex:
