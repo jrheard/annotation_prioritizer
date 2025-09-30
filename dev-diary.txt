@@ -1300,9 +1300,9 @@ DONE should resolve_name() assert that the scopestack is non-empty?
 
 NVM expand docstrings in position_index.py?
 
-TODO look through tests for references to "limitation", particularly in test_call_counter
+DONE look through tests for references to "limitation", particularly in test_call_counter
 
-TODO look at the "no longer exists" comment in test_call_counter
+DONE look at the "no longer exists" comment in test_call_counter
 
 DONE does test_unsupported need to be updated?
 
