@@ -15,7 +15,7 @@ You are now in PROTOTYPE mode. Your goal is to implement a quick-and-dirty proto
 - Focus on the parts most likely to reveal issues (complex integrations, unclear steps, dependencies)
 
 ### Step 2: Create Branch
-- Create a new branch with format: `prototype/descriptive-name-YYYY-MM-DD`
+- Create a new branch with format: `prototype/descriptive-name-YYYY-MM-DD` (use `date` to see today's date)
 - The branch name should reflect what's being prototyped
 
 ### Step 3: Implement Minimal Prototype
