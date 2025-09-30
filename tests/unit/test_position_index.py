@@ -6,6 +6,8 @@ Tests also cover the build_position_index() factory function for
 creating indexes from collected name bindings.
 """
 
+import pytest
+
 from annotation_prioritizer.models import (
     NameBinding,
     QualifiedName,
@@ -221,15 +223,14 @@ class TestPositionIndexEdgeCases:
         result = resolve_name(index, "sqrt", 10, make_module_scope())
         assert result is None
 
-    def test_empty_scope_stack(self) -> None:
-        """Handle empty scope stack (treats as module scope)."""
+    def test_empty_scope_stack_raises_error(self) -> None:
+        """resolve_name raises ValueError for empty scope stack."""
         empty_scope: ScopeStack = ()
         binding = make_import_binding("x", "foo", line_number=5)
         index = build_index([binding])
 
-        # Empty scope should be treated as module scope
-        result = resolve_name(index, "x", 10, empty_scope)
-        assert result == binding
+        with pytest.raises(ValueError, match="scope_stack must not be empty"):
+            resolve_name(index, "x", 10, empty_scope)
 
     def test_single_scope_in_stack(self) -> None:
         """Handle scope stack with only module scope."""

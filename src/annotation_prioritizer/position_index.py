@@ -34,8 +34,6 @@ from annotation_prioritizer.models import (
     NameBinding,
     NameBindingKind,
     QualifiedName,
-    Scope,
-    ScopeKind,
     ScopeStack,
     make_qualified_name,
 )
@@ -50,7 +48,7 @@ These are kept sorted by line number for efficient lookup.
 """
 
 
-type PositionIndex = Mapping[QualifiedName, dict[str, list[LineBinding]]]
+type PositionIndex = Mapping[QualifiedName, Mapping[str, list[LineBinding]]]
 """Position-aware name resolution index.
 
 Structure:
@@ -106,10 +104,13 @@ def resolve_name(index: PositionIndex, name: str, line: int, scope_stack: ScopeS
     Returns:
         The most recent NameBinding for this name before the given line,
         or None if no binding is found in any scope.
+
+    Raises:
+        ValueError: If scope_stack is empty
     """
-    # Handle empty scope stack as module scope
     if not scope_stack:
-        scope_stack = (Scope(ScopeKind.MODULE, "__module__"),)
+        msg = "scope_stack must not be empty"
+        raise ValueError(msg)
 
     # Try each scope from innermost to outermost
     for scope_depth in range(len(scope_stack), 0, -1):
