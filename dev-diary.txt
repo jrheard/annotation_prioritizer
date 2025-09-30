@@ -1277,3 +1277,12 @@ TODO also someday this
   calc: Calculator # just a definition with no assignment
 
 TODO review diff and start refactoring/improving
+
+===
+
+9/30
+
+ok let's review this diff
+eh i'll just /make-pr
+
+TODO update project_status - did i have a command for this?

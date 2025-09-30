@@ -10,8 +10,13 @@ from annotation_prioritizer.models import (
     AnnotationScore,
     FunctionInfo,
     FunctionPriority,
+    NameBinding,
+    NameBindingKind,
     ParameterInfo,
     QualifiedName,
+    Scope,
+    ScopeKind,
+    ScopeStack,
     make_qualified_name,
 )
 
@@ -159,4 +164,182 @@ def make_priority(  # noqa: PLR0913
         annotation_score=annotation_score,
         call_count=call_count,
         priority_score=priority_score,
+    )
+
+
+def make_module_scope() -> ScopeStack:
+    """Create a module-level scope stack.
+
+    Returns:
+        A scope stack containing only the module scope
+    """
+    return (Scope(ScopeKind.MODULE, "__module__"),)
+
+
+def make_function_scope(func_name: str) -> ScopeStack:
+    """Create a function scope stack within module scope.
+
+    Args:
+        func_name: Name of the function
+
+    Returns:
+        A scope stack with module and function scopes
+    """
+    return (
+        Scope(ScopeKind.MODULE, "__module__"),
+        Scope(ScopeKind.FUNCTION, func_name),
+    )
+
+
+def make_class_scope(class_name: str) -> ScopeStack:
+    """Create a class scope stack within module scope.
+
+    Args:
+        class_name: Name of the class
+
+    Returns:
+        A scope stack with module and class scopes
+    """
+    return (
+        Scope(ScopeKind.MODULE, "__module__"),
+        Scope(ScopeKind.CLASS, class_name),
+    )
+
+
+def make_import_binding(
+    name: str,
+    source_module: str,
+    *,
+    line_number: int = 1,
+    scope_stack: ScopeStack | None = None,
+) -> NameBinding:
+    """Create an import NameBinding with sensible defaults.
+
+    Args:
+        name: Local name being imported (e.g., "sqrt")
+        source_module: Module being imported from (e.g., "math")
+        line_number: Line where import occurs (default: 1)
+        scope_stack: Scope where binding occurs (default: module scope)
+
+    Returns:
+        NameBinding instance for an import
+    """
+    if scope_stack is None:
+        scope_stack = make_module_scope()
+
+    return NameBinding(
+        name=name,
+        line_number=line_number,
+        kind=NameBindingKind.IMPORT,
+        qualified_name=None,  # Imports don't have qualified names
+        scope_stack=scope_stack,
+        source_module=source_module,
+        target_class=None,
+    )
+
+
+def make_class_binding(
+    name: str,
+    *,
+    line_number: int = 1,
+    scope_stack: ScopeStack | None = None,
+    qualified_name: QualifiedName | None = None,
+) -> NameBinding:
+    """Create a class NameBinding with sensible defaults.
+
+    Args:
+        name: Class name (e.g., "Calculator")
+        line_number: Line where class is defined (default: 1)
+        scope_stack: Scope where binding occurs (default: module scope)
+        qualified_name: Fully qualified name (default: auto-generated from scope and name)
+
+    Returns:
+        NameBinding instance for a class definition
+    """
+    if scope_stack is None:
+        scope_stack = make_module_scope()
+
+    if qualified_name is None:
+        qualified_name = make_qualified_name(f"__module__.{name}")
+
+    return NameBinding(
+        name=name,
+        line_number=line_number,
+        kind=NameBindingKind.CLASS,
+        qualified_name=qualified_name,
+        scope_stack=scope_stack,
+        source_module=None,
+        target_class=None,
+    )
+
+
+def make_function_binding(
+    name: str,
+    *,
+    line_number: int = 1,
+    scope_stack: ScopeStack | None = None,
+    qualified_name: QualifiedName | None = None,
+) -> NameBinding:
+    """Create a function NameBinding with sensible defaults.
+
+    Args:
+        name: Function name (e.g., "process")
+        line_number: Line where function is defined (default: 1)
+        scope_stack: Scope where binding occurs (default: module scope)
+        qualified_name: Fully qualified name (default: auto-generated from scope and name)
+
+    Returns:
+        NameBinding instance for a function definition
+    """
+    if scope_stack is None:
+        scope_stack = make_module_scope()
+
+    if qualified_name is None:
+        qualified_name = make_qualified_name(f"__module__.{name}")
+
+    return NameBinding(
+        name=name,
+        line_number=line_number,
+        kind=NameBindingKind.FUNCTION,
+        qualified_name=qualified_name,
+        scope_stack=scope_stack,
+        source_module=None,
+        target_class=None,
+    )
+
+
+def make_variable_binding(
+    name: str,
+    *,
+    line_number: int = 1,
+    scope_stack: ScopeStack | None = None,
+    target_class: QualifiedName | None = None,
+    qualified_name: QualifiedName | None = None,
+) -> NameBinding:
+    """Create a variable NameBinding with sensible defaults.
+
+    Args:
+        name: Variable name (e.g., "calc")
+        line_number: Line where variable is assigned (default: 1)
+        scope_stack: Scope where binding occurs (default: module scope)
+        target_class: Class the variable is an instance of (default: None)
+        qualified_name: Fully qualified name (default: auto-generated from scope and name)
+
+    Returns:
+        NameBinding instance for a variable assignment
+    """
+    if scope_stack is None:
+        scope_stack = make_module_scope()
+
+    if qualified_name is None:
+        qualified_name = make_qualified_name(f"__module__.{name}")
+
+    return NameBinding(
+        name=name,
+        line_number=line_number,
+        kind=NameBindingKind.VARIABLE,
+        qualified_name=qualified_name,
+        scope_stack=scope_stack,
+        source_module=None,
+        target_class=target_class,
     )

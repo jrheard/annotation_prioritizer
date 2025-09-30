@@ -2,16 +2,20 @@
 
 This module tests the factory function that builds a PositionIndex from
 collected name bindings, including position-aware variable resolution.
+
+TODO: Merge this file into test_position_index.py
 """
 
-from annotation_prioritizer.models import (
-    NameBinding,
-    NameBindingKind,
-    Scope,
-    ScopeKind,
-    make_qualified_name,
-)
+from annotation_prioritizer.models import make_qualified_name
 from annotation_prioritizer.position_index import build_position_index, resolve_name
+from tests.helpers.factories import (
+    make_class_binding,
+    make_function_binding,
+    make_function_scope,
+    make_import_binding,
+    make_module_scope,
+    make_variable_binding,
+)
 
 
 def test_build_index_with_no_bindings() -> None:
@@ -19,355 +23,161 @@ def test_build_index_with_no_bindings() -> None:
     index = build_position_index([])
 
     # Should resolve to None for any name
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-    result = resolve_name(index, "foo", 10, module_scope)
+    result = resolve_name(index, "foo", 10, make_module_scope())
     assert result is None
 
 
 def test_build_index_with_single_binding() -> None:
     """Index with single binding should be resolvable."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-    binding = NameBinding(
-        name="sqrt",
-        line_number=1,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="math",
-        target_class=None,
-    )
-
+    binding = make_import_binding("sqrt", "math")
     index = build_position_index([binding])
 
     # Should resolve sqrt after line 1
-    result = resolve_name(index, "sqrt", 10, module_scope)
+    result = resolve_name(index, "sqrt", 10, make_module_scope())
     assert result == binding
 
     # Should not resolve before line 1
-    result = resolve_name(index, "sqrt", 1, module_scope)
+    result = resolve_name(index, "sqrt", 1, make_module_scope())
     assert result is None
 
 
 def test_build_index_sorts_bindings_by_line_number() -> None:
     """Bindings should be sorted by line number for correct resolution."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
     # Create bindings out of order
-    binding2 = NameBinding(
-        name="foo",
-        line_number=20,
-        kind=NameBindingKind.FUNCTION,
-        qualified_name=make_qualified_name("__module__.foo"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
-    binding1 = NameBinding(
-        name="foo",
-        line_number=10,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="bar",
-        target_class=None,
-    )
+    binding2 = make_function_binding("foo", line_number=20)
+    binding1 = make_import_binding("foo", "bar", line_number=10)
 
     # Build index with out-of-order bindings
     index = build_position_index([binding2, binding1])
 
     # At line 15, should resolve to the import (line 10)
-    result = resolve_name(index, "foo", 15, module_scope)
+    result = resolve_name(index, "foo", 15, make_module_scope())
     assert result == binding1
 
     # At line 25, should resolve to the function (line 20)
-    result = resolve_name(index, "foo", 25, module_scope)
+    result = resolve_name(index, "foo", 25, make_module_scope())
     assert result == binding2
 
 
 def test_build_index_resolves_variable_to_class() -> None:
     """Variables referencing classes should have target_class resolved."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
-    class_binding = NameBinding(
-        name="Calculator",
-        line_number=1,
-        kind=NameBindingKind.CLASS,
-        qualified_name=make_qualified_name("__module__.Calculator"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
-
-    var_binding = NameBinding(
-        name="calc",
-        line_number=10,
-        kind=NameBindingKind.VARIABLE,
-        qualified_name=make_qualified_name("__module__.calc"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,  # Unresolved
-    )
+    class_binding = make_class_binding("Calculator")
+    var_binding = make_variable_binding("calc", line_number=10)
 
     # Build index with unresolved variable
     index = build_position_index([class_binding, var_binding], [(var_binding, "Calculator")])
 
     # The variable should now have target_class resolved
-    result = resolve_name(index, "calc", 15, module_scope)
+    result = resolve_name(index, "calc", 15, make_module_scope())
     assert result is not None
-    assert result.kind == NameBindingKind.VARIABLE
     assert result.target_class == make_qualified_name("__module__.Calculator")
 
 
 def test_build_index_variable_resolves_to_shadowed_class() -> None:
     """Variable resolution should respect shadowing (issue #31)."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
     # Import Calculator from module
-    import_binding = NameBinding(
-        name="Calculator",
-        line_number=1,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="external",
-        target_class=None,
-    )
+    import_binding = make_import_binding("Calculator", "external")
 
     # Local Calculator class shadows the import
-    class_binding = NameBinding(
-        name="Calculator",
-        line_number=10,
-        kind=NameBindingKind.CLASS,
-        qualified_name=make_qualified_name("__module__.Calculator"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    class_binding = make_class_binding("Calculator", line_number=10)
 
     # Variable created after the local class
-    var_binding = NameBinding(
-        name="calc",
-        line_number=20,
-        kind=NameBindingKind.VARIABLE,
-        qualified_name=make_qualified_name("__module__.calc"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    var_binding = make_variable_binding("calc", line_number=20)
 
     index = build_position_index([import_binding, class_binding, var_binding], [(var_binding, "Calculator")])
 
     # Variable should resolve to the LOCAL class, not the import
-    result = resolve_name(index, "calc", 25, module_scope)
+    result = resolve_name(index, "calc", 25, make_module_scope())
     assert result is not None
     assert result.target_class == make_qualified_name("__module__.Calculator")
 
 
 def test_build_index_unresolvable_variable_keeps_none() -> None:
     """Variables that can't be resolved should keep target_class=None."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
-    var_binding = NameBinding(
-        name="calc",
-        line_number=10,
-        kind=NameBindingKind.VARIABLE,
-        qualified_name=make_qualified_name("__module__.calc"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    var_binding = make_variable_binding("calc", line_number=10)
 
     # Try to resolve to a class that doesn't exist
     index = build_position_index([var_binding], [(var_binding, "NonexistentClass")])
 
-    result = resolve_name(index, "calc", 15, module_scope)
+    result = resolve_name(index, "calc", 15, make_module_scope())
     assert result is not None
     assert result.target_class is None
 
 
 def test_build_index_variable_wont_resolve_to_function() -> None:
     """Variables referencing functions should not get target_class set."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
-    func_binding = NameBinding(
-        name="process",
-        line_number=1,
-        kind=NameBindingKind.FUNCTION,
-        qualified_name=make_qualified_name("__module__.process"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
-
-    var_binding = NameBinding(
-        name="p",
-        line_number=10,
-        kind=NameBindingKind.VARIABLE,
-        qualified_name=make_qualified_name("__module__.p"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    func_binding = make_function_binding("process")
+    var_binding = make_variable_binding("p", line_number=10)
 
     # Variable references a function, not a class
     index = build_position_index([func_binding, var_binding], [(var_binding, "process")])
 
-    result = resolve_name(index, "p", 15, module_scope)
+    result = resolve_name(index, "p", 15, make_module_scope())
     assert result is not None
     assert result.target_class is None  # Should not resolve to function
 
 
 def test_build_index_variable_wont_resolve_to_import() -> None:
     """Variables referencing imports should not get target_class set."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
-    import_binding = NameBinding(
-        name="math",
-        line_number=1,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="math",
-        target_class=None,
-    )
-
-    var_binding = NameBinding(
-        name="m",
-        line_number=10,
-        kind=NameBindingKind.VARIABLE,
-        qualified_name=make_qualified_name("__module__.m"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    import_binding = make_import_binding("math", "math")
+    var_binding = make_variable_binding("m", line_number=10)
 
     # Variable references an import, not a class
     index = build_position_index([import_binding, var_binding], [(var_binding, "math")])
 
-    result = resolve_name(index, "m", 15, module_scope)
+    result = resolve_name(index, "m", 15, make_module_scope())
     assert result is not None
     assert result.target_class is None  # Should not resolve to import
 
 
 def test_build_index_shadowing_import_by_function() -> None:
     """Import shadowed by function (issue #31 scenario)."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
     # Import: from math import sqrt
-    import_binding = NameBinding(
-        name="sqrt",
-        line_number=1,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="math",
-        target_class=None,
-    )
+    import_binding = make_import_binding("sqrt", "math")
 
     # Function: def sqrt(): ...
-    func_binding = NameBinding(
-        name="sqrt",
-        line_number=10,
-        kind=NameBindingKind.FUNCTION,
-        qualified_name=make_qualified_name("__module__.sqrt"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    func_binding = make_function_binding("sqrt", line_number=10)
 
     index = build_position_index([import_binding, func_binding])
 
     # Before function definition: should resolve to import
-    result = resolve_name(index, "sqrt", 5, module_scope)
+    result = resolve_name(index, "sqrt", 5, make_module_scope())
     assert result == import_binding
 
     # After function definition: should resolve to function
-    result = resolve_name(index, "sqrt", 15, module_scope)
+    result = resolve_name(index, "sqrt", 15, make_module_scope())
     assert result == func_binding
 
 
 def test_build_index_shadowing_function_by_import() -> None:
     """Function shadowed by later import (issue #31 scenario)."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
     # Function: def sqrt(): ...
-    func_binding = NameBinding(
-        name="sqrt",
-        line_number=1,
-        kind=NameBindingKind.FUNCTION,
-        qualified_name=make_qualified_name("__module__.sqrt"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    func_binding = make_function_binding("sqrt")
 
     # Import: from math import sqrt
-    import_binding = NameBinding(
-        name="sqrt",
-        line_number=10,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="math",
-        target_class=None,
-    )
+    import_binding = make_import_binding("sqrt", "math", line_number=10)
 
     index = build_position_index([func_binding, import_binding])
 
     # Before import: should resolve to function
-    result = resolve_name(index, "sqrt", 5, module_scope)
+    result = resolve_name(index, "sqrt", 5, make_module_scope())
     assert result == func_binding
 
     # After import: should resolve to import
-    result = resolve_name(index, "sqrt", 15, module_scope)
+    result = resolve_name(index, "sqrt", 15, make_module_scope())
     assert result == import_binding
 
 
 def test_build_index_variable_reassignment() -> None:
     """Multiple assignments to same variable should be tracked."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
-    class1_binding = NameBinding(
-        name="Calculator",
-        line_number=1,
-        kind=NameBindingKind.CLASS,
-        qualified_name=make_qualified_name("__module__.Calculator"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
-
-    class2_binding = NameBinding(
-        name="AdvancedCalculator",
-        line_number=5,
-        kind=NameBindingKind.CLASS,
-        qualified_name=make_qualified_name("__module__.AdvancedCalculator"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    class1_binding = make_class_binding("Calculator")
+    class2_binding = make_class_binding("AdvancedCalculator", line_number=5)
 
     # First assignment to calc variable
-    var1_binding = NameBinding(
-        name="calc",
-        line_number=10,
-        kind=NameBindingKind.VARIABLE,
-        qualified_name=make_qualified_name("__module__.calc"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    var1_binding = make_variable_binding("calc", line_number=10)
 
     # Second assignment to calc variable (reassignment)
-    var2_binding = NameBinding(
-        name="calc",
-        line_number=20,
-        kind=NameBindingKind.VARIABLE,
-        qualified_name=make_qualified_name("__module__.calc"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    var2_binding = make_variable_binding("calc", line_number=20)
 
     index = build_position_index(
         [class1_binding, class2_binding, var1_binding, var2_binding],
@@ -375,13 +185,13 @@ def test_build_index_variable_reassignment() -> None:
     )
 
     # At line 15: should resolve to first assignment
-    result = resolve_name(index, "calc", 15, module_scope)
+    result = resolve_name(index, "calc", 15, make_module_scope())
     assert result is not None
     assert result.line_number == 10
     assert result.target_class == make_qualified_name("__module__.Calculator")
 
     # At line 25: should resolve to second assignment
-    result = resolve_name(index, "calc", 25, module_scope)
+    result = resolve_name(index, "calc", 25, make_module_scope())
     assert result is not None
     assert result.line_number == 20
     assert result.target_class == make_qualified_name("__module__.AdvancedCalculator")
@@ -389,118 +199,62 @@ def test_build_index_variable_reassignment() -> None:
 
 def test_build_index_multiple_shadows_in_scope() -> None:
     """Multiple shadowing events for the same name (issue #31)."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
     # from math import sqrt (line 1)
-    import1 = NameBinding(
-        name="sqrt",
-        line_number=1,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="math",
-        target_class=None,
-    )
+    import1 = make_import_binding("sqrt", "math")
 
     # def sqrt(): ... (line 10)
-    func = NameBinding(
-        name="sqrt",
-        line_number=10,
-        kind=NameBindingKind.FUNCTION,
-        qualified_name=make_qualified_name("__module__.sqrt"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    func = make_function_binding("sqrt", line_number=10)
 
     # from numpy import sqrt (line 20)
-    import2 = NameBinding(
-        name="sqrt",
-        line_number=20,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="numpy",
-        target_class=None,
-    )
+    import2 = make_import_binding("sqrt", "numpy", line_number=20)
 
     index = build_position_index([import1, func, import2])
 
     # Line 5: should resolve to math.sqrt
-    result = resolve_name(index, "sqrt", 5, module_scope)
+    result = resolve_name(index, "sqrt", 5, make_module_scope())
     assert result == import1
 
     # Line 15: should resolve to local function
-    result = resolve_name(index, "sqrt", 15, module_scope)
+    result = resolve_name(index, "sqrt", 15, make_module_scope())
     assert result == func
 
     # Line 25: should resolve to numpy.sqrt
-    result = resolve_name(index, "sqrt", 25, module_scope)
+    result = resolve_name(index, "sqrt", 25, make_module_scope())
     assert result == import2
 
 
 def test_build_index_class_shadows_import() -> None:
     """Class definition shadows import (issue #31 scenario)."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
     # Import: from external import Calculator
-    import_binding = NameBinding(
-        name="Calculator",
-        line_number=1,
-        kind=NameBindingKind.IMPORT,
-        qualified_name=None,
-        scope_stack=module_scope,
-        source_module="external",
-        target_class=None,
-    )
+    import_binding = make_import_binding("Calculator", "external")
 
     # Class: class Calculator: ...
-    class_binding = NameBinding(
-        name="Calculator",
-        line_number=10,
-        kind=NameBindingKind.CLASS,
-        qualified_name=make_qualified_name("__module__.Calculator"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    class_binding = make_class_binding("Calculator", line_number=10)
 
     index = build_position_index([import_binding, class_binding])
 
     # Before class: resolves to import
-    result = resolve_name(index, "Calculator", 5, module_scope)
+    result = resolve_name(index, "Calculator", 5, make_module_scope())
     assert result == import_binding
 
     # After class: resolves to local class
-    result = resolve_name(index, "Calculator", 15, module_scope)
+    result = resolve_name(index, "Calculator", 15, make_module_scope())
     assert result == class_binding
 
 
 def test_build_index_variables_in_nested_scope() -> None:
     """Variable resolution works in nested scopes."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-    func_scope = (Scope(ScopeKind.MODULE, "__module__"), Scope(ScopeKind.FUNCTION, "process"))
+    func_scope = make_function_scope("process")
 
     # class Calculator at module level
-    class_binding = NameBinding(
-        name="Calculator",
-        line_number=1,
-        kind=NameBindingKind.CLASS,
-        qualified_name=make_qualified_name("__module__.Calculator"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    class_binding = make_class_binding("Calculator")
 
     # calc = Calculator() inside function
-    var_binding = NameBinding(
-        name="calc",
+    var_binding = make_variable_binding(
+        "calc",
         line_number=10,
-        kind=NameBindingKind.VARIABLE,
-        qualified_name=make_qualified_name("__module__.process.calc"),
         scope_stack=func_scope,
-        source_module=None,
-        target_class=None,
+        qualified_name=make_qualified_name("__module__.process.calc"),
     )
 
     index = build_position_index([class_binding, var_binding], [(var_binding, "Calculator")])
@@ -513,41 +267,21 @@ def test_build_index_variables_in_nested_scope() -> None:
 
 def test_build_index_with_no_unresolved_variables() -> None:
     """Index building works when unresolved_variables is None."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
-    binding = NameBinding(
-        name="foo",
-        line_number=1,
-        kind=NameBindingKind.FUNCTION,
-        qualified_name=make_qualified_name("__module__.foo"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    binding = make_function_binding("foo")
 
     # Call with unresolved_variables=None (default)
     index = build_position_index([binding])
 
-    result = resolve_name(index, "foo", 10, module_scope)
+    result = resolve_name(index, "foo", 10, make_module_scope())
     assert result == binding
 
 
 def test_build_index_with_empty_unresolved_list() -> None:
     """Index building works when unresolved_variables is empty list."""
-    module_scope = (Scope(ScopeKind.MODULE, "__module__"),)
-
-    binding = NameBinding(
-        name="foo",
-        line_number=1,
-        kind=NameBindingKind.FUNCTION,
-        qualified_name=make_qualified_name("__module__.foo"),
-        scope_stack=module_scope,
-        source_module=None,
-        target_class=None,
-    )
+    binding = make_function_binding("foo")
 
     # Call with empty list
     index = build_position_index([binding], [])
 
-    result = resolve_name(index, "foo", 10, module_scope)
+    result = resolve_name(index, "foo", 10, make_module_scope())
     assert result == binding
