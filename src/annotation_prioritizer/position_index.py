@@ -28,7 +28,7 @@ Performance:
 import bisect
 import dataclasses
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 
 from annotation_prioritizer.models import (
     ExecutionContext,
@@ -40,28 +40,34 @@ from annotation_prioritizer.models import (
 from annotation_prioritizer.scope_tracker import scope_stack_to_qualified_name
 
 type LineBinding = tuple[int, NameBinding]
-"""A name binding at a specific line number.
+"""A name binding paired with its definition line number.
 
-Used in PositionIndex for binary search: the int is the line number where
-the binding occurs, and the NameBinding contains the binding information.
-These are kept sorted by line number for efficient lookup.
+Tuple of (line_number, binding) where line_number is 1-indexed.
+
+Example:
+    (5, NameBinding(name="Calculator", kind=CLASS, ...))
 """
 
 
-type PositionIndex = Mapping[QualifiedName, Mapping[str, list[LineBinding]]]
+type ScopeBindings = Mapping[str, list[LineBinding]]
+"""Name bindings within a single scope.
+
+Maps local (unqualified) names to their list of bindings at different line numbers.
+This is the inner mapping structure of PositionIndex.
+"""
+
+
+type PositionIndex = Mapping[QualifiedName, ScopeBindings]
 """Position-aware name resolution index.
 
 Structure:
-    Mapping[QualifiedName, dict[str, list[LineBinding]]]
+    Mapping[QualifiedName, ScopeBindings]
 
     - Outer dict key (QualifiedName): Which scope contains the bindings
       Examples: "__module__", "__module__.Calculator"
 
-    - Inner dict key (str): Local name within that scope
-      Examples: "sqrt", "Calculator", "add", "math"
-
-    - Value (list[LineBinding]): All bindings for that name in that scope,
-      sorted by line number for binary search
+    - Inner dict value (ScopeBindings): Maps local names to their bindings
+      Examples: "sqrt" -> [(1, NameBinding(...))], "Calculator" -> [(5, NameBinding(...))]
 
 Example for this code:
     import math                  # line 1
@@ -95,86 +101,95 @@ def resolve_name(
     scope_stack: ScopeStack,
     execution_context: ExecutionContext,
 ) -> NameBinding | None:
-    """Resolve a name at a given position using binary search with execution context awareness.
+    """Resolve a name at a given position using execution context-aware search.
 
-    Searches through the scope chain from innermost to outermost scope,
-    finding the most recent binding of the given name. Resolution strategy
-    depends on execution context:
-
-    - IMMEDIATE context: Only looks backward (definitions before usage)
-    - DEFERRED context: Tries backward first, then forward for FUNCTION/CLASS bindings
-
-    This matches Python's actual execution model where function bodies (deferred)
-    can reference functions defined later in the scope, but module-level code
-    (immediate) executes top-to-bottom.
+    Searches the scope chain from innermost to outermost. In IMMEDIATE context,
+    only looks backward. In DEFERRED context, tries backward first, then forward
+    for FUNCTION/CLASS bindings.
 
     Args:
         index: The position index to search in
-        name: The name to resolve (e.g., "sqrt", "Calculator")
+        name: The name to resolve
         line: The line number where the name is used (1-indexed)
         scope_stack: The scope context where the name appears
         execution_context: Whether code executes immediately or is deferred
 
     Returns:
-        The most recent NameBinding for this name, or None if not found.
-        In DEFERRED context, may return a binding defined after the usage line.
+        The most recent NameBinding, or None if not found
 
     Raises:
         ValueError: If scope_stack is empty
-
-    Examples:
-        # Module-level code (IMMEDIATE) - backward only:
-        >>> resolve_name(index, "helper", line=2, scope_stack, ExecutionContext.IMMEDIATE)
-        None  # helper defined at line 5, so not found
-
-        # Function body (DEFERRED) - can find forward references:
-        >>> resolve_name(index, "helper", line=2, scope_stack, ExecutionContext.DEFERRED)
-        NameBinding(...)  # helper found even though defined at line 5
     """
     if not scope_stack:
         msg = "scope_stack must not be empty"
         raise ValueError(msg)
 
-    # Try each scope from innermost to outermost
+    # Try backward search in all scopes first
+    for scope_bindings in _iterate_scopes(index, scope_stack):
+        binding = _search_backward_in_scope(scope_bindings, name, line)
+        if binding is not None:
+            return binding
+
+    # If in deferred context and not found, try forward search
+    if execution_context == ExecutionContext.DEFERRED:
+        for scope_bindings in _iterate_scopes(index, scope_stack):
+            binding = _search_forward_in_scope(scope_bindings, name, line)
+            if binding is not None:
+                return binding
+
+    return None
+
+
+def _iterate_scopes(
+    index: PositionIndex,
+    scope_stack: ScopeStack,
+) -> Iterator[ScopeBindings]:
+    """Iterate through scopes from innermost to outermost.
+
+    Yields:
+        ScopeBindings for each scope in the chain that exists in the index.
+    """
     for scope_depth in range(len(scope_stack), 0, -1):
-        # Build scope qualified name for this depth
         current_scope = scope_stack[:scope_depth]
         scope_name = scope_stack_to_qualified_name(current_scope)
 
-        # Look up bindings for this name in this scope
-        if scope_name not in index:
-            continue
+        if scope_name in index:
+            yield index[scope_name]
 
-        scope_dict = index[scope_name]
-        if name not in scope_dict:
-            continue
 
-        bindings = scope_dict[name]
+def _search_backward_in_scope(
+    scope_bindings: ScopeBindings,
+    name: str,
+    line: int,
+) -> NameBinding | None:
+    """Search for a binding before the given line in a single scope.
 
-        # ALWAYS try backward first (preserves shadowing semantics)
-        idx = bisect.bisect_left(bindings, line, key=lambda x: x[0])
-        if idx > 0:
-            return bindings[idx - 1][1]
+    Used for standard backward name resolution (shadowing semantics).
+    Returns the most recent binding before the line.
 
-    # If in deferred context and not found backward in any scope, try forward in each scope
-    if execution_context == ExecutionContext.DEFERRED:
-        for scope_depth in range(len(scope_stack), 0, -1):
-            current_scope = scope_stack[:scope_depth]
-            scope_name = scope_stack_to_qualified_name(current_scope)
+    Args:
+        scope_bindings: The scope's name -> bindings mapping
+        name: The name to search for
+        line: The line number to search before (1-indexed)
 
-            if scope_name not in index:
-                continue
+    Returns:
+        The most recent binding before the line, or None
+    """
+    if name not in scope_bindings:
+        return None
 
-            scope_dict = index[scope_name]
-            forward_binding = _search_forward_in_scope(scope_dict, name, line)
-            if forward_binding is not None:
-                return forward_binding
+    bindings = scope_bindings[name]
+
+    # Find most recent binding BEFORE the line
+    idx = bisect.bisect_left(bindings, line, key=lambda x: x[0])
+    if idx > 0:
+        return bindings[idx - 1][1]
 
     return None
 
 
 def _search_forward_in_scope(
-    scope_dict: Mapping[str, list[LineBinding]],
+    scope_bindings: ScopeBindings,
     name: str,
     line: int,
 ) -> NameBinding | None:
@@ -185,17 +200,17 @@ def _search_forward_in_scope(
     be defined before use even in deferred contexts.
 
     Args:
-        scope_dict: The scope's name -> bindings mapping
+        scope_bindings: The scope's name -> bindings mapping
         name: The name to search for
         line: The line number to search after (1-indexed)
 
     Returns:
         The first FUNCTION or CLASS binding after the line, or None
     """
-    if name not in scope_dict:
+    if name not in scope_bindings:
         return None
 
-    bindings = scope_dict[name]
+    bindings = scope_bindings[name]
 
     # Find first binding AFTER the line (strictly greater than)
     for line_num, binding in bindings:
