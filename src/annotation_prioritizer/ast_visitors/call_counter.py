@@ -180,9 +180,25 @@ class CallCountVisitor(ast.NodeVisitor):
         self._position_index = position_index
         self._known_classes = known_classes
         self._scope_stack = create_initial_stack()
-        self._execution_context_stack: list[ExecutionContext] = [ExecutionContext.IMMEDIATE]
         self._source_code = source_code
         self._unresolvable_calls: list[UnresolvableCall] = []
+
+    def _current_execution_context(self) -> ExecutionContext:
+        """Derive execution context from current scope kind.
+
+        - FUNCTION scopes execute DEFERRED (when called)
+        - CLASS and MODULE scopes execute IMMEDIATE (when encountered)
+
+        Returns:
+            The execution context for the current scope
+        """
+        if not self._scope_stack:
+            return ExecutionContext.IMMEDIATE
+        return (
+            ExecutionContext.DEFERRED
+            if self._scope_stack[-1].kind == ScopeKind.FUNCTION
+            else ExecutionContext.IMMEDIATE
+        )
 
     @override
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
@@ -192,9 +208,7 @@ class CallCountVisitor(ast.NodeVisitor):
         the class definition is nested inside a function.
         """
         self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.CLASS, name=node.name))
-        self._execution_context_stack.append(ExecutionContext.IMMEDIATE)
         self.generic_visit(node)
-        self._execution_context_stack.pop()
         self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
@@ -205,9 +219,7 @@ class CallCountVisitor(ast.NodeVisitor):
         not when it's defined. This allows forward references.
         """
         self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
-        self._execution_context_stack.append(ExecutionContext.DEFERRED)
         self.generic_visit(node)
-        self._execution_context_stack.pop()
         self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
@@ -217,9 +229,7 @@ class CallCountVisitor(ast.NodeVisitor):
         Async function bodies also execute DEFERRED.
         """
         self._scope_stack = add_scope(self._scope_stack, Scope(kind=ScopeKind.FUNCTION, name=node.name))
-        self._execution_context_stack.append(ExecutionContext.DEFERRED)
         self.generic_visit(node)
-        self._execution_context_stack.pop()
         self._scope_stack = drop_last_scope(self._scope_stack)
 
     @override
@@ -306,7 +316,7 @@ class CallCountVisitor(ast.NodeVisitor):
             func.id,
             func.lineno,
             self._scope_stack,
-            self._execution_context_stack[-1],
+            self._current_execution_context(),
         )
 
         if binding is None or binding.kind == NameBindingKind.IMPORT:
@@ -358,7 +368,7 @@ class CallCountVisitor(ast.NodeVisitor):
             func.value.id,
             func.lineno,
             self._scope_stack,
-            self._execution_context_stack[-1],
+            self._current_execution_context(),
         )
 
         if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
@@ -433,7 +443,7 @@ class CallCountVisitor(ast.NodeVisitor):
             parts[0],
             lineno,
             self._scope_stack,
-            self._execution_context_stack[-1],
+            self._current_execution_context(),
         )
         if not binding:
             return None
