@@ -24,9 +24,10 @@ def is_dangerous_command(command: str) -> tuple[bool, str | None]:
     if re.search(r"(^|&&|\|\||;)\s*git\s+reset\s+--hard\b", command):
         return True, "git reset --hard discards uncommitted changes and is destructive"
 
-    # Pattern for git push at start of command or after command separator
-    if re.search(r"(^|&&|\|\||;)\s*git\s+push\b", command):
-        return True, "git push modifies remote repository state"
+    # Pattern for git push --force (and variants) at start of command or after command separator
+    # Matches: git push --force, git push -f, git push --force-with-lease
+    if re.search(r"(^|&&|\|\||;)\s*git\s+push\s+.*(-f\b|--force\b|--force-with-lease\b)", command):
+        return True, "git push --force can overwrite remote history and cause data loss"
 
     return False, None
 
@@ -44,7 +45,7 @@ def format_error_message(reason: str) -> str:
         f"BLOCKED: Dangerous git command detected. {reason}\n\n"
         "This hook prevents:\n"
         "  - git reset --hard (data loss)\n"
-        "  - git push (remote modifications)\n\n"
+        "  - git push --force (overwrites remote history)\n\n"
         "If you need to run these commands, ask the user to run them manually.\n"
     )
 
