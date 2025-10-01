@@ -16,7 +16,14 @@ import ast
 from collections.abc import Iterable
 
 from annotation_prioritizer.iteration import first
-from annotation_prioritizer.models import QualifiedName, Scope, ScopeKind, ScopeStack, make_qualified_name
+from annotation_prioritizer.models import (
+    ExecutionContext,
+    QualifiedName,
+    Scope,
+    ScopeKind,
+    ScopeStack,
+    make_qualified_name,
+)
 
 
 def create_initial_stack() -> ScopeStack:
@@ -167,6 +174,37 @@ def get_containing_class_qualified_name(scope_stack: ScopeStack) -> QualifiedNam
         if scope_stack[i].kind == ScopeKind.CLASS:
             return make_qualified_name(".".join(s.name for s in scope_stack[: i + 1]))
     return None
+
+
+def get_execution_context(scope_stack: ScopeStack) -> ExecutionContext:
+    """Derive execution context from the current scope kind.
+
+    Function scopes execute DEFERRED (when called), while CLASS and MODULE
+    scopes execute IMMEDIATE (when encountered). This mirrors Python's actual
+    execution model and enables proper forward reference resolution.
+
+    Args:
+        scope_stack: Current scope context
+
+    Returns:
+        DEFERRED if in a function scope, IMMEDIATE otherwise
+
+    Example:
+        >>> stack = (Scope(MODULE, "__module__"), Scope(FUNCTION, "process"))
+        >>> get_execution_context(stack)
+        ExecutionContext.DEFERRED
+
+        >>> stack = (Scope(MODULE, "__module__"), Scope(CLASS, "Calculator"))
+        >>> get_execution_context(stack)
+        ExecutionContext.IMMEDIATE
+    """
+    if not scope_stack:
+        return ExecutionContext.IMMEDIATE
+    return (
+        ExecutionContext.DEFERRED
+        if scope_stack[-1].kind == ScopeKind.FUNCTION
+        else ExecutionContext.IMMEDIATE
+    )
 
 
 def resolve_name_in_scope(

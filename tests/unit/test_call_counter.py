@@ -14,6 +14,7 @@ from annotation_prioritizer.ast_visitors.call_counter import (
 )
 from annotation_prioritizer.iteration import first
 from annotation_prioritizer.models import ExecutionContext, make_qualified_name
+from annotation_prioritizer.scope_tracker import get_execution_context
 from tests.helpers.factories import make_function_info, make_parameter
 from tests.helpers.function_parsing import build_position_index_from_source
 
@@ -327,12 +328,12 @@ x = 1
     visitor = CallCountVisitor((), position_index, known_classes, source)
 
     # At module level, context should be IMMEDIATE
-    assert visitor._current_execution_context() == ExecutionContext.IMMEDIATE
+    assert get_execution_context(visitor._scope_stack) == ExecutionContext.IMMEDIATE
 
     visitor.visit(tree)
 
     # After visiting, should still be at module level
-    assert visitor._current_execution_context() == ExecutionContext.IMMEDIATE
+    assert get_execution_context(visitor._scope_stack) == ExecutionContext.IMMEDIATE
 
 
 def test_execution_context_stack_function() -> None:
@@ -350,7 +351,7 @@ def foo():
     class ContextTrackingVisitor(CallCountVisitor):
         @override
         def visit_Pass(self, node: ast.Pass) -> None:
-            contexts_seen.append(self._current_execution_context())
+            contexts_seen.append(get_execution_context(self._scope_stack))
             self.generic_visit(node)
 
     visitor = ContextTrackingVisitor((), position_index, known_classes, source)
@@ -375,7 +376,7 @@ class Foo:
     class ContextTrackingVisitor(CallCountVisitor):
         @override
         def visit_Assign(self, node: ast.Assign) -> None:
-            contexts_seen.append(self._current_execution_context())
+            contexts_seen.append(get_execution_context(self._scope_stack))
             self.generic_visit(node)
 
     visitor = ContextTrackingVisitor((), position_index, known_classes, source)
@@ -401,7 +402,7 @@ class Outer:
         @override
         def visit_Pass(self, node: ast.Pass) -> None:
             # Inside method (innermost scope), context should be DEFERRED
-            contexts_seen.append(self._current_execution_context())
+            contexts_seen.append(get_execution_context(self._scope_stack))
             self.generic_visit(node)
 
     visitor = ContextTrackingVisitor((), position_index, known_classes, source)
@@ -427,7 +428,7 @@ def outer():
     class ContextTrackingVisitor(CallCountVisitor):
         @override
         def visit_Assign(self, node: ast.Assign) -> None:
-            contexts_seen.append(self._current_execution_context())
+            contexts_seen.append(get_execution_context(self._scope_stack))
             self.generic_visit(node)
 
     visitor = ContextTrackingVisitor((), position_index, known_classes, source)
@@ -451,4 +452,4 @@ x = 1
     visitor._scope_stack = ()
 
     # Empty scope stack should default to IMMEDIATE
-    assert visitor._current_execution_context() == ExecutionContext.IMMEDIATE
+    assert get_execution_context(visitor._scope_stack) == ExecutionContext.IMMEDIATE

@@ -32,8 +32,8 @@ from typing import override
 
 from annotation_prioritizer.models import (
     CallCount,
-    ExecutionContext,
     FunctionInfo,
+    NameBinding,
     NameBindingKind,
     QualifiedName,
     Scope,
@@ -47,6 +47,7 @@ from annotation_prioritizer.scope_tracker import (
     create_initial_stack,
     drop_last_scope,
     get_containing_class_qualified_name,
+    get_execution_context,
 )
 
 # Maximum length for unresolvable call text before truncation
@@ -132,8 +133,6 @@ class CallCountVisitor(ast.NodeVisitor):
 
     Traverses the AST to identify and count function calls, maintaining context
     about the current scope (classes and functions) to properly resolve self.method() calls.
-    Uses conservative resolution - when the target of a call cannot be determined
-    with confidence, it is not counted rather than guessed at.
 
     Usage:
         After calling visit() on an AST tree, access the 'call_counts' dictionary
@@ -183,21 +182,22 @@ class CallCountVisitor(ast.NodeVisitor):
         self._source_code = source_code
         self._unresolvable_calls: list[UnresolvableCall] = []
 
-    def _current_execution_context(self) -> ExecutionContext:
-        """Derive execution context from current scope kind.
+    def _resolve_name_at_position(self, name: str, lineno: int) -> NameBinding | None:
+        """Resolve a name at a specific position using the current scope context.
 
-        - FUNCTION scopes execute DEFERRED (when called)
-        - CLASS and MODULE scopes execute IMMEDIATE (when encountered)
+        Args:
+            name: The name to resolve
+            lineno: Line number for position-aware resolution
 
         Returns:
-            The execution context for the current scope
+            NameBinding if the name can be resolved, None otherwise
         """
-        if not self._scope_stack:
-            return ExecutionContext.IMMEDIATE
-        return (
-            ExecutionContext.DEFERRED
-            if self._scope_stack[-1].kind == ScopeKind.FUNCTION
-            else ExecutionContext.IMMEDIATE
+        return resolve_name(
+            self._position_index,
+            name,
+            lineno,
+            self._scope_stack,
+            get_execution_context(self._scope_stack),
         )
 
     @override
@@ -236,10 +236,17 @@ class CallCountVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         """Visit function call to count calls to known functions."""
         call_name = self._resolve_call_name(node)
-        if call_name and call_name in self.call_counts:
-            self.call_counts[call_name] += 1
-        elif call_name is None and not _is_builtin_call(node):
-            self._track_unresolvable_call(node)
+
+        match call_name:
+            case name if name and name in self.call_counts:
+                # Resolved and in known_functions - increment count
+                self.call_counts[name] += 1
+            case None if not _is_builtin_call(node):
+                # Unresolvable and not a builtin - track for diagnostics
+                self._track_unresolvable_call(node)
+            case _:
+                # Resolved but not in known_functions, or builtin - ignore
+                pass
 
         self.generic_visit(node)
 
@@ -272,10 +279,6 @@ class CallCountVisitor(ast.NodeVisitor):
 
     def _resolve_call_name(self, node: ast.Call) -> QualifiedName | None:
         """Resolve the qualified name of the called function.
-
-        Uses conservative resolution - only returns names for calls that can be
-        confidently attributed to specific functions. Ambiguous or dynamic calls
-        return None and are excluded from counting.
 
         Handles both function calls and class instantiations. When a name
         refers to a known class, resolves to ClassName.__init__.
@@ -311,13 +314,7 @@ class CallCountVisitor(ast.NodeVisitor):
         Returns:
             Qualified name if resolvable, None otherwise
         """
-        binding = resolve_name(
-            self._position_index,
-            func.id,
-            func.lineno,
-            self._scope_stack,
-            self._current_execution_context(),
-        )
+        binding = self._resolve_name_at_position(func.id, func.lineno)
 
         if binding is None or binding.kind == NameBindingKind.IMPORT:
             # Unresolvable or imported (Phase 1 limitation)
@@ -363,13 +360,7 @@ class CallCountVisitor(ast.NodeVisitor):
         if not isinstance(func.value, ast.Name):
             return None
 
-        binding = resolve_name(
-            self._position_index,
-            func.value.id,
-            func.lineno,
-            self._scope_stack,
-            self._current_execution_context(),
-        )
+        binding = self._resolve_name_at_position(func.value.id, func.lineno)
 
         if binding and binding.kind == NameBindingKind.VARIABLE and binding.target_class:
             # We know what class the variable refers to
@@ -438,13 +429,7 @@ class CallCountVisitor(ast.NodeVisitor):
             return None
 
         # Resolve the leftmost name
-        binding = resolve_name(
-            self._position_index,
-            parts[0],
-            lineno,
-            self._scope_stack,
-            self._current_execution_context(),
-        )
+        binding = self._resolve_name_at_position(parts[0], lineno)
         if not binding:
             return None
 

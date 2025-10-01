@@ -213,6 +213,7 @@ def _search_forward_in_scope(
     bindings = scope_bindings[name]
 
     # Find first binding AFTER the line (strictly greater than)
+    # TODO: why not bisect here too?
     for line_num, binding in bindings:
         if line_num > line:
             # Only return function/class bindings for forward refs
