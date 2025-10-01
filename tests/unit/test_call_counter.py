@@ -318,7 +318,7 @@ def test():
 
 
 def test_execution_context_stack_module_level() -> None:
-    """Test that module level starts with IMMEDIATE context."""
+    """Test that module level has IMMEDIATE context."""
     source = """
 x = 1
 """
@@ -326,13 +326,13 @@ x = 1
     _, position_index, known_classes = build_position_index_from_source(source)
     visitor = CallCountVisitor((), position_index, known_classes, source)
 
-    # Before visiting, should be at module level (IMMEDIATE)
-    assert visitor._execution_context_stack == [ExecutionContext.IMMEDIATE]
+    # At module level, context should be IMMEDIATE
+    assert visitor._current_execution_context() == ExecutionContext.IMMEDIATE
 
     visitor.visit(tree)
 
     # After visiting, should still be at module level
-    assert visitor._execution_context_stack == [ExecutionContext.IMMEDIATE]
+    assert visitor._current_execution_context() == ExecutionContext.IMMEDIATE
 
 
 def test_execution_context_stack_function() -> None:
@@ -350,7 +350,7 @@ def foo():
     class ContextTrackingVisitor(CallCountVisitor):
         @override
         def visit_Pass(self, node: ast.Pass) -> None:
-            contexts_seen.append(self._execution_context_stack[-1])
+            contexts_seen.append(self._current_execution_context())
             self.generic_visit(node)
 
     visitor = ContextTrackingVisitor((), position_index, known_classes, source)
@@ -375,7 +375,7 @@ class Foo:
     class ContextTrackingVisitor(CallCountVisitor):
         @override
         def visit_Assign(self, node: ast.Assign) -> None:
-            contexts_seen.append(self._execution_context_stack[-1])
+            contexts_seen.append(self._current_execution_context())
             self.generic_visit(node)
 
     visitor = ContextTrackingVisitor((), position_index, known_classes, source)
@@ -386,7 +386,7 @@ class Foo:
 
 
 def test_execution_context_stack_nested() -> None:
-    """Test that context stack handles nested scopes correctly."""
+    """Test that derived context is correct for nested scopes."""
     source = """
 class Outer:
     def method(self):
@@ -395,25 +395,21 @@ class Outer:
     tree = ast.parse(source)
     _, position_index, known_classes = build_position_index_from_source(source)
 
-    contexts_seen: list[list[ExecutionContext]] = []
+    contexts_seen: list[ExecutionContext] = []
 
     class ContextTrackingVisitor(CallCountVisitor):
         @override
         def visit_Pass(self, node: ast.Pass) -> None:
-            # Should have: [IMMEDIATE (module), IMMEDIATE (class), DEFERRED (method)]
-            contexts_seen.append(list(self._execution_context_stack))
+            # Inside method (innermost scope), context should be DEFERRED
+            contexts_seen.append(self._current_execution_context())
             self.generic_visit(node)
 
     visitor = ContextTrackingVisitor((), position_index, known_classes, source)
     visitor.visit(tree)
 
-    # Inside method, should have all three contexts
+    # Inside method, context should be DEFERRED (derived from innermost scope)
     assert len(contexts_seen) == 1
-    assert contexts_seen[0] == [
-        ExecutionContext.IMMEDIATE,  # module
-        ExecutionContext.IMMEDIATE,  # class
-        ExecutionContext.DEFERRED,  # method
-    ]
+    assert contexts_seen[0] == ExecutionContext.DEFERRED
 
 
 def test_execution_context_stack_class_in_function() -> None:
@@ -426,21 +422,33 @@ def outer():
     tree = ast.parse(source)
     _, position_index, known_classes = build_position_index_from_source(source)
 
-    contexts_seen: list[list[ExecutionContext]] = []
+    contexts_seen: list[ExecutionContext] = []
 
     class ContextTrackingVisitor(CallCountVisitor):
         @override
         def visit_Assign(self, node: ast.Assign) -> None:
-            contexts_seen.append(list(self._execution_context_stack))
+            contexts_seen.append(self._current_execution_context())
             self.generic_visit(node)
 
     visitor = ContextTrackingVisitor((), position_index, known_classes, source)
     visitor.visit(tree)
 
-    # Inside class body (which is inside function)
+    # Inside class body (innermost scope), context should be IMMEDIATE
+    # even though the class is nested inside a DEFERRED function
     assert len(contexts_seen) == 1
-    assert contexts_seen[0] == [
-        ExecutionContext.IMMEDIATE,  # module
-        ExecutionContext.DEFERRED,  # outer function
-        ExecutionContext.IMMEDIATE,  # Inner class body
-    ]
+    assert contexts_seen[0] == ExecutionContext.IMMEDIATE
+
+
+def test_execution_context_empty_scope_stack() -> None:
+    """Test that empty scope stack defaults to IMMEDIATE context."""
+    source = """
+x = 1
+"""
+    _, position_index, known_classes = build_position_index_from_source(source)
+    visitor = CallCountVisitor((), position_index, known_classes, source)
+
+    # Temporarily clear the scope stack to test the edge case
+    visitor._scope_stack = ()
+
+    # Empty scope stack should default to IMMEDIATE
+    assert visitor._current_execution_context() == ExecutionContext.IMMEDIATE
