@@ -1292,6 +1292,154 @@ During design, we evaluated 10 different approaches. Here are the key alternativ
 
 The key insight: **execution context is not arbitrary** - it's fundamental to how Python actually works. By modeling this correctly, we get accurate results without needing heuristics or configuration.
 
+## Appendix: Forward Lookup Scope Resolution Nuances
+
+During Step 6 implementation, we discovered important nuances about when and where to apply forward lookup in the scope chain.
+
+### Initial (Incorrect) Approach: Innermost Scope Only
+
+The initial implementation only performed forward lookup in the innermost scope:
+
+```python
+# WRONG - causes issues with nested scopes
+for scope_depth in range(len(scope_stack), 0, -1):
+    # Try backward first
+    if backward_found:
+        return binding
+
+    # Forward lookup only in innermost scope
+    is_innermost = scope_depth == len(scope_stack)
+    if is_deferred and is_innermost:
+        forward_binding = search_forward(...)
+        if forward_binding:
+            return forward_binding
+```
+
+**Problem:** When inside a nested function looking for a module-level function defined later, this fails:
+
+```python
+def outer():
+    def inner():
+        return helper()  # ❌ NOT FOUND - only looks forward in 'outer' scope, not module scope
+    return inner()
+
+def helper():
+    return 42
+```
+
+At line 3 (inside `inner`), the scope stack is `[MODULE, outer, inner]`. The algorithm:
+1. Checks `inner` scope backward → not found
+2. Checks `inner` scope forward (innermost) → not found
+3. Checks `outer` scope backward → not found
+4. Skips `outer` scope forward (not innermost)
+5. Checks `MODULE` scope backward → not found
+6. Skips `MODULE` scope forward (not innermost)
+7. Returns None ❌
+
+### Second (Also Incorrect) Approach: Forward Immediately After Backward
+
+Next attempt: try forward lookup immediately after backward fails in each scope:
+
+```python
+# ALSO WRONG - causes incorrect shadowing
+for scope_depth in range(len(scope_stack), 0, -1):
+    if backward_found:
+        return binding
+    if is_deferred:
+        forward_binding = search_forward(...)
+        if forward_binding:
+            return forward_binding  # ❌ Returns too early
+```
+
+**Problem:** This finds forward references in inner scopes that should be shadowed by outer scopes:
+
+```python
+def container():
+    result = outer_func()  # Line 2 - should find module-level outer_func
+
+    def outer_func():  # Line 4 - nested function
+        return "inner"
+
+def outer_func():  # Line 7 - module-level function
+    return "outer"
+```
+
+At line 2 (inside `container`), the algorithm:
+1. Checks `container` scope backward → not found
+2. Checks `container` scope forward → finds nested `outer_func` at line 4 ❌ WRONG
+3. Returns nested function (should have found module-level function)
+
+### Final (Correct) Approach: Backward First, Then Forward
+
+The correct algorithm:
+1. **First pass:** Try backward lookup in ALL scopes (innermost to outermost)
+2. **Second pass:** Try forward lookup in ALL scopes (innermost to outermost)
+
+```python
+# CORRECT
+# First pass: backward lookup in all scopes
+for scope_depth in range(len(scope_stack), 0, -1):
+    if backward_found:
+        return binding
+
+# Second pass: forward lookup in all scopes (only if deferred)
+if is_deferred:
+    for scope_depth in range(len(scope_stack), 0, -1):
+        forward_binding = search_forward(...)
+        if forward_binding:
+            return forward_binding
+```
+
+This matches Python's LEGB (Local, Enclosing, Global, Built-in) scope resolution, but with execution context awareness:
+- **Backward pass:** Mimics normal LEGB for already-defined names
+- **Forward pass:** Only in deferred contexts, allows finding functions/classes defined later
+
+### Why This Works
+
+The two-pass approach correctly handles all cases:
+
+**Case 1: Nested function calling module function (forward)**
+```python
+def outer():
+    def inner():
+        return helper()  # ✅ FOUND in module scope (forward pass)
+    return inner()
+
+def helper():
+    return 42
+```
+
+**Case 2: Forward reference shouldn't shadow outer scope**
+```python
+def container():
+    result = outer_func()  # ✅ FOUND module-level (forward pass, module scope)
+
+    def outer_func():
+        return "inner"
+
+def outer_func():
+    return "outer"
+```
+
+**Case 3: Backward reference takes precedence**
+```python
+def helper():
+    return "first"
+
+def caller():
+    return helper()  # ✅ FOUND (backward pass) - doesn't check forward
+
+def helper():  # This is shadowed
+    return "second"
+```
+
+### Key Insight
+
+Forward references in Python work like this:
+> "At execution time, can I see this name by looking anywhere in my scope chain, including names that will be defined later in those scopes?"
+
+The answer is "yes" for functions/classes in deferred contexts, but **backward references always take precedence** because they were already executed. The two-pass algorithm naturally implements this precedence.
+
 ## Summary
 
 This implementation adds execution context tracking to support forward references while maintaining semantic accuracy with Python's actual execution model. The approach is conservative, well-tested, and aligns with the project's philosophy of "mimic Python's actual rules as closely as possible."
