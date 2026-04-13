@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Python type annotation priority analyzer"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = ["rich>=13.0.0"]
+dependencies = ["rich>=15.0.0"]
 
 [project.scripts]
 annotation-prioritizer = "annotation_prioritizer.cli:main"
